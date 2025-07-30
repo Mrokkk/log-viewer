@@ -11,16 +11,9 @@
 namespace core
 {
 
-struct TerminalSize
-{
-    int x;
-    int y;
-};
-
 struct UserInterface : utils::Immobile
 {
     virtual ~UserInterface() = default;
-    virtual TerminalSize getTerminalSize() const = 0;
     virtual void run(core::Context& context) = 0;
     virtual void quit(core::Context& context) = 0;
     virtual void execute(std::function<void()> fn) = 0;

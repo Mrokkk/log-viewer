@@ -6,6 +6,7 @@
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/screen/terminal.hpp>
 
 #include "core/context.hpp"
 #include "core/logger.hpp"
@@ -63,7 +64,6 @@ struct Picker final : utils::Immobile
 struct Ftxui final : core::UserInterface
 {
     Ftxui();
-    core::TerminalSize getTerminalSize() const override;
     void run(core::Context& context) override;
     void quit(core::Context& context) override;
     void execute(std::function<void()> fn) override;
@@ -71,6 +71,7 @@ struct Ftxui final : core::UserInterface
     std::ostream& operator<<(Severity severity) override;
 
     ftxui::ScreenInteractive screen;
+    ftxui::Dimensions        terminalSize;
     CommandLine              commandLine;
     UIElement                active;
     Picker                   picker;

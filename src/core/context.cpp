@@ -5,7 +5,6 @@ namespace core
 
 Context::Context()
     : currentView{nullptr}
-    , terminalSize{0, 0}
     , showLineNumbers{false}
 {
 }

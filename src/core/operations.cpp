@@ -125,7 +125,6 @@ View* asyncViewLoader(std::string path, Context& context)
                     *context.ui << info
                         << newFile->path() << ": lines: " << newFile->lineCount() << "; took "
                         << std::fixed << std::setprecision(3) << newFile->loadTime() << " s";
-                    resize(context);
                     reloadView(view, context);
                 });
         }).detach();
@@ -584,39 +583,6 @@ bool executeCode(const std::string& line, Context& context)
     }
 
     return true;
-}
-
-void reloadView(View& view, Context& context)
-{
-    view.viewHeight = std::min(static_cast<size_t>(context.terminalSize.y) - 2, view.file->lineCount());
-    view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
-    view.ringBuffer = utils::RingBuffer<std::string>(view.viewHeight);
-    view.yoffset = view.yoffset | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
-
-    reloadLines(view, context);
-}
-
-bool resize(Context& context)
-{
-    auto oldTerminalSize = context.terminalSize;
-    context.terminalSize = context.ui->getTerminalSize();
-
-    if (not context.currentView or not context.currentView->file)
-    {
-        return false;
-    }
-
-    if (context.terminalSize.y != oldTerminalSize.y)
-    {
-        logger << info << "terminal size: " << context.terminalSize.x << 'x' << context.terminalSize.y;
-
-        for (auto& view : context.views)
-        {
-            reloadView(view, context);
-        }
-    }
-
-    return false;
 }
 
 bool registerKeyPress(char c, Context& context)

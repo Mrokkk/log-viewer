@@ -17,7 +17,6 @@ struct Context final : utils::Immobile
     Views            views;
     MappedFiles      files;
     View*            currentView;
-    TerminalSize     terminalSize;
     InputState       inputState;
     bool             showLineNumbers;
     UserInterfacePtr ui;

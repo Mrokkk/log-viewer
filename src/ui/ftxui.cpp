@@ -70,6 +70,17 @@ std::string getLine(core::Context& context, View& view, size_t lineIndex)
     return ss.str();
 }
 
+void reloadView(View& view, Context& context)
+{
+    auto& ui = context.ui->get<ui::Ftxui>();
+    view.viewHeight = std::min(static_cast<size_t>(ui.terminalSize.dimy) - 2, view.file->lineCount());
+    view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
+    view.ringBuffer = utils::RingBuffer<std::string>(view.viewHeight);
+    view.yoffset = view.yoffset | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
+
+    reloadLines(view, context);
+}
+
 }  // namespace core
 
 namespace ui
@@ -107,7 +118,7 @@ static void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
 {
     ui.picker.content->DetachAllChildren();
 
-    const auto width = context.terminalSize.x / 2 - 4;
+    const auto width = ui.terminalSize.dimx / 2 - 4;
     const auto leftWidth = width / 2;
 
     switch (type)
@@ -364,9 +375,26 @@ static EventHandler whenActive(UIElement element, T func)
         };
 }
 
-static bool resize(Ftxui&, core::Context& context)
+static bool resize(Ftxui& ui, core::Context& context)
 {
-    core::resize(context);
+    auto oldTerminalSize = ui.terminalSize;
+    ui.terminalSize = Terminal::Size();
+
+    if (not context.currentView or not context.currentView->file)
+    {
+        return false;
+    }
+
+    if (ui.terminalSize.dimy != oldTerminalSize.dimy)
+    {
+        logger << info << "terminal size: " << ui.terminalSize.dimx << 'x' << ui.terminalSize.dimy;
+
+        for (auto& view : context.views)
+        {
+            reloadView(view, context);
+        }
+    }
+
     return true;
 }
 
@@ -420,10 +448,10 @@ static Elements operator|(utils::RingBuffer<std::string>& buf, const ToFtxuiText
     return vec;
 }
 
-static Element renderPickerWindow(Ftxui& ui, core::Context& context)
+static Element renderPickerWindow(Ftxui& ui, core::Context&)
 {
-    const auto resx = context.terminalSize.x / 2;
-    const auto resy = context.terminalSize.y / 2;
+    const auto resx = ui.terminalSize.dimx / 2;
+    const auto resy = ui.terminalSize.dimy / 2;
 
     char buffer[128];
     std::ospanstream ss(buffer);
@@ -652,12 +680,6 @@ Ftxui::Ftxui()
 {
 }
 
-core::TerminalSize Ftxui::getTerminalSize() const
-{
-    auto terminalSize = Terminal::Size();
-    return {.x = terminalSize.dimx, .y = terminalSize.dimy};
-}
-
 void Ftxui::run(core::Context& context)
 {
     commandLine.input = Input(
@@ -700,7 +722,7 @@ void Ftxui::run(core::Context& context)
             }),
             [&context, this]{ return render(*this, context); })
         | CatchEvent([&context, this](const Event& event){ return handleEvent(event, *this, context); })
-        | utils::sideEffect([&context](auto&){ core::resize(context); });
+        | utils::sideEffect([this, &context](auto&){ resize(*this, context); });
 
     screen
         .OnCrash([](const int signal){ sys::crashHandle(signal); })

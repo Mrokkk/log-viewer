@@ -25,7 +25,6 @@ void scrollTo(size_t lineNumber, core::Context& context);
 bool executeCode(const std::string& line, core::Context& context);
 bool backspace(core::Context& context);
 void reloadView(View& view, Context& context);
-bool resize(core::Context& context);
 void initializeDefaultInputMapping(core::Context& context);
 bool registerKeyPress(char c, core::Context& context);
 utils::Strings readCurrentDirectory();
