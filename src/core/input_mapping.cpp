@@ -49,8 +49,8 @@ void initializeDefaultInputMapping(Context&)
 static std::expected<std::string, std::string> convertKeys(std::string_view input)
 {
     static std::flat_map<std::string, char> mapping = {
-        {"SPACE", ' '},
-        {"LEADER", ','},
+        {"space", ' '},
+        {"leader", ','},
     };
 
     std::string keys;
@@ -73,6 +73,9 @@ static std::expected<std::string, std::string> convertKeys(std::string_view inpu
                 {
                     case 'C':
                         keys += key[2] - 0x40;
+                        break;
+                    case 'c':
+                        keys += key[2] - 0x60;
                         break;
                     default:
                         return std::unexpected("Unknown key");
@@ -99,11 +102,6 @@ static std::expected<std::string, std::string> convertKeys(std::string_view inpu
 
 bool addInputMapping(std::string keys, const std::string& command, bool force, Context& context)
 {
-    std::transform(
-        keys.begin(), keys.end(),
-        keys.begin(),
-        [](char c){ return std::toupper(c); });
-
     const auto converted = convertKeys(keys);
 
     if (not converted)
