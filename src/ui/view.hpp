@@ -1,17 +1,17 @@
 #pragma once
 
+#include <list>
 #include <string>
-#include <vector>
 
 #include "core/mapped_file.hpp"
 #include "utils/ring_buffer.hpp"
 
-namespace core
+namespace ui
 {
 
 struct View
 {
-    MappedFile*                    file;
+    core::MappedFile*              file;
     size_t                         viewHeight;
     size_t                         yoffset;
     size_t                         xoffset;
@@ -19,6 +19,6 @@ struct View
     utils::RingBuffer<std::string> ringBuffer;
 };
 
-using Views = std::vector<View>;
+using Views = std::list<View>;
 
-}  // namespace core
+}  // namespace ui

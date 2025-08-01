@@ -2,6 +2,8 @@
 #include "core/command.hpp"
 #include "core/operations.hpp"
 
+#include "ui/ftxui.hpp"
+
 namespace core
 {
 
@@ -17,13 +19,7 @@ DEFINE_COMMAND(open)
 
     EXECUTOR()
     {
-        const auto& path = args[0];
-        if (auto view = asyncViewLoader(path.string, context))
-        {
-            context.currentView = view;
-            return true;
-        }
-        return false;
+        return asyncViewLoader(args[0].string, context);
     }
 }
 

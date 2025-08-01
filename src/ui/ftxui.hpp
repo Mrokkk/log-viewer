@@ -11,6 +11,7 @@
 #include "core/context.hpp"
 #include "core/logger.hpp"
 #include "core/user_interface.hpp"
+#include "ui/view.hpp"
 #include "utils/immobile.hpp"
 #include "utils/string.hpp"
 
@@ -66,16 +67,21 @@ struct Ftxui final : core::UserInterface
     Ftxui();
     void run(core::Context& context) override;
     void quit(core::Context& context) override;
-    void execute(std::function<void()> fn) override;
     void executeShell(const std::string& command) override;
+    void scrollTo(ssize_t lineNumber, core::Context& context) override;
     std::ostream& operator<<(Severity severity) override;
+    void* createView(core::Context& context) override;
+    void attachFileToView(core::MappedFile& file, void* view, core::Context& context) override;
 
     ftxui::ScreenInteractive screen;
     ftxui::Dimensions        terminalSize;
+    Views                    views;
+    View*                    currentView;
     CommandLine              commandLine;
     UIElement                active;
     Picker                   picker;
     EventHandlers            eventHandlers;
+    bool                     showLineNumbers;
 };
 
 core::UserInterface& createFtxuiUserInterface(core::Context& context);

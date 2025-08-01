@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <iomanip>
-#include <ios>
 #include <iostream>
 #include <memory>
 #include <queue>
@@ -24,7 +22,6 @@
 #include "core/type.hpp"
 #include "core/variable.hpp"
 #include "sys/system.hpp"
-#include "utils/math.hpp"
 #include "utils/string.hpp"
 
 namespace core
@@ -78,7 +75,7 @@ int run(int argc, char* const* argv, Context& context)
 
     if (file)
     {
-        context.currentView = asyncViewLoader(std::string(file->string), context);
+        asyncViewLoader(std::string(file->string), context);
     }
 
     context.ui->run(context);
@@ -89,244 +86,26 @@ int run(int argc, char* const* argv, Context& context)
     return 0;
 }
 
-View* asyncViewLoader(std::string path, Context& context)
+bool asyncViewLoader(std::string path, Context& context)
 {
     if (not std::filesystem::exists(path))
     {
         *context.ui << error << path << ": no such file";
-        return nullptr;
+        return false;
     }
 
-    // FIXME: a workaround for the fact that vector can reallocate data,
-    // while I keep references to old data in thread. I need to switch
-    // to non-continguos data structures
-    context.views.reserve(100);
-    context.files.reserve(100);
-
-    auto& view = context.views.emplace_back(
-        View{
-            .file = nullptr,
-            .viewHeight = 0,
-            .yoffset = 0,
-            .xoffset = 0,
-            .lineNrDigits = 0,
-            .ringBuffer{0}
-        });
+    auto view = context.ui->createView(context);
 
     auto& newFile = context.files.emplace_back(nullptr);
 
     std::thread(
-        [path = std::move(path), &newFile, &view, &context]
+        [path = std::move(path), &newFile, view, &context]
         {
             newFile = std::make_unique<MappedFile>(path);
-            view.file = newFile.get();
-            context.ui->execute([&newFile, &context, &view]
-                {
-                    *context.ui << info
-                        << newFile->path() << ": lines: " << newFile->lineCount() << "; took "
-                        << std::fixed << std::setprecision(3) << newFile->loadTime() << " s";
-                    reloadView(view, context);
-                });
+            context.ui->attachFileToView(*newFile, view, context);
         }).detach();
 
-    return &view;
-}
-
-void reloadLines(View& view, Context& context)
-{
-    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
-    {
-        view.ringBuffer.pushBack(getLine(context, view, i));
-    }
-}
-
-bool scrollLeft(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    if (view.xoffset == 0)
-    {
-        return true;
-    }
-
-    view.xoffset--;
-    reloadLines(view, context);
     return true;
-}
-
-bool scrollRight(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    view.xoffset++;
-    reloadLines(view, context);
-    return true;
-}
-
-bool scrollLineDown(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    if (view.ringBuffer.size() == 0)
-    {
-        return true;
-    }
-
-    if (view.yoffset + view.viewHeight >= view.file->lineCount())
-    {
-        return true;
-    }
-
-    view.yoffset++;
-    auto line = getLine(context, view, view.yoffset + view.viewHeight - 1);
-    view.ringBuffer.pushBack(std::move(line));
-
-    return true;
-}
-
-bool scrollLineUp(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    if (view.yoffset == 0)
-    {
-        return true;
-    }
-
-    view.yoffset--;
-    view.ringBuffer.pushFront(getLine(context, view, view.yoffset));
-
-    return true;
-}
-
-bool scrollPageDown(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    if (view.ringBuffer.size() == 0)
-    {
-        return true;
-    }
-
-    if (view.yoffset + view.viewHeight >= view.file->lineCount())
-    {
-        return true;
-    }
-
-    view.yoffset = (view.yoffset + view.viewHeight)
-        | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
-
-    reloadLines(view, context);
-
-    return true;
-}
-
-bool scrollPageUp(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    if (view.yoffset == 0)
-    {
-        return true;
-    }
-
-    view.yoffset -= view.viewHeight;
-
-    if ((long)view.yoffset < 0)
-    {
-        view.yoffset = 0;
-    }
-
-    reloadLines(view, context);
-
-    return true;
-}
-
-bool scrollToBeginning(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    if (view.yoffset == 0)
-    {
-        return true;
-    }
-
-    view.yoffset = 0;
-    reloadLines(view, context);
-
-    return true;
-}
-
-bool scrollToEnd(Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *context.currentView;
-
-    const auto lastViewLine = view.file->lineCount() - view.viewHeight;
-
-    if (view.yoffset >= lastViewLine)
-    {
-        return true;
-    }
-
-    view.yoffset = lastViewLine;
-
-    reloadLines(view, context);
-
-    return true;
-}
-
-void scrollTo(size_t lineNumber, Context& context)
-{
-    if (not context.currentView or not context.currentView->file)
-    {
-        return;
-    }
-
-    auto& view = *context.currentView;
-
-    lineNumber = lineNumber | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
-    view.yoffset = lineNumber;
-    reloadLines(view, context);
 }
 
 using TokensSpan = std::span<const Token>;
@@ -406,16 +185,26 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
 
             case Token::Type::percent:
             {
-                if (not context.currentView or not context.currentView->file)
+                auto path = Variables::find("path");
+
+                if (not path)
                 {
-                    *context.ui << error << "File path not set in current view";
+                    *context.ui << error << "path variable does not exist";
                     return false;
                 }
-                const auto& path = context.currentView->file->path();
+
+                auto value = path->reader(context);
+
+                if (not value.string)
+                {
+                    *context.ui << error << "path not set";
+                    return false;
+                }
+
                 args.emplace_back(
                     Argument{
                         .type = Type::string,
-                        .string{path.begin(), path.end()},
+                        .string = *value.string,
                     });
                 break;
             }
@@ -478,15 +267,7 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
     if (tokens[0].type == Token::Type::intLiteral)
     {
         const auto lineNumber = commandName | utils::to<long>;
-        if (lineNumber == -1)
-        {
-            scrollToEnd(context);
-        }
-        else if (lineNumber < 0)
-        {
-            return false;
-        }
-        scrollTo(lineNumber, context);
+        context.ui->scrollTo(lineNumber, context);
         return true;
     }
 
@@ -700,36 +481,6 @@ utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& 
     }
 
     return refs;
-}
-
-DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")
-{
-    READER()
-    {
-        return context.showLineNumbers;
-    }
-
-    WRITER()
-    {
-        context.showLineNumbers = value.boolean;
-        if (context.currentView and context.currentView->file)
-        {
-            reloadLines(*context.currentView, context);
-        }
-        return true;
-    }
-}
-
-DEFINE_READONLY_VARIABLE(path, string, "Path to the opened file")
-{
-    READER()
-    {
-        if (not context.currentView or not context.currentView->file)
-        {
-            return nullptr;
-        }
-        return &context.currentView->file->path();
-    }
 }
 
 }  // namespace core

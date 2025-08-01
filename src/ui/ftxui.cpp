@@ -5,6 +5,7 @@
 #include <cstring>
 #include <flat_set>
 #include <iomanip>
+#include <ios>
 #include <ranges>
 #include <spanstream>
 #include <sstream>
@@ -30,17 +31,16 @@
 
 using namespace ftxui;
 
-namespace core
+namespace ui
 {
 
-// This should be somewhere else, but I need to figure out how
-// to handle string coloring in a generic manner not dependent
-// on ftxui and without excessive number of string allocations
-std::string getLine(core::Context& context, View& view, size_t lineIndex)
+static std::string getLine(View& view, size_t lineIndex, core::Context& context)
 {
     std::stringstream ss;
 
-    if (context.showLineNumbers)
+    auto& ui = context.ui->get<ui::Ftxui>();
+
+    if (ui.showLineNumbers)
     {
         ss << std::setw(view.lineNrDigits + 1) << std::right
            << ColorWrapped(lineIndex, 0x4e4e4e_rgb)
@@ -70,7 +70,15 @@ std::string getLine(core::Context& context, View& view, size_t lineIndex)
     return ss.str();
 }
 
-void reloadView(View& view, Context& context)
+static void reloadLines(View& view, core::Context& context)
+{
+    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
+    {
+        view.ringBuffer.pushBack(getLine(view, i, context));
+    }
+}
+
+static void reloadView(View& view, core::Context& context)
 {
     auto& ui = context.ui->get<ui::Ftxui>();
     view.viewHeight = std::min(static_cast<size_t>(ui.terminalSize.dimy) - 2, view.file->lineCount());
@@ -81,10 +89,180 @@ void reloadView(View& view, Context& context)
     reloadLines(view, context);
 }
 
-}  // namespace core
-
-namespace ui
+static bool scrollLeft(Ftxui& ui, core::Context& context)
 {
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    if (view.xoffset == 0)
+    {
+        return true;
+    }
+
+    view.xoffset--;
+    reloadLines(view, context);
+    return true;
+}
+
+static bool scrollRight(Ftxui& ui, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    view.xoffset++;
+    reloadLines(view, context);
+    return true;
+}
+
+static bool scrollLineDown(Ftxui& ui, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    if (view.ringBuffer.size() == 0)
+    {
+        return true;
+    }
+
+    if (view.yoffset + view.viewHeight >= view.file->lineCount())
+    {
+        return true;
+    }
+
+    view.yoffset++;
+    auto line = getLine(view, view.yoffset + view.viewHeight - 1, context);
+    view.ringBuffer.pushBack(std::move(line));
+
+    return true;
+}
+
+static bool scrollLineUp(Ftxui& ui, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    if (view.yoffset == 0)
+    {
+        return true;
+    }
+
+    view.yoffset--;
+    view.ringBuffer.pushFront(getLine(view, view.yoffset, context));
+
+    return true;
+}
+
+static bool scrollPageDown(Ftxui& ui, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    if (view.ringBuffer.size() == 0)
+    {
+        return true;
+    }
+
+    if (view.yoffset + view.viewHeight >= view.file->lineCount())
+    {
+        return true;
+    }
+
+    view.yoffset = (view.yoffset + view.viewHeight)
+        | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
+
+    reloadLines(view, context);
+
+    return true;
+}
+
+static bool scrollPageUp(Ftxui& ui, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    if (view.yoffset == 0)
+    {
+        return true;
+    }
+
+    view.yoffset -= view.viewHeight;
+
+    if ((long)view.yoffset < 0)
+    {
+        view.yoffset = 0;
+    }
+
+    reloadLines(view, context);
+
+    return true;
+}
+
+static bool scrollToEnd(Ftxui& ui, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return true;
+    }
+
+    auto& view = *ui.currentView;
+
+    const auto lastViewLine = view.file->lineCount() - view.viewHeight;
+
+    if (view.yoffset >= lastViewLine)
+    {
+        return true;
+    }
+
+    view.yoffset = lastViewLine;
+
+    reloadLines(view, context);
+
+    return true;
+}
+
+static void scrollTo(Ftxui& ui, ssize_t lineNumber, core::Context& context)
+{
+    if (not ui.currentView or not ui.currentView->file)
+    {
+        return;
+    }
+
+    auto& view = *ui.currentView;
+
+    if (lineNumber == -1)
+    {
+        scrollToEnd(ui, context);
+        return;
+    }
+
+    lineNumber = (size_t)lineNumber | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
+    view.yoffset = lineNumber;
+    reloadLines(view, context);
+}
 
 static bool abort(Ftxui&, core::Context&)
 {
@@ -131,8 +309,8 @@ static void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::views:
-            ui.picker.strings = context.views
-                | views::transform([](const core::View& e){ return e.file ? e.file->path() : "loading..."; })
+            ui.picker.strings = ui.views
+                | views::transform([](const View& e){ return e.file ? e.file->path() : "loading..."; })
                 | to<utils::Strings>();
             break;
 
@@ -257,8 +435,19 @@ static void pickerAccept(Ftxui& ui, core::Context& context)
             break;
 
         case Picker::Type::views:
-            context.currentView = &context.views[index];
+        {
+            size_t i = 0;
+            for (auto& view : ui.views)
+            {
+                if (index == i)
+                {
+                    ui.currentView = &view;
+                    break;
+                }
+                ++i;
+            }
             break;
+        }
 
         default:
             break;
@@ -380,7 +569,7 @@ static bool resize(Ftxui& ui, core::Context& context)
     auto oldTerminalSize = ui.terminalSize;
     ui.terminalSize = Terminal::Size();
 
-    if (not context.currentView or not context.currentView->file)
+    if (not ui.currentView or not ui.currentView->file)
     {
         return false;
     }
@@ -389,7 +578,7 @@ static bool resize(Ftxui& ui, core::Context& context)
     {
         logger << info << "terminal size: " << ui.terminalSize.dimx << 'x' << ui.terminalSize.dimy;
 
-        for (auto& view : context.views)
+        for (auto& view : ui.views)
         {
             reloadView(view, context);
         }
@@ -398,40 +587,39 @@ static bool resize(Ftxui& ui, core::Context& context)
     return true;
 }
 
-static bool pageUp(Ftxui&, core::Context& context)
+static bool pageUp(Ftxui& ui, core::Context& context)
 {
-    core::scrollPageUp(context);
+    scrollPageUp(ui, context);
     return true;
 }
 
-static bool pageDown(Ftxui&, core::Context& context)
+static bool pageDown(Ftxui& ui, core::Context& context)
 {
-    core::scrollPageDown(context);
+    scrollPageDown(ui, context);
     return true;
 }
 
-static bool arrowDown(Ftxui&, core::Context& context)
+static bool arrowDown(Ftxui& ui, core::Context& context)
 {
-    core::scrollLineDown(context);
+    scrollLineDown(ui, context);
     return true;
 }
 
-static bool arrowUp(Ftxui&, core::Context& context)
+static bool arrowUp(Ftxui& ui, core::Context& context)
 {
-    core::scrollLineUp(context);
+    scrollLineUp(ui, context);
     return true;
 }
 
-static bool arrowLeft(Ftxui&, core::Context& context)
+static bool arrowLeft(Ftxui& ui, core::Context& context)
 {
-    core::scrollLeft(context);
+    scrollLeft(ui, context);
     return true;
 }
 
-static bool arrowRight(Ftxui&, core::Context& context)
+static bool arrowRight(Ftxui& ui, core::Context& context)
 {
-    core::scrollRight(context);
-    return true;
+    return scrollRight(ui, context);
 }
 
 static bool ignore(Ftxui&, core::Context&)
@@ -484,7 +672,7 @@ static Element renderEmptyView(core::Context& context)
 
     return vbox({
         text("Hello!") | center,
-        text("Press CTRL-P to open file picker") | center,
+        text("Type :files<Enter> to open file picker") | center,
         text("Alternatively, type :e <file><Enter> to open given file") | center,
     }) | center | flex;
 }
@@ -501,7 +689,7 @@ static Element renderLoadingView(core::Context& context)
     return vbox({text("Loading...") | center}) | center | flex;
 }
 
-static Element renderView(core::View& view, core::Context& context)
+static Element renderView(View& view, core::Context& context)
 {
     auto& ui = context.ui->get<Ftxui>();
 
@@ -531,9 +719,11 @@ static Element renderView(core::View& view, core::Context& context)
 
 static Element renderStatusLine(core::Context& context, bool isCommand)
 {
-    const auto fileName = context.currentView
-        ? context.currentView->file
-            ? context.currentView->file->path().c_str()
+    auto& ui = context.ui->get<Ftxui>();
+
+    const auto fileName = ui.currentView
+        ? ui.currentView->file
+            ? ui.currentView->file->path().c_str()
             : "loading..."
         : "[No Name]";
 
@@ -573,9 +763,9 @@ static Element render(Ftxui& ui, core::Context& context)
     const auto isCommand = ui.active == UIElement::commandLine;
 
     auto children = Elements{
-        context.currentView
-            ? context.currentView->file
-                ? renderView(*context.currentView, context)
+        ui.currentView
+            ? ui.currentView->file
+                ? renderView(*ui.currentView, context)
                 : renderLoadingView(context)
             : renderEmptyView(context),
         renderStatusLine(context, isCommand),
@@ -646,7 +836,7 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
     return handler->second(ui, context);
 }
 
-void onFilePickerChange(Ftxui& ui, core::Context&)
+static void onFilePickerChange(Ftxui& ui, core::Context&)
 {
     ui.picker.content->DetachAllChildren();
 
@@ -660,6 +850,7 @@ void onFilePickerChange(Ftxui& ui, core::Context&)
 
 Ftxui::Ftxui()
     : screen(ScreenInteractive::Fullscreen())
+    , currentView(nullptr)
     , active(UIElement::logView)
     , eventHandlers{
         {Event::PageUp,     whenActive(UIElement::logView, pageUp)},
@@ -736,12 +927,6 @@ void Ftxui::quit(core::Context&)
     screen.Exit();
 }
 
-void Ftxui::execute(std::function<void()> fn)
-{
-    screen.Post(std::move(fn));
-    screen.RequestAnimationFrame();
-}
-
 void Ftxui::executeShell(const std::string& cmd)
 {
     auto command = cmd + "; read -n 1 -s -r -p \"\nCommand exited with $?; press any key to continue\"";
@@ -752,11 +937,49 @@ void Ftxui::executeShell(const std::string& cmd)
         }));
 }
 
+void Ftxui::scrollTo(ssize_t lineNumber, core::Context& context)
+{
+    ::ui::scrollTo(*this, lineNumber, context);
+}
+
 std::ostream& Ftxui::operator<<(Severity severity)
 {
     clearMessageLine(*this);
     commandLine.severity = severity;
     return commandLine.messageLine;
+}
+
+void* Ftxui::createView(core::Context&)
+{
+    auto& view = views.emplace_back(
+        View{
+            .file = nullptr,
+            .viewHeight = 0,
+            .yoffset = 0,
+            .xoffset = 0,
+            .lineNrDigits = 0,
+            .ringBuffer{0}
+        });
+
+    currentView = &view;
+
+    return &view;
+}
+
+void Ftxui::attachFileToView(core::MappedFile& file, void* handle, core::Context& context)
+{
+    auto& view = *static_cast<View*>(handle);
+
+    screen.Post(
+        [this, &file, &view, &context]
+        {
+            view.file = &file;
+            *this << info
+                << file.path() << ": lines: " << file.lineCount() << "; took "
+                << std::fixed << std::setprecision(3) << file.loadTime() << " s";
+            reloadView(view, context);
+        });
+    screen.RequestAnimationFrame();
 }
 
 core::UserInterface& createFtxuiUserInterface(core::Context& context)
@@ -831,6 +1054,41 @@ DEFINE_COMMAND(variables)
     {
         showPicker(context.ui->get<Ftxui>(), Picker::Type::variables, context);
         return true;
+    }
+}
+
+DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")
+{
+    READER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        return ui.showLineNumbers;
+    }
+
+    WRITER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+
+        ui.showLineNumbers = value.boolean;
+        if (ui.currentView and ui.currentView->file)
+        {
+            reloadLines(*ui.currentView, context);
+        }
+        return true;
+    }
+}
+
+DEFINE_READONLY_VARIABLE(path, string, "Path to the opened file")
+{
+    READER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+
+        if (not ui.currentView or not ui.currentView->file)
+        {
+            return nullptr;
+        }
+        return &ui.currentView->file->path();
     }
 }
 

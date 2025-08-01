@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,13 +32,12 @@ struct MappedFile final : utils::Immobile
     std::string operator[](unsigned long i);
 
 private:
-
     float       loadTime_;
     File        file_;
     Lines       lines_;
     Mapping     mapping_;
 };
 
-using MappedFiles = std::vector<std::unique_ptr<MappedFile>>;
+using MappedFiles = std::list<std::unique_ptr<MappedFile>>;
 
 }  // namespace core
