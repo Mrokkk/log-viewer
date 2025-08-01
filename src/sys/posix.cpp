@@ -66,6 +66,12 @@ static std::string mappingNameFind(const ProcessMappings& mappings, uintptr_t ad
         : "??";
 }
 
+using BacktraceCreateStateFn = decltype(&backtrace_create_state);
+using BacktraceFullFn = decltype(&backtrace_full);
+
+BacktraceCreateStateFn backtraceCreateState;
+BacktraceFullFn backtraceFull;
+
 static int backtraceCallback(void* data, uintptr_t pc, const char* pathname, int lineNumber, const char* function)
 {
     auto ctx = static_cast<BacktraceContext*>(data);
@@ -167,17 +173,44 @@ static ProcessMappings mappingRead()
 
 void stacktraceLog(void)
 {
+    if (not backtraceFull)
+    {
+        logger << warning << "libbacktrace unavailable; cannot collect stacktrace";
+        return;
+    }
+
     auto context = BacktraceContext{
         .index = 0,
         .maps = mappingRead()
     };
+
     logger << info << "Stacktrace:";
-    backtrace_full(backtraceState, 1, backtraceCallback, backtraceErrorCallback, static_cast<void*>(&context));
+
+    backtraceFull(backtraceState, 1, backtraceCallback, backtraceErrorCallback, static_cast<void*>(&context));
 }
 
 void initialize()
 {
-    backtraceState = backtrace_create_state(NULL, 0, backtraceErrorCallback, NULL);
+    auto libbacktrace = dlopen("libbacktrace.so", RTLD_LAZY);
+
+    if (not libbacktrace)
+    {
+        std::cerr << "cannot load libbacktrace.so\n";
+        return;
+    }
+
+    backtraceCreateState = reinterpret_cast<BacktraceCreateStateFn>(dlsym(libbacktrace, "backtrace_create_state"));
+    backtraceFull = reinterpret_cast<BacktraceFullFn>(dlsym(libbacktrace, "backtrace_full"));
+
+    if (not backtraceFull or not backtraceCreateState)
+    {
+        std::cerr << "cannot find backtrace_full or backtrace_create_state\n";
+        backtraceFull = nullptr;
+        backtraceCreateState = nullptr;
+        return;
+    }
+
+    backtraceState = backtraceCreateState(NULL, 0, backtraceErrorCallback, NULL);
 }
 
 void finalize()
