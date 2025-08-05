@@ -1,14 +1,13 @@
 #include "ftxui.hpp"
 
-#include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <flat_set>
 #include <iomanip>
 #include <ios>
-#include <ranges>
 #include <spanstream>
 #include <sstream>
+#include <string>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_options.hpp>
@@ -25,7 +24,10 @@
 #include "core/operations.hpp"
 #include "core/variable.hpp"
 #include "sys/system.hpp"
+#include "ui/picker.hpp"
+#include "ui/scroll.hpp"
 #include "utils/math.hpp"
+#include "utils/ring_buffer.hpp"
 #include "utils/side_effect.hpp"
 #include "utils/string.hpp"
 
@@ -34,11 +36,16 @@ using namespace ftxui;
 namespace ui
 {
 
-static std::string getLine(View& view, size_t lineIndex, core::Context& context)
+std::string getLine(View& view, size_t lineIndex, core::Context& context)
 {
     std::stringstream ss;
 
     auto& ui = context.ui->get<ui::Ftxui>();
+
+    if (not view.lines.empty())
+    {
+        lineIndex = view.lines[lineIndex];
+    }
 
     if (ui.showLineNumbers)
     {
@@ -70,7 +77,7 @@ static std::string getLine(View& view, size_t lineIndex, core::Context& context)
     return ss.str();
 }
 
-static void reloadLines(View& view, core::Context& context)
+void reloadLines(View& view, core::Context& context)
 {
     for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
     {
@@ -78,190 +85,28 @@ static void reloadLines(View& view, core::Context& context)
     }
 }
 
-static void reloadView(View& view, core::Context& context)
+static size_t getAvailableViewHeight(Ftxui& ui, View& view)
+{
+    return static_cast<size_t>(ui.terminalSize.dimy)
+        - 1 // command line
+        - 1 // status line
+        - (view.depth() + 1);
+}
+
+void reloadView(View& view, core::Context& context)
 {
     auto& ui = context.ui->get<ui::Ftxui>();
-    view.viewHeight = std::min(static_cast<size_t>(ui.terminalSize.dimy) - 2, view.file->lineCount());
+    view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
     view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
     view.ringBuffer = utils::RingBuffer<std::string>(view.viewHeight);
-    view.yoffset = view.yoffset | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
+    view.yoffset = view.yoffset | utils::clamp(0ul, view.lineCount - view.viewHeight);
 
     reloadLines(view, context);
 }
 
-static bool scrollLeft(Ftxui& ui, core::Context& context)
+bool isViewLoaded(Ftxui& ui)
 {
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    if (view.xoffset == 0)
-    {
-        return true;
-    }
-
-    view.xoffset--;
-    reloadLines(view, context);
-    return true;
-}
-
-static bool scrollRight(Ftxui& ui, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    view.xoffset++;
-    reloadLines(view, context);
-    return true;
-}
-
-static bool scrollLineDown(Ftxui& ui, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    if (view.ringBuffer.size() == 0)
-    {
-        return true;
-    }
-
-    if (view.yoffset + view.viewHeight >= view.file->lineCount())
-    {
-        return true;
-    }
-
-    view.yoffset++;
-    auto line = getLine(view, view.yoffset + view.viewHeight - 1, context);
-    view.ringBuffer.pushBack(std::move(line));
-
-    return true;
-}
-
-static bool scrollLineUp(Ftxui& ui, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    if (view.yoffset == 0)
-    {
-        return true;
-    }
-
-    view.yoffset--;
-    view.ringBuffer.pushFront(getLine(view, view.yoffset, context));
-
-    return true;
-}
-
-static bool scrollPageDown(Ftxui& ui, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    if (view.ringBuffer.size() == 0)
-    {
-        return true;
-    }
-
-    if (view.yoffset + view.viewHeight >= view.file->lineCount())
-    {
-        return true;
-    }
-
-    view.yoffset = (view.yoffset + view.viewHeight)
-        | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
-
-    reloadLines(view, context);
-
-    return true;
-}
-
-static bool scrollPageUp(Ftxui& ui, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    if (view.yoffset == 0)
-    {
-        return true;
-    }
-
-    view.yoffset -= view.viewHeight;
-
-    if ((long)view.yoffset < 0)
-    {
-        view.yoffset = 0;
-    }
-
-    reloadLines(view, context);
-
-    return true;
-}
-
-static bool scrollToEnd(Ftxui& ui, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return true;
-    }
-
-    auto& view = *ui.currentView;
-
-    const auto lastViewLine = view.file->lineCount() - view.viewHeight;
-
-    if (view.yoffset >= lastViewLine)
-    {
-        return true;
-    }
-
-    view.yoffset = lastViewLine;
-
-    reloadLines(view, context);
-
-    return true;
-}
-
-static void scrollTo(Ftxui& ui, ssize_t lineNumber, core::Context& context)
-{
-    if (not ui.currentView or not ui.currentView->file)
-    {
-        return;
-    }
-
-    auto& view = *ui.currentView;
-
-    if (lineNumber == -1)
-    {
-        scrollToEnd(ui, context);
-        return;
-    }
-
-    lineNumber = (size_t)lineNumber | utils::clamp(0ul, view.file->lineCount() - view.viewHeight);
-    view.yoffset = lineNumber;
-    reloadLines(view, context);
+    return ui.currentView and ui.currentView->file;
 }
 
 static bool abort(Ftxui&, core::Context&)
@@ -275,122 +120,6 @@ static void clearMessageLine(Ftxui& ui)
     memset(ui.commandLine.buffer, 0, sizeof(ui.commandLine.buffer));
     std::ospanstream s(ui.commandLine.buffer);
     ui.commandLine.messageLine.swap(s);
-}
-
-static const MenuEntryOption menuOption{
-    .transform =
-        [](const EntryState& state)
-        {
-            if (state.focused)
-            {
-                return text("▌" + state.label) | color(Color::Blue) | bold;
-            }
-            else
-            {
-                return text(" " + state.label);
-            }
-        }
-};
-
-static void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
-{
-    ui.picker.content->DetachAllChildren();
-
-    const auto width = ui.terminalSize.dimx / 2 - 4;
-    const auto leftWidth = width / 2;
-
-    switch (type)
-    {
-        using namespace std;
-        using namespace std::ranges;
-
-        case Picker::Type::files:
-            ui.picker.strings = core::readCurrentDirectoryRecursive();
-            break;
-
-        case Picker::Type::views:
-            ui.picker.strings = ui.views
-                | views::transform([](const View& e){ return e.file ? e.file->path() : "loading..."; })
-                | to<utils::Strings>();
-            break;
-
-        case Picker::Type::commands:
-            ui.picker.strings = core::Commands::map()
-                | views::transform(
-                    [leftWidth, width](const auto& e)
-                    {
-                        std::stringstream commandDesc;
-                        commandDesc << e.second.name << " ";
-                        for (const auto& arg : e.second.arguments.get())
-                        {
-                            if (arg.type == core::Type::variadic)
-                            {
-                                commandDesc << '[' << arg.name << "]... ";
-                            }
-                            else
-                            {
-                                commandDesc << '[' << arg.type << ':' << arg.name << "] ";
-                            }
-                        }
-
-                        std::stringstream ss;
-                        ss << std::left << std::setw(leftWidth) << commandDesc.str()
-                           << std::right << std::setw(width - leftWidth) << ColorWrapped(e.second.help, 0x4e4e4e_rgb);
-
-                        return ss.str();
-                    })
-                | to<utils::Strings>();
-            break;
-
-        case Picker::Type::variables:
-            ui.picker.strings = core::Variables::map()
-                | views::transform(
-                    [&context, leftWidth, width](const auto& e)
-                    {
-                        std::stringstream variableDesc;
-                        variableDesc << e.second.name << '{';
-                        if (not e.second.writer)
-                        {
-                            variableDesc << "const ";
-                        }
-
-                        variableDesc << e.second.type << "} : " << core::VariableWithContext{e.second, context};
-
-                        std::stringstream ss;
-                        ss << std::left << std::setw(leftWidth) << variableDesc.str()
-                           << std::right << std::setw(width - leftWidth) << ColorWrapped(e.second.help, 0x4e4e4e_rgb);
-
-                        return ss.str();
-                    })
-                | to<utils::Strings>();
-            break;
-
-        default:
-            break;
-    }
-
-    ui.picker.cachedStrings = core::fuzzyFilter(ui.picker.strings, "");
-
-    for (auto& entry : ui.picker.cachedStrings)
-    {
-        ui.picker.content->Add(MenuEntry(entry, menuOption));
-    }
-
-    if (ui.picker.cachedStrings.size())
-    {
-        ui.picker.content->SetActiveChild(ui.picker.content->ChildAt(0));
-    }
-
-    ui.picker.inputLine.clear();
-    ui.picker.active = type;
-}
-
-static void showPicker(Ftxui& ui, Picker::Type type, core::Context& context)
-{
-    loadPicker(ui, type, context);
-
-    ui.picker.content->TakeFocus();
-    ui.active = UIElement::picker;
 }
 
 static bool escape(Ftxui& ui, core::Context& context)
@@ -410,50 +139,6 @@ static bool ctrlC(Ftxui& ui, core::Context&)
 {
     ui << info << "Type :qa and press <Enter> to quit";
     return true;
-}
-
-static void pickerAccept(Ftxui& ui, core::Context& context)
-{
-    auto active = ui.picker.content->ActiveChild();
-
-    if (not active) [[unlikely]]
-    {
-        return;
-    }
-
-    const auto index = static_cast<size_t>(active->Index());
-
-    if (index >= ui.picker.cachedStrings.size()) [[unlikely]]
-    {
-        return;
-    }
-
-    switch (ui.picker.active)
-    {
-        case Picker::Type::files:
-            executeCode("open \"" + *ui.picker.cachedStrings[active->Index()] + '\"', context);
-            break;
-
-        case Picker::Type::views:
-        {
-            size_t i = 0;
-            for (auto& view : ui.views)
-            {
-                if (index == i)
-                {
-                    ui.currentView = &view;
-                    break;
-                }
-                ++i;
-            }
-            break;
-        }
-
-        default:
-            break;
-    }
-
-    ui.active = UIElement::logView;
 }
 
 static bool enter(Ftxui& ui, core::Context& context)
@@ -479,62 +164,13 @@ static bool enter(Ftxui& ui, core::Context& context)
     }
 }
 
-static std::string pickerName(const Picker::Type type)
-{
-#define TYPE_CONVERT(type) \
-    case Picker::Type::type: return #type
-    switch (type)
-    {
-        TYPE_CONVERT(files);
-        TYPE_CONVERT(views);
-        TYPE_CONVERT(commands);
-        TYPE_CONVERT(variables);
-        case Picker::Type::_last:
-            break;
-    }
-    return "unknown";
-}
-
-static utils::Strings getPickerNames()
-{
-    utils::Strings names;
-    for (int i = 0; i < static_cast<int>(Picker::Type::_last); ++i)
-    {
-        names.push_back(pickerName(static_cast<Picker::Type>(i)));
-    }
-    return names;
-}
-
-static void pickerNext(Ftxui& ui, core::Context& context)
-{
-    auto nextType = static_cast<Picker::Type>(ui.picker.active + 1);
-
-    if (nextType == Picker::Type::_last)
-    {
-        nextType = Picker::Type::files;
-    }
-
-    loadPicker(ui, nextType, context);
-}
-
-static void pickerPrev(Ftxui& ui, core::Context& context)
-{
-    auto nextType = static_cast<Picker::Type>(ui.picker.active - 1);
-
-    if (static_cast<int>(nextType < 0))
-    {
-        nextType = static_cast<Picker::Type>(Picker::Type::_last - 1);
-    }
-
-    loadPicker(ui, nextType, context);
-}
-
 static bool tab(Ftxui& ui, core::Context& context)
 {
     if (ui.active != UIElement::picker)
     {
         return false;
     }
+
     pickerNext(ui, context);
     return true;
 }
@@ -545,6 +181,7 @@ static bool tabReverse(Ftxui& ui, core::Context& context)
     {
         return false;
     }
+
     pickerPrev(ui, context);
     return true;
 }
@@ -569,7 +206,7 @@ static bool resize(Ftxui& ui, core::Context& context)
     auto oldTerminalSize = ui.terminalSize;
     ui.terminalSize = Terminal::Size();
 
-    if (not ui.currentView or not ui.currentView->file)
+    if (not isViewLoaded(ui))
     {
         return false;
     }
@@ -578,9 +215,11 @@ static bool resize(Ftxui& ui, core::Context& context)
     {
         logger << info << "terminal size: " << ui.terminalSize.dimx << 'x' << ui.terminalSize.dimy;
 
-        for (auto& view : ui.views)
+        // FIXME: resize all views
+        //for (auto& view : ui.views)
         {
-            reloadView(view, context);
+            (void)context;
+            //reloadView(view, context);
         }
     }
 
@@ -636,35 +275,8 @@ static Elements operator|(utils::RingBuffer<std::string>& buf, const ToFtxuiText
     return vec;
 }
 
-static Element renderPickerWindow(Ftxui& ui, core::Context&)
+static Element renderEmptyView(Ftxui& ui, core::Context& context)
 {
-    const auto resx = ui.terminalSize.dimx / 2;
-    const auto resy = ui.terminalSize.dimy / 2;
-
-    char buffer[128];
-    std::ospanstream ss(buffer);
-
-    ss << ui.picker.cachedStrings.size() << '/' << ui.picker.strings.size();
-
-    return window(
-        text(""),
-        vbox({
-            ui.picker.tabs->Render(),
-            separator(),
-            hbox({
-                ui.picker.input->Render() | xflex,
-                separator(),
-                text(std::string(ss.span().begin(), ss.span().end()))
-            }),
-            separator(),
-            ui.picker.content->Render() | yframe
-        }) | flex) | size(WIDTH, EQUAL, resx) | size(HEIGHT, EQUAL, resy) | clear_under | center | flex;
-}
-
-static Element renderEmptyView(core::Context& context)
-{
-    auto& ui = context.ui->get<Ftxui>();
-
     if (ui.active == UIElement::picker)
     {
         return dbox(text(""), renderPickerWindow(ui, context)) | flex;
@@ -677,50 +289,80 @@ static Element renderEmptyView(core::Context& context)
     }) | center | flex;
 }
 
-static Element renderLoadingView(core::Context& context)
+static Element wrapActiveLineIf(Element line, bool condition)
 {
-    auto& ui = context.ui->get<Ftxui>();
-
-    if (ui.active == UIElement::picker)
+    if (not condition)
     {
-        return dbox(text(""), renderPickerWindow(ui, context)) | flex;
+        return line;
     }
-
-    return vbox({text("Loading...") | center}) | center | flex;
+    return hbox({
+        line,
+        text("") | color(0x282828_rgb) | bgcolor(0x7daea3_rgb),
+        text("") | color(0x7daea3_rgb) | bgcolor(0x353535_rgb) | xflex,
+    });
 }
 
-static Element renderView(View& view, core::Context& context)
+static Elements renderTablines(Ftxui& ui)
 {
-    auto& ui = context.ui->get<Ftxui>();
+    Elements vertical;
+    vertical.reserve(5);
 
-    if (ui.active == UIElement::picker)
+    int index = 0;
+
+    vertical.push_back(
+        wrapActiveLineIf(
+            ui.mainView.renderTabline(),
+            ui.activeLine == index++));
+
+    auto view = ui.mainView.activeChild();
+
+    while (view->activeChild())
     {
-        return dbox(
+        vertical.push_back(
+            wrapActiveLineIf(
+                view->renderTabline(),
+                ui.activeLine == index++));
+
+        view = view->activeChild();
+    }
+
+    return vertical;
+}
+
+static Element renderView(Ftxui& ui, core::Context& context)
+{
+    auto vertical = renderTablines(ui);
+
+    if (ui.currentView->file) [[likely]]
+    {
+        vertical.push_back(
             flexbox(
-                {vbox(view.ringBuffer | toFtxuiText)},
+                {vbox(ui.currentView->ringBuffer | toFtxuiText)},
                 FlexboxConfig()
                     .Set(FlexboxConfig::Wrap::NoWrap)
                     .Set(FlexboxConfig::AlignItems::FlexStart)
                     .Set(FlexboxConfig::AlignContent::FlexStart)
-                    .Set(FlexboxConfig::JustifyContent::FlexStart)) | flex,
+                    .Set(FlexboxConfig::JustifyContent::FlexStart)) | flex);
+    }
+    else
+    {
+        vertical.push_back(vbox({text("Loading...") | center}) | center | flex);
+    }
+
+    if (ui.active == UIElement::picker)
+    {
+        return dbox(
+            vbox(std::move(vertical)) | flex,
             renderPickerWindow(ui, context)) | flex;
     }
     else
     {
-        return flexbox(
-            {vbox(view.ringBuffer | toFtxuiText)},
-            FlexboxConfig()
-                .Set(FlexboxConfig::Wrap::NoWrap)
-                .Set(FlexboxConfig::AlignItems::FlexStart)
-                .Set(FlexboxConfig::AlignContent::FlexStart)
-                .Set(FlexboxConfig::JustifyContent::FlexStart)) | flex;
+        return vbox(std::move(vertical)) | flex;
     }
 }
 
-static Element renderStatusLine(core::Context& context, bool isCommand)
+static Element renderStatusLine(Ftxui& ui, bool isCommand)
 {
-    auto& ui = context.ui->get<Ftxui>();
-
     const auto fileName = ui.currentView
         ? ui.currentView->file
             ? ui.currentView->file->path().c_str()
@@ -738,10 +380,8 @@ static Element renderStatusLine(core::Context& context, bool isCommand)
     });
 }
 
-static Element renderCommandLine(core::Context& context)
+static Element renderCommandLine(Ftxui& ui)
 {
-    auto& ui = context.ui->get<Ftxui>();
-
     if (ui.active == UIElement::commandLine)
     {
         return hbox(text(":"), ui.commandLine.input->Render());
@@ -764,12 +404,10 @@ static Element render(Ftxui& ui, core::Context& context)
 
     auto children = Elements{
         ui.currentView
-            ? ui.currentView->file
-                ? renderView(*ui.currentView, context)
-                : renderLoadingView(context)
-            : renderEmptyView(context),
-        renderStatusLine(context, isCommand),
-        renderCommandLine(context)
+            ? renderView(ui, context)
+            : renderEmptyView(ui, context),
+        renderStatusLine(ui, isCommand),
+        renderCommandLine(ui)
     };
 
     return vbox(std::move(children)) | flex;
@@ -836,37 +474,106 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
     return handler->second(ui, context);
 }
 
-static void onFilePickerChange(Ftxui& ui, core::Context&)
+ViewNode* getActiveLineView(Ftxui& ui)
 {
-    ui.picker.content->DetachAllChildren();
+    auto view = ui.mainView.activeChild();
 
-    ui.picker.cachedStrings = core::fuzzyFilter(ui.picker.strings, ui.picker.inputLine);
-
-    for (auto& entry : ui.picker.cachedStrings)
+    while (view->activeChild())
     {
-        ui.picker.content->Add(MenuEntry(entry, menuOption));
+        if (view->depth() == ui.activeLine)
+        {
+            break;
+        }
+        view = view->activeChild();
     }
+
+    return view;
+}
+
+static bool activeLineLeft(Ftxui& ui, core::Context&)
+{
+    if (ui.active != logView)
+    {
+        return false;
+    }
+
+    auto prev = getActiveLineView(ui)->prev();
+
+    if (prev)
+    {
+        prev->setActive();
+        ui.currentView = prev->parent()->deepestActive()->ptrCast<View>();
+    }
+
+    return true;
+}
+
+static bool activeLineRight(Ftxui& ui, core::Context&)
+{
+    if (ui.active != logView)
+    {
+        return false;
+    }
+
+    auto next = getActiveLineView(ui)->next();
+
+    if (next)
+    {
+        next->setActive();
+        ui.currentView = next->parent()->deepestActive()->ptrCast<View>();
+    }
+
+    return true;
+}
+
+static bool activeLineUp(Ftxui& ui, core::Context&)
+{
+    if (ui.active != logView)
+    {
+        return false;
+    }
+
+    ui.activeLine = (ui.activeLine - 1) | utils::clamp(0, ui.currentView->depth());
+    return true;
+}
+
+static bool activeLineDown(Ftxui& ui, core::Context&)
+{
+    if (ui.active != logView)
+    {
+        return false;
+    }
+
+    ui.activeLine = (ui.activeLine + 1) | utils::clamp(0, ui.currentView->depth());
+    return true;
 }
 
 Ftxui::Ftxui()
     : screen(ScreenInteractive::Fullscreen())
+    , showLineNumbers(false)
+    , mainView(ViewNode::Type::link, "main")
     , currentView(nullptr)
+    , activeLine(0)
     , active(UIElement::logView)
     , eventHandlers{
-        {Event::PageUp,     whenActive(UIElement::logView, pageUp)},
-        {Event::PageDown,   whenActive(UIElement::logView, pageDown)},
-        {Event::ArrowDown,  whenActive(UIElement::logView, arrowDown)},
-        {Event::ArrowUp,    whenActive(UIElement::logView, arrowUp)},
-        {Event::ArrowLeft,  whenActive(UIElement::logView, arrowLeft)},
-        {Event::ArrowRight, whenActive(UIElement::logView, arrowRight)},
-        {Event::Escape,     escape},
-        {Event::CtrlC,      ctrlC},
-        {Event::CtrlZ,      ignore},
-        {Event::Return,     enter},
-        {Event::Resize,     resize},
-        {Event::F12,        abort},
-        {Event::Tab,        tab},
-        {Event::TabReverse, tabReverse},
+        {Event::PageUp,         whenActive(UIElement::logView, pageUp)},
+        {Event::PageDown,       whenActive(UIElement::logView, pageDown)},
+        {Event::ArrowDown,      whenActive(UIElement::logView, arrowDown)},
+        {Event::ArrowUp,        whenActive(UIElement::logView, arrowUp)},
+        {Event::ArrowLeft,      whenActive(UIElement::logView, arrowLeft)},
+        {Event::ArrowRight,     whenActive(UIElement::logView, arrowRight)},
+        {Event::Escape,         escape},
+        {Event::CtrlC,          ctrlC},
+        {Event::CtrlZ,          ignore},
+        {Event::Return,         enter},
+        {Event::Resize,         resize},
+        {Event::F12,            abort},
+        {Event::Tab,            tab},
+        {Event::TabReverse,     tabReverse},
+        {Event::ArrowLeftCtrl,  activeLineLeft},
+        {Event::ArrowRightCtrl, activeLineRight},
+        {Event::ArrowUpCtrl,    activeLineUp},
+        {Event::ArrowDownCtrl,  activeLineDown},
     }
 {
 }
@@ -879,31 +586,7 @@ void Ftxui::run(core::Context& context)
             .multiline = false
         });
 
-    picker.content = Container::Vertical({});
-    picker.input = Input(
-        &picker.inputLine,
-        InputOption{
-            .multiline = false,
-            .on_change = [this, &context]{ onFilePickerChange(*this, context); },
-        }
-    );
-
-    picker.tabs = Toggle(
-        getPickerNames(),
-        std::bit_cast<int*>(&picker.active));
-
-    picker.window = Window({
-        .inner = Container::LockedVertical({
-            picker.tabs,
-            picker.input,
-            picker.content
-        }),
-        .title = "",
-        .resize_left = false,
-        .resize_right = false,
-        .resize_top = false,
-        .resize_down = false,
-    });
+    createPicker(*this, context);
 
     auto component
         = Renderer(
@@ -929,7 +612,7 @@ void Ftxui::quit(core::Context&)
 
 void Ftxui::executeShell(const std::string& cmd)
 {
-    auto command = cmd + "; read -n 1 -s -r -p \"\nCommand exited with $?; press any key to continue\"";
+    auto command = cmd + "; read -n 1 -s -r -p \"\nCommand exited with $?; press any key to continue\"; echo";
     screen.Post(screen.WithRestoredIO(
         [command = std::move(command)]
         {
@@ -949,35 +632,37 @@ std::ostream& Ftxui::operator<<(Severity severity)
     return commandLine.messageLine;
 }
 
-void* Ftxui::createView(core::Context&)
+void* Ftxui::createView(std::string name, core::Context&)
 {
-    auto& view = views.emplace_back(
-        View{
-            .file = nullptr,
-            .viewHeight = 0,
-            .yoffset = 0,
-            .xoffset = 0,
-            .lineNrDigits = 0,
-            .ringBuffer{0}
-        });
+    auto& link = mainView
+        .addChild(ViewNode::createLink(std::move(name)))
+        .setActive()
+        .depth(0);
 
-    currentView = &view;
+    currentView = link
+        .addChild(View::create("base"))
+        .setActive()
+        .ptrCast<View>();
 
-    return &view;
+    return &link;
 }
 
 void Ftxui::attachFileToView(core::MappedFile& file, void* handle, core::Context& context)
 {
-    auto& view = *static_cast<View*>(handle);
+    auto& view = *static_cast<ViewNode*>(handle);
 
     screen.Post(
         [this, &file, &view, &context]
         {
-            view.file = &file;
+            auto& base = view.base().cast<View>();
+            base.file = &file;
+            base.lineCount = file.lineCount();
+
             *this << info
                 << file.path() << ": lines: " << file.lineCount() << "; took "
                 << std::fixed << std::setprecision(3) << file.loadTime() << " s";
-            reloadView(view, context);
+
+            reloadView(base, context);
         });
     screen.RequestAnimationFrame();
 }
@@ -997,62 +682,64 @@ CommandLine::CommandLine()
 {
 }
 
-DEFINE_COMMAND(files)
+DEFINE_COMMAND(grep)
 {
-    HELP() = "show file picker";
+    HELP() = "filter current view";
     ARGUMENTS()
     {
-        return {};
+        return {
+            ARGUMENT(string, "pattern")
+        };
     }
 
     EXECUTOR()
     {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::files, context);
-        return true;
-    }
-}
+        const auto& pattern = args[0].string;
+        auto& ui = context.ui->get<Ftxui>();
 
-DEFINE_COMMAND(views)
-{
-    HELP() = "show variables picker";
-    ARGUMENTS()
-    {
-        return {};
-    }
+        if (not isViewLoaded(ui))
+        {
+            ui << error << "no file loaded yet";
+            return false;
+        }
 
-    EXECUTOR()
-    {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::views, context);
-        return true;
-    }
-}
+        auto viewToAdd = ui.currentView->isBase()
+            ? ui.currentView->parent()
+            : ui.currentView;
 
-DEFINE_COMMAND(commands)
-{
-    HELP() = "show commands picker";
-    ARGUMENTS()
-    {
-        return {};
-    }
+        auto& newLink = (*viewToAdd)
+            .addChild(ViewNode::createLink(pattern))
+            .setActive();
 
-    EXECUTOR()
-    {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::commands, context);
-        return true;
-    }
-}
+        auto& base = newLink
+            .addChild(View::create("base"))
+            .setActive()
+            .cast<View>();
 
-DEFINE_COMMAND(variables)
-{
-    HELP() = "show variables picker";
-    ARGUMENTS()
-    {
-        return {};
-    }
+        auto parentView = ui.currentView;
+        ui.currentView = &base;
 
-    EXECUTOR()
-    {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::variables, context);
+        core::asyncGrep(
+            pattern,
+            parentView->lines,
+            *parentView->file,
+            [&base, &ui, &context, file = parentView->file](core::LineRefs lines, float time)
+            {
+                ui.screen.Post(
+                    [&ui, &base, &context, lines = std::move(lines), file, time]
+                    {
+                        ui << info << "found " << lines.size() << " matches; took "
+                           << std::fixed << std::setprecision(3) << time << " s";
+
+                        base.file = file;
+                        base.lineCount = lines.size();
+                        base.lines = std::move(lines);
+
+                        reloadView(base, context);
+                    });
+                ui.screen.RequestAnimationFrame();
+            });
+
         return true;
     }
 }
@@ -1070,10 +757,12 @@ DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the le
         auto& ui = context.ui->get<Ftxui>();
 
         ui.showLineNumbers = value.boolean;
+
         if (ui.currentView and ui.currentView->file)
         {
             reloadLines(*ui.currentView, context);
         }
+
         return true;
     }
 }
@@ -1084,10 +773,11 @@ DEFINE_READONLY_VARIABLE(path, string, "Path to the opened file")
     {
         auto& ui = context.ui->get<Ftxui>();
 
-        if (not ui.currentView or not ui.currentView->file)
+        if (not isViewLoaded(ui))
         {
             return nullptr;
         }
+
         return &ui.currentView->file->path();
     }
 }

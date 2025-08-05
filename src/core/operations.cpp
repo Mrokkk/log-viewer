@@ -23,6 +23,7 @@
 #include "core/variable.hpp"
 #include "sys/system.hpp"
 #include "utils/string.hpp"
+#include "utils/time.hpp"
 
 namespace core
 {
@@ -94,7 +95,7 @@ bool asyncViewLoader(std::string path, Context& context)
         return false;
     }
 
-    auto view = context.ui->createView(context);
+    auto view = context.ui->createView(path, context);
 
     auto& newFile = context.files.emplace_back(nullptr);
 
@@ -481,6 +482,44 @@ utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& 
     }
 
     return refs;
+}
+
+void asyncGrep(std::string pattern, const LineRefs& filter, MappedFile& file, std::function<void(LineRefs, float)> callback)
+{
+    std::thread(
+        [pattern = std::move(pattern), &filter, &file, callback = std::move(callback)]
+        {
+            LineRefs lines;
+            auto time = utils::measureTime([&lines, &pattern, &filter, &file]{ lines = grep(pattern, filter, file); });
+            callback(std::move(lines), time);
+        }).detach();
+}
+
+LineRefs grep(const std::string& pattern, const LineRefs& filter, MappedFile& file)
+{
+    LineRefs lines;
+    if (filter.empty())
+    {
+        for (size_t i = 0; i < file.lineCount(); ++i)
+        {
+            if (file[i].contains(pattern))
+            {
+                lines.emplace_back(i);
+            }
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < filter.size(); ++i)
+        {
+            const auto lineIndex = filter[i];
+            if (file[lineIndex].contains(pattern))
+            {
+                lines.emplace_back(lineIndex);
+            }
+        }
+    }
+    return lines;
 }
 
 }  // namespace core

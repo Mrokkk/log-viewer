@@ -69,6 +69,9 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/sys/posix.cpp
     src/ui/ftxui.cpp
+    src/ui/picker.cpp
+    src/ui/scroll.cpp
+    src/ui/view.cpp
     src/utils/math.cpp
     src/utils/string.cpp
 

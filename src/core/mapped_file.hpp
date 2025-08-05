@@ -19,6 +19,7 @@ struct Line final
 };
 
 using Lines = std::vector<Line>;
+using LineRefs = std::vector<size_t>;
 
 #define BLOCK_SIZE static_cast<size_t>(16 * 1024 * 1024)
 
