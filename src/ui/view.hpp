@@ -111,6 +111,16 @@ struct ViewNode : utils::Noncopyable
     ViewNode* prev();
     ViewNode* deepestActive();
 
+    template <typename T>
+    void forEachRecursive(T functor)
+    {
+        for (auto& child : children_)
+        {
+            functor(*child);
+            child->forEachRecursive(functor);
+        }
+    }
+
 private:
     Type             type_;
     int              depth_;

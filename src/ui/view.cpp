@@ -1,10 +1,15 @@
 #include "view.hpp"
 
+#include <sstream>
+
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/colored_string.hpp>
 
+#include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
+#include "utils/math.hpp"
 
 using namespace ftxui;
 
@@ -212,6 +217,78 @@ View::View(std::string name)
 ViewPtr View::create(std::string name)
 {
     return std::make_unique<View>(std::move(name));
+}
+
+std::string getLine(View& view, size_t lineIndex, core::Context& context)
+{
+    std::stringstream ss;
+
+    auto& ui = context.ui->get<ui::Ftxui>();
+
+    if (not view.lines.empty())
+    {
+        lineIndex = view.lines[lineIndex];
+    }
+
+    if (ui.showLineNumbers)
+    {
+        ss << std::setw(view.lineNrDigits + 1) << std::right
+           << ColorWrapped(lineIndex, Palette::View::lineNumberFg)
+           << ColorWrapped("│ ", Palette::View::lineNumberFg);
+    }
+
+    auto line = (*view.file)[lineIndex];
+    auto xoffset = view.xoffset | utils::clamp(0ul, line.length());
+
+    if (line.find("ERR") != std::string::npos)
+    {
+        ss << ColorWrapped(line.c_str() + xoffset, Color::Red);
+    }
+    else if (line.find("WRN") != std::string::npos)
+    {
+        ss << ColorWrapped(line.c_str() + xoffset, Color::Yellow);
+    }
+    else if (line.find("DBG") != std::string::npos)
+    {
+        ss << ColorWrapped(line.c_str() + xoffset, Color::Palette256(245));
+    }
+    else
+    {
+        ss << line.c_str() + xoffset;
+    }
+
+    return ss.str();
+}
+
+void reloadLines(View& view, core::Context& context)
+{
+    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
+    {
+        view.ringBuffer.pushBack(getLine(view, i, context));
+    }
+}
+
+static size_t getAvailableViewHeight(Ftxui& ui, View& view)
+{
+    return static_cast<size_t>(ui.terminalSize.dimy)
+        - 1 // command line
+        - 1 // status line
+        - (view.depth() + 1);
+}
+
+void reloadView(View& view, Ftxui& ui, core::Context& context)
+{
+    view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
+    view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
+    view.ringBuffer = utils::RingBuffer<std::string>(view.viewHeight);
+    view.yoffset = view.yoffset | utils::clamp(0ul, view.lineCount - view.viewHeight);
+
+    reloadLines(view, context);
+}
+
+bool isViewLoaded(Ftxui& ui)
+{
+    return ui.currentView and ui.currentView->file;
 }
 
 }  // namespace ui

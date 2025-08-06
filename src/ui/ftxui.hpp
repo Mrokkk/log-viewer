@@ -94,6 +94,6 @@ core::UserInterface& createFtxuiUserInterface(core::Context& context);
 bool isViewLoaded(Ftxui& ui);
 void reloadLines(View& view, core::Context& context);
 std::string getLine(View& view, size_t lineIndex, core::Context& context);
-void reloadView(View& view, core::Context& context);
+void reloadView(View& view, Ftxui& ui, core::Context& context);
 
 }  // namespace ui

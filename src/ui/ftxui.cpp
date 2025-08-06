@@ -6,7 +6,6 @@
 #include <iomanip>
 #include <ios>
 #include <spanstream>
-#include <sstream>
 #include <string>
 
 #include <ftxui/component/component.hpp>
@@ -36,79 +35,6 @@ using namespace ftxui;
 
 namespace ui
 {
-
-std::string getLine(View& view, size_t lineIndex, core::Context& context)
-{
-    std::stringstream ss;
-
-    auto& ui = context.ui->get<ui::Ftxui>();
-
-    if (not view.lines.empty())
-    {
-        lineIndex = view.lines[lineIndex];
-    }
-
-    if (ui.showLineNumbers)
-    {
-        ss << std::setw(view.lineNrDigits + 1) << std::right
-           << ColorWrapped(lineIndex, Palette::View::lineNumberFg)
-           << ColorWrapped("│ ", Palette::View::lineNumberFg);
-    }
-
-    auto line = (*view.file)[lineIndex];
-    auto xoffset = view.xoffset | utils::clamp(0ul, line.length());
-
-    if (line.find("ERR") != std::string::npos)
-    {
-        ss << ColorWrapped(line.c_str() + xoffset, Color::Red);
-    }
-    else if (line.find("WRN") != std::string::npos)
-    {
-        ss << ColorWrapped(line.c_str() + xoffset, Color::Yellow);
-    }
-    else if (line.find("DBG") != std::string::npos)
-    {
-        ss << ColorWrapped(line.c_str() + xoffset, Color::Palette256(245));
-    }
-    else
-    {
-        ss << line.c_str() + xoffset;
-    }
-
-    return ss.str();
-}
-
-void reloadLines(View& view, core::Context& context)
-{
-    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
-    {
-        view.ringBuffer.pushBack(getLine(view, i, context));
-    }
-}
-
-static size_t getAvailableViewHeight(Ftxui& ui, View& view)
-{
-    return static_cast<size_t>(ui.terminalSize.dimy)
-        - 1 // command line
-        - 1 // status line
-        - (view.depth() + 1);
-}
-
-void reloadView(View& view, core::Context& context)
-{
-    auto& ui = context.ui->get<ui::Ftxui>();
-    view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
-    view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
-    view.ringBuffer = utils::RingBuffer<std::string>(view.viewHeight);
-    view.yoffset = view.yoffset | utils::clamp(0ul, view.lineCount - view.viewHeight);
-
-    reloadLines(view, context);
-}
-
-bool isViewLoaded(Ftxui& ui)
-{
-    return ui.currentView and ui.currentView->file;
-}
 
 static bool abort(Ftxui&, core::Context&)
 {
@@ -216,12 +142,14 @@ static bool resize(Ftxui& ui, core::Context& context)
     {
         logger << info << "terminal size: " << ui.terminalSize.dimx << 'x' << ui.terminalSize.dimy;
 
-        // FIXME: resize all views
-        //for (auto& view : ui.views)
-        {
-            (void)context;
-            //reloadView(view, context);
-        }
+        ui.mainView.forEachRecursive(
+            [&ui, &context](ViewNode& view)
+            {
+                if (view.type() == ViewNode::Type::view)
+                {
+                    reloadView(view.cast<View>(), ui, context);
+                }
+            });
     }
 
     return true;
@@ -677,7 +605,7 @@ void Ftxui::attachFileToView(core::MappedFile& file, void* handle, core::Context
                 << file.path() << ": lines: " << file.lineCount() << "; took "
                 << std::fixed << std::setprecision(3) << file.loadTime() << " s";
 
-            reloadView(base, context);
+            reloadView(base, *this, context);
         });
     screen.RequestAnimationFrame();
 }
@@ -750,7 +678,7 @@ DEFINE_COMMAND(grep)
                         base.lineCount = lines.size();
                         base.lines = std::move(lines);
 
-                        reloadView(base, context);
+                        reloadView(base, ui, context);
                     });
                 ui.screen.RequestAnimationFrame();
             });
