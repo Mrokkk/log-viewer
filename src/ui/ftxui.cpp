@@ -25,6 +25,7 @@
 #include "core/variable.hpp"
 #include "sys/system.hpp"
 #include "ui/picker.hpp"
+#include "ui/palette.hpp"
 #include "ui/scroll.hpp"
 #include "utils/math.hpp"
 #include "utils/ring_buffer.hpp"
@@ -50,8 +51,8 @@ std::string getLine(View& view, size_t lineIndex, core::Context& context)
     if (ui.showLineNumbers)
     {
         ss << std::setw(view.lineNrDigits + 1) << std::right
-           << ColorWrapped(lineIndex, 0x4e4e4e_rgb)
-           << ColorWrapped("│ ", 0x4e4e4e_rgb);
+           << ColorWrapped(lineIndex, Palette::View::lineNumberFg)
+           << ColorWrapped("│ ", Palette::View::lineNumberFg);
     }
 
     auto line = (*view.file)[lineIndex];
@@ -297,8 +298,13 @@ static Element wrapActiveLineIf(Element line, bool condition)
     }
     return hbox({
         line,
-        text("") | color(0x282828_rgb) | bgcolor(0x7daea3_rgb),
-        text("") | color(0x7daea3_rgb) | bgcolor(0x353535_rgb) | xflex,
+        text("")
+            | color(Palette::TabLine::inactiveLineBg)
+            | bgcolor(Palette::TabLine::activeLineMarker),
+        text("")
+            | color(Palette::TabLine::activeLineMarker)
+            | bgcolor(Palette::TabLine::activeLineBg)
+            | xflex,
     });
 }
 
@@ -370,13 +376,22 @@ static Element renderStatusLine(Ftxui& ui, bool isCommand)
         : "[No Name]";
 
     return hbox({
-        // FIXME: I really need to define palette
-        text(isCommand ? " COMMAND " : " NORMAL ") | bgcolor(isCommand ? 0x7daea3_rgb : 0xaf8787_rgb) | color(0x282828_rgb) | bold,
-        text("") | color(isCommand ? 0x7daea3_rgb : 0xaf8787_rgb) | bgcolor(0x4e4e4e_rgb),
-        text(" ") | color(0x4e4e4e_rgb) | bgcolor(0x303030_rgb),
-        text(fileName) | bgcolor(0x303030_rgb) | flex,
-        text("") | color(0x45403d_rgb) | bgcolor(0x303030_rgb),
-        text("   ") | bgcolor(0x45403d_rgb)
+        text(isCommand ? " COMMAND " : " NORMAL ")
+            | bgcolor(isCommand ? Palette::StatusLine::commandBg : Palette::StatusLine::normalBg)
+            | color(isCommand ? Palette::StatusLine::commandFg : Palette::StatusLine::normalFg) | bold,
+        text("")
+            | color(isCommand ? Palette::StatusLine::commandBg : Palette::StatusLine::normalBg)
+            | bgcolor(Palette::StatusLine::bg2),
+        text(" ")
+            | color(Palette::StatusLine::bg2)
+            | bgcolor(Palette::StatusLine::bg1),
+        text(fileName)
+            | bgcolor(Palette::StatusLine::bg1)
+            | flex,
+        text("")
+            | color(Palette::StatusLine::bg3)
+            | bgcolor(Palette::StatusLine::bg1),
+        text("   ") | bgcolor(Palette::StatusLine::bg3)
     });
 }
 

@@ -4,6 +4,8 @@
 #include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include "ui/palette.hpp"
+
 using namespace ftxui;
 
 namespace ui
@@ -14,21 +16,34 @@ static const MenuEntryOption tabOption{
         [](const EntryState& state)
         {
             auto string = ' ' + std::to_string(state.index) + ' ' + state.label + ' ';
+
             if (state.focused)
             {
                 if (state.index != 0)
                 {
                     return hbox({
-                        text("") | bgcolor(0xaf8787_rgb) | color(0x282828_rgb),
-                        text(std::move(string)) | bgcolor(0xaf8787_rgb) | color(0x282828_rgb) | bold,
-                        text("") | color(0xaf8787_rgb) | bgcolor(0x282828_rgb),
+                        text("")
+                            | bgcolor(Palette::TabLine::activeBg)
+                            | color(Palette::TabLine::activeFg),
+                        text(std::move(string))
+                            | bgcolor(Palette::TabLine::activeBg)
+                            | color(Palette::TabLine::activeFg)
+                            | bold,
+                        text("")
+                            | color(Palette::TabLine::activeBg)
+                            | bgcolor(Palette::TabLine::separatorBg),
                     });
                 }
                 else
                 {
                     return hbox({
-                        text(std::move(string)) | bgcolor(0xaf8787_rgb) | color(0x282828_rgb) | bold,
-                        text("") | color(0xaf8787_rgb) | bgcolor(0x282828_rgb),
+                        text(std::move(string))
+                            | bgcolor(Palette::TabLine::activeBg)
+                            | color(Palette::TabLine::activeFg)
+                            | bold,
+                        text("")
+                            | color(Palette::TabLine::activeBg)
+                            | bgcolor(Palette::TabLine::activeFg),
                     });
                 }
             }
@@ -37,16 +52,24 @@ static const MenuEntryOption tabOption{
                 if (state.index != 0)
                 {
                     return hbox({
-                        text("") | bgcolor(0x4e4e4e_rgb) | color(0x282828_rgb),
-                        text(std::move(string)) | bgcolor(0x4e4e4e_rgb),
-                        text("") | color(0x4e4e4e_rgb) | bgcolor(0x282828_rgb),
+                        text("")
+                            | bgcolor(Palette::TabLine::inactiveBg)
+                            | color(Palette::TabLine::separatorBg),
+                        text(std::move(string))
+                            | bgcolor(Palette::TabLine::inactiveBg),
+                        text("")
+                            | color(Palette::TabLine::inactiveBg)
+                            | bgcolor(Palette::TabLine::separatorBg),
                     });
                 }
                 else
                 {
                     return hbox({
-                        text(std::move(string)) | bgcolor(0x4e4e4e_rgb),
-                        text("") | color(0x4e4e4e_rgb) | bgcolor(0x282828_rgb),
+                        text(std::move(string))
+                            | bgcolor(Palette::TabLine::inactiveBg),
+                        text("")
+                            | color(Palette::TabLine::inactiveBg)
+                            | bgcolor(Palette::TabLine::separatorBg),
                     });
                 }
             }

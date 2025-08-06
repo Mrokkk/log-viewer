@@ -7,6 +7,7 @@
 #include "core/command.hpp"
 #include "core/operations.hpp"
 #include "core/variable.hpp"
+#include "ui/palette.hpp"
 #include "utils/string.hpp"
 
 using namespace ftxui;
@@ -20,7 +21,7 @@ static const MenuEntryOption menuOption{
         {
             if (state.focused)
             {
-                return text("▌" + state.label) | color(Color::Blue) | bold;
+                return text("▌" + state.label) | color(Palette::Picker::activeLineMarker) | bold;
             }
             else
             {
@@ -72,7 +73,8 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
 
                         std::stringstream ss;
                         ss << std::left << std::setw(leftWidth) << commandDesc.str()
-                           << std::right << std::setw(width - leftWidth) << ColorWrapped(e.second.help, 0x4e4e4e_rgb);
+                           << std::right << std::setw(width - leftWidth)
+                           << ColorWrapped(e.second.help, Palette::Picker::additionalInfoFg);
 
                         return ss.str();
                     })
@@ -95,7 +97,8 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
 
                         std::stringstream ss;
                         ss << std::left << std::setw(leftWidth) << variableDesc.str()
-                           << std::right << std::setw(width - leftWidth) << ColorWrapped(e.second.help, 0x4e4e4e_rgb);
+                           << std::right << std::setw(width - leftWidth)
+                           << ColorWrapped(e.second.help, Palette::Picker::additionalInfoFg);
 
                         return ss.str();
                     })
