@@ -16,13 +16,13 @@
 #include <ftxui/screen/colored_string.hpp>
 #include <ftxui/screen/terminal.hpp>
 
-#include "core/command.hpp"
 #include "core/context.hpp"
 #include "core/logger.hpp"
 #include "core/mapped_file.hpp"
 #include "core/operations.hpp"
 #include "core/variable.hpp"
 #include "sys/system.hpp"
+#include "ui/grepper.hpp"
 #include "ui/picker.hpp"
 #include "ui/palette.hpp"
 #include "ui/scroll.hpp"
@@ -78,6 +78,10 @@ static bool enter(Ftxui& ui, core::Context& context)
 
         case picker:
             pickerAccept(ui, context);
+            return true;
+
+        case grepper:
+            grepperAccept(ui, context);
             return true;
 
         case commandLine:
@@ -289,6 +293,12 @@ static Element renderView(Ftxui& ui, core::Context& context)
             vbox(std::move(vertical)) | flex,
             renderPickerWindow(ui, context)) | flex;
     }
+    else if (ui.active == UIElement::grepper)
+    {
+        return dbox(
+            vbox(std::move(vertical)) | flex,
+            renderGrepper(ui)) | flex;
+    }
     else
     {
         return vbox(std::move(vertical)) | flex;
@@ -306,7 +316,8 @@ static Element renderStatusLine(Ftxui& ui, bool isCommand)
     return hbox({
         text(isCommand ? " COMMAND " : " NORMAL ")
             | bgcolor(isCommand ? Palette::StatusLine::commandBg : Palette::StatusLine::normalBg)
-            | color(isCommand ? Palette::StatusLine::commandFg : Palette::StatusLine::normalFg) | bold,
+            | color(isCommand ? Palette::StatusLine::commandFg : Palette::StatusLine::normalFg)
+            | bold,
         text("")
             | color(isCommand ? Palette::StatusLine::commandBg : Palette::StatusLine::normalBg)
             | bgcolor(Palette::StatusLine::bg2),
@@ -531,11 +542,13 @@ void Ftxui::run(core::Context& context)
         });
 
     createPicker(*this, context);
+    createGrepper(*this);
 
     auto component
         = Renderer(
             Container::Stacked({
                 picker.window,
+                grepper.window,
                 Container::Vertical({commandLine.input})
             }),
             [&context, this]{ return render(*this, context); })
@@ -624,94 +637,6 @@ CommandLine::CommandLine()
     , buffer{}
     , messageLine(buffer)
 {
-}
-
-DEFINE_COMMAND(grep)
-{
-    HELP() = "filter current view";
-
-    FLAGS()
-    {
-        return {
-            "c",
-            "i",
-            "r",
-        };
-    }
-
-    ARGUMENTS()
-    {
-        return {
-            ARGUMENT(string, "pattern")
-        };
-    }
-
-    EXECUTOR()
-    {
-        const auto& pattern = args[0].string;
-        auto& ui = context.ui->get<Ftxui>();
-
-        if (not isViewLoaded(ui))
-        {
-            ui << error << "no file loaded yet";
-            return false;
-        }
-
-        core::GrepOptions options;
-
-        if (flags.contains("c"))
-        {
-            options.caseInsensitive = true;
-        }
-        if (flags.contains("r"))
-        {
-            options.regex = true;
-        }
-        if (flags.contains("i"))
-        {
-            options.inverted = true;
-        }
-
-        auto viewToAdd = ui.currentView->isBase()
-            ? ui.currentView->parent()
-            : ui.currentView;
-
-        auto& newLink = (*viewToAdd)
-            .addChild(ViewNode::createLink(pattern))
-            .setActive();
-
-        auto& base = newLink
-            .addChild(View::create("base"))
-            .setActive()
-            .cast<View>();
-
-        auto parentView = ui.currentView;
-        ui.currentView = &base;
-
-        core::asyncGrep(
-            pattern,
-            options,
-            parentView->lines,
-            *parentView->file,
-            [&base, &ui, &context, file = parentView->file](core::LineRefs lines, float time)
-            {
-                ui.screen.Post(
-                    [&ui, &base, &context, lines = std::move(lines), file, time]
-                    {
-                        ui << info << "found " << lines.size() << " matches; took "
-                           << std::fixed << std::setprecision(3) << time << " s";
-
-                        base.file = file;
-                        base.lineCount = lines.size();
-                        base.lines = std::move(lines);
-
-                        reloadView(base, ui, context);
-                    });
-                ui.screen.RequestAnimationFrame();
-            });
-
-        return true;
-    }
 }
 
 DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")

@@ -15,6 +15,7 @@
 #include "core/context.hpp"
 #include "core/mapped_file.hpp"
 #include "core/user_interface.hpp"
+#include "ui/grepper.hpp"
 #include "ui/view.hpp"
 #include "utils/immobile.hpp"
 #include "utils/string.hpp"
@@ -32,6 +33,7 @@ enum UIElement
     logView,
     commandLine,
     picker,
+    grepper,
 };
 
 struct CommandLine final : utils::Immobile
@@ -85,6 +87,7 @@ struct Ftxui final : core::UserInterface
     int                      activeLine;
     CommandLine              commandLine;
     Picker                   picker;
+    Grepper                  grepper;
     UIElement                active;
     EventHandlers            eventHandlers;
 };

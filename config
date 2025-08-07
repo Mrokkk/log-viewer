@@ -1,3 +1,4 @@
 map "<c-p>" "files"
 map "<leader>." "files"
+map "<c-g>" "grepper"
 echo "Config loaded"
