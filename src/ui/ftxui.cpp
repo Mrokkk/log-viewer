@@ -601,6 +601,8 @@ void* Ftxui::createView(std::string name, core::Context&)
         .setActive()
         .ptrCast<View>();
 
+    activeLine = 0;
+
     return &link;
 }
 
