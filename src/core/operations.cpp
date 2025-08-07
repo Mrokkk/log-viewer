@@ -490,12 +490,31 @@ utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& 
     return refs;
 }
 
-static LineRefs grep(const std::string& pattern, const GrepOptions& options, const LineRefs& filter, MappedFile& file)
+static bool caseSensitiveCheck(const std::string& line, const std::string& pattern)
+{
+    return line.contains(pattern);
+}
+
+static bool caseInsensitiveCheck(const std::string& line, const std::string& pattern)
+{
+    return std::search(
+        line.begin(), line.end(),
+        pattern.begin(), pattern.end(),
+        [](char c1, char c2)
+        {
+            return std::tolower(c1) == std::tolower(c2);
+        }) != line.end();
+}
+
+static LineRefs grep(
+    const std::string& pattern,
+    const GrepOptions& options,
+    const LineRefs& filter,
+    MappedFile& file)
 {
     LineRefs lines;
     size_t lineCount;
     std::function<size_t(size_t)> lineNumberTransform;
-
     if (not filter.empty())
     {
         lineNumberTransform = [&filter](size_t i){ return filter[i]; };
@@ -509,12 +528,16 @@ static LineRefs grep(const std::string& pattern, const GrepOptions& options, con
 
     if (not options.regex)
     {
+        auto lineCheck = options.caseInsensitive
+            ? &caseInsensitiveCheck
+            : &caseSensitiveCheck;
+
         if (options.inverted)
         {
             for (size_t i = 0; i < lineCount; ++i)
             {
                 auto lineIndex = lineNumberTransform(i);
-                if (not file[lineIndex].contains(pattern))
+                if (not lineCheck(file[lineIndex], pattern))
                 {
                     lines.emplace_back(lineIndex);
                 }
@@ -525,7 +548,7 @@ static LineRefs grep(const std::string& pattern, const GrepOptions& options, con
             for (size_t i = 0; i < lineCount; ++i)
             {
                 auto lineIndex = lineNumberTransform(i);
-                if (file[lineIndex].contains(pattern))
+                if (lineCheck(file[lineIndex], pattern))
                 {
                     lines.emplace_back(lineIndex);
                 }
@@ -536,6 +559,12 @@ static LineRefs grep(const std::string& pattern, const GrepOptions& options, con
     {
         RE2::Options reOptions;
         reOptions.set_log_errors(false);
+
+        if (options.caseInsensitive)
+        {
+            reOptions.set_case_sensitive(false);
+        }
+
         RE2 re(std::move(pattern), reOptions);
 
         if (options.inverted)
@@ -565,7 +594,12 @@ static LineRefs grep(const std::string& pattern, const GrepOptions& options, con
     return lines;
 }
 
-void asyncGrep(std::string pattern, GrepOptions options, const LineRefs& filter, MappedFile& file, std::function<void(LineRefs, float)> callback)
+void asyncGrep(
+    std::string pattern,
+    GrepOptions options,
+    const LineRefs& filter,
+    MappedFile& file,
+    std::function<void(LineRefs, float)> callback)
 {
     std::thread(
         [pattern = std::move(pattern), &filter, &file, callback = std::move(callback), options]
