@@ -7,6 +7,12 @@ namespace core
 DEFINE_COMMAND(get)
 {
     HELP() = "print value of variable";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

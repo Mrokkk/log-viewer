@@ -6,6 +6,12 @@ namespace core
 DEFINE_COMMAND(echo)
 {
     HELP() = "print to message line";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

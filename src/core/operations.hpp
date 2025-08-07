@@ -19,7 +19,14 @@ bool registerKeyPress(char c, core::Context& context);
 utils::Strings readCurrentDirectory();
 utils::Strings readCurrentDirectoryRecursive();
 utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& pattern);
-LineRefs grep(const std::string& pattern, const LineRefs& filter, MappedFile& file);
-void asyncGrep(std::string pattern, const LineRefs& filter, MappedFile& file, std::function<void(LineRefs, float)> callback);
+
+struct GrepOptions
+{
+    bool regex           = false;
+    bool inverted        = false;
+    bool caseInsensitive = false;
+};
+
+void asyncGrep(std::string pattern, GrepOptions options, const LineRefs& filter, MappedFile& file, std::function<void(LineRefs, float)> callback);
 
 }  // namespace core

@@ -15,6 +15,7 @@ struct Token
         comment,
         stringLiteral,
         intLiteral,
+        flagLiteral,
         booleanLiteral,
         exclamation,
         leftParenthesis,

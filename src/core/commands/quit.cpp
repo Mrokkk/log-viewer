@@ -9,6 +9,12 @@ namespace core
 DEFINE_COMMAND(quit)
 {
     HELP() = "quit the program";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {};

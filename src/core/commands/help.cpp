@@ -7,6 +7,12 @@ namespace core
 DEFINE_COMMAND(help)
 {
     HELP() = "print help about command/variable";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

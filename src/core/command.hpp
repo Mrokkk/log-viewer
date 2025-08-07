@@ -1,6 +1,7 @@
 #pragma once
 
 #include <flat_map>
+#include <flat_set>
 #include <string>
 #include <string_view>
 
@@ -23,8 +24,9 @@ struct Argument
 };
 
 using Arguments = std::vector<Argument>;
+using Flags = std::flat_set<std::string>;
 
-using CommandHandler = bool(*)(const Arguments& args, bool force, Context& context);
+using CommandHandler = bool(*)(const Arguments& args, const Flags& flags, bool force, Context& context);
 
 struct CommandArguments final
 {
@@ -50,10 +52,29 @@ private:
     std::vector<ArgumentSignature> types_;
 };
 
+struct CommandFlags final
+{
+    CommandFlags() = default;
+
+    CommandFlags(std::initializer_list<std::string> n)
+        : flags_(std::move(n))
+    {
+    }
+
+    const std::flat_set<std::string>& get() const
+    {
+        return flags_;
+    }
+
+private:
+    std::flat_set<std::string> flags_;
+};
+
 struct Command final : utils::Noncopyable
 {
     std::string_view name;
     CommandArguments arguments;
+    CommandFlags     flags;
     CommandHandler   handler;
     const char*      help;
 };
@@ -71,6 +92,7 @@ struct Commands final
 #define EXECUTOR() \
     bool Command::execute( \
         [[maybe_unused]] const ::core::Arguments& args, \
+        [[maybe_unused]] const ::core::Flags& flags, \
         [[maybe_unused]] bool force, \
         [[maybe_unused]] ::core::Context& context)
 
@@ -79,6 +101,9 @@ struct Commands final
 
 #define ARGUMENTS() \
     ::core::CommandArguments Command::arguments()
+
+#define FLAGS() \
+    ::core::CommandFlags Command::flags()
 
 #define ARGUMENT(TYPE, NAME) \
     ::core::CommandArguments::ArgumentSignature{ \
@@ -97,19 +122,21 @@ struct Commands final
     { \
     struct Command \
     { \
-        static bool execute(const ::core::Arguments& args, bool force, ::core::Context& context); \
+        static bool execute(const ::core::Arguments& args, const ::core::Flags& flags, bool force, ::core::Context& context); \
         static void init() \
         { \
             ::core::Commands::$register( \
                 ::core::Command{ \
                     .name = #NAME, \
                     .arguments = Command::arguments(), \
+                    .flags = Command::flags(), \
                     .handler = &Command::execute, \
                     .help = Command::help \
                 }); \
         } \
         static const char* help; \
         static ::core::CommandArguments arguments(); \
+        static ::core::CommandFlags flags(); \
         static inline bool registered = (Command::init(), true); \
     }; \
     } \

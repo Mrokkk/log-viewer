@@ -319,7 +319,8 @@ static Element renderStatusLine(Ftxui& ui, bool isCommand)
         text("")
             | color(Palette::StatusLine::bg3)
             | bgcolor(Palette::StatusLine::bg1),
-        text("   ") | bgcolor(Palette::StatusLine::bg3)
+        text("   ")
+            | bgcolor(Palette::StatusLine::bg3)
     });
 }
 
@@ -628,6 +629,16 @@ CommandLine::CommandLine()
 DEFINE_COMMAND(grep)
 {
     HELP() = "filter current view";
+
+    FLAGS()
+    {
+        return {
+            "c",
+            "i",
+            "r",
+        };
+    }
+
     ARGUMENTS()
     {
         return {
@@ -644,6 +655,21 @@ DEFINE_COMMAND(grep)
         {
             ui << error << "no file loaded yet";
             return false;
+        }
+
+        core::GrepOptions options;
+
+        if (flags.contains("c"))
+        {
+            options.caseInsensitive = true;
+        }
+        if (flags.contains("r"))
+        {
+            options.regex = true;
+        }
+        if (flags.contains("i"))
+        {
+            options.inverted = true;
         }
 
         auto viewToAdd = ui.currentView->isBase()
@@ -664,6 +690,7 @@ DEFINE_COMMAND(grep)
 
         core::asyncGrep(
             pattern,
+            options,
             parentView->lines,
             *parentView->file,
             [&base, &ui, &context, file = parentView->file](core::LineRefs lines, float time)

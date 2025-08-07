@@ -7,6 +7,12 @@ namespace core
 DEFINE_COMMAND(set)
 {
     HELP() = "set variable";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

@@ -8,6 +8,12 @@ namespace core
 DEFINE_COMMAND(source)
 {
     HELP() = "source given file";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

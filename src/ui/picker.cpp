@@ -58,7 +58,14 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
                     [leftWidth, width](const auto& e)
                     {
                         std::stringstream commandDesc;
+
                         commandDesc << e.second.name << " ";
+
+                        for (const auto& flag : e.second.flags.get())
+                        {
+                            commandDesc << "[-" << flag << "] ";
+                        }
+
                         for (const auto& arg : e.second.arguments.get())
                         {
                             if (arg.type == core::Type::variadic)
@@ -292,6 +299,12 @@ Element renderPickerWindow(Ftxui& ui, core::Context&)
 DEFINE_COMMAND(files)
 {
     HELP() = "show file picker";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {};
@@ -307,6 +320,12 @@ DEFINE_COMMAND(files)
 DEFINE_COMMAND(views)
 {
     HELP() = "show variables picker";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {};
@@ -322,6 +341,12 @@ DEFINE_COMMAND(views)
 DEFINE_COMMAND(commands)
 {
     HELP() = "show commands picker";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {};
@@ -337,6 +362,12 @@ DEFINE_COMMAND(commands)
 DEFINE_COMMAND(variables)
 {
     HELP() = "show variables picker";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {};

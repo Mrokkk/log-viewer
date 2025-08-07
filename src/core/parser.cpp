@@ -21,6 +21,7 @@ std::ostream& operator<<(std::ostream& os, const Token::Type type)
         TOKEN_TYPE_PRINT(comment);
         TOKEN_TYPE_PRINT(stringLiteral);
         TOKEN_TYPE_PRINT(intLiteral);
+        TOKEN_TYPE_PRINT(flagLiteral);
         TOKEN_TYPE_PRINT(booleanLiteral);
         TOKEN_TYPE_PRINT(exclamation);
         TOKEN_TYPE_PRINT(leftParenthesis);
@@ -322,6 +323,31 @@ static bool booleanLiteral(LexerState& state)
     return false;
 }
 
+static bool flagLiteral(LexerState& state)
+{
+    auto c = peek(state);
+
+    if (c != '-')
+    {
+        return false;
+    }
+
+    auto word = peekWord(state).substr(1);
+
+    for (auto c : word)
+    {
+        if (not std::isalnum(c))
+        {
+            return false;
+        }
+    }
+
+    advance(word, state);
+    addToken(Token::Type::flagLiteral, word.data(), current(state), state);
+
+    return true;
+}
+
 static const Tokenhandlers handlers = {
     space,
     comment,
@@ -335,6 +361,7 @@ static const Tokenhandlers handlers = {
     singleChar('}', Token::Type::rightBracket),
     variableReferenceHandle,
     intLiteral,
+    flagLiteral,
     stringLiteral,
     booleanLiteral,
     identifier,

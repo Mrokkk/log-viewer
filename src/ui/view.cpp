@@ -194,6 +194,11 @@ ViewNode* ViewNode::deepestActive()
 {
     auto child = activeChild_;
 
+    if (not child)
+    {
+        return nullptr;
+    }
+
     while (child->activeChild())
     {
         child = child->activeChild();

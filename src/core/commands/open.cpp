@@ -2,14 +2,18 @@
 #include "core/command.hpp"
 #include "core/operations.hpp"
 
-#include "ui/ftxui.hpp"
-
 namespace core
 {
 
 DEFINE_COMMAND(open)
 {
     HELP() = "open a file";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

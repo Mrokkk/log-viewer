@@ -7,6 +7,12 @@ namespace core
 DEFINE_COMMAND(map)
 {
     HELP() = "map keys to the command";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {

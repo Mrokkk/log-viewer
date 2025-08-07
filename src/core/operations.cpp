@@ -11,6 +11,7 @@
 #include <thread>
 
 #include <rapidfuzz/fuzz.hpp>
+#include <re2/re2.h>
 
 #include "core/alias.hpp"
 #include "core/argparse.hpp"
@@ -142,6 +143,7 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
 
     bool force{false};
     Arguments args;
+    Flags flags;
 
     for (size_t i = 1; i < tokens.size(); ++i)
     {
@@ -157,6 +159,10 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
         }
         switch (tokens[i].type)
         {
+            case Token::Type::flagLiteral:
+                flags.insert(std::string(tokens[i].value));
+                break;
+
             case Token::Type::intLiteral:
                 args.emplace_back(
                     Argument{
@@ -311,7 +317,7 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
         }
     }
 
-    command->handler(args, force, context);
+    command->handler(args, flags, force, context);
 
     return true;
 }
@@ -484,42 +490,94 @@ utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& 
     return refs;
 }
 
-void asyncGrep(std::string pattern, const LineRefs& filter, MappedFile& file, std::function<void(LineRefs, float)> callback)
-{
-    std::thread(
-        [pattern = std::move(pattern), &filter, &file, callback = std::move(callback)]
-        {
-            LineRefs lines;
-            auto time = utils::measureTime([&lines, &pattern, &filter, &file]{ lines = grep(pattern, filter, file); });
-            callback(std::move(lines), time);
-        }).detach();
-}
-
-LineRefs grep(const std::string& pattern, const LineRefs& filter, MappedFile& file)
+static LineRefs grep(const std::string& pattern, const GrepOptions& options, const LineRefs& filter, MappedFile& file)
 {
     LineRefs lines;
-    if (filter.empty())
+    size_t lineCount;
+    std::function<size_t(size_t)> lineNumberTransform;
+
+    if (not filter.empty())
     {
-        for (size_t i = 0; i < file.lineCount(); ++i)
+        lineNumberTransform = [&filter](size_t i){ return filter[i]; };
+        lineCount = filter.size();
+    }
+    else
+    {
+        lineNumberTransform = [](size_t i){ return i; };
+        lineCount = file.lineCount();
+    }
+
+    if (not options.regex)
+    {
+        if (options.inverted)
         {
-            if (file[i].contains(pattern))
+            for (size_t i = 0; i < lineCount; ++i)
             {
-                lines.emplace_back(i);
+                auto lineIndex = lineNumberTransform(i);
+                if (not file[lineIndex].contains(pattern))
+                {
+                    lines.emplace_back(lineIndex);
+                }
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < lineCount; ++i)
+            {
+                auto lineIndex = lineNumberTransform(i);
+                if (file[lineIndex].contains(pattern))
+                {
+                    lines.emplace_back(lineIndex);
+                }
             }
         }
     }
     else
     {
-        for (size_t i = 0; i < filter.size(); ++i)
+        RE2::Options reOptions;
+        reOptions.set_log_errors(false);
+        RE2 re(std::move(pattern), reOptions);
+
+        if (options.inverted)
         {
-            const auto lineIndex = filter[i];
-            if (file[lineIndex].contains(pattern))
+            for (size_t i = 0; i < lineCount; ++i)
             {
-                lines.emplace_back(lineIndex);
+                auto lineIndex = lineNumberTransform(i);
+                if (not RE2::PartialMatch(file[lineIndex], re))
+                {
+                    lines.emplace_back(lineIndex);
+                }
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < lineCount; ++i)
+            {
+                auto lineIndex = lineNumberTransform(i);
+                if (RE2::PartialMatch(file[lineIndex], re))
+                {
+                    lines.emplace_back(lineIndex);
+                }
             }
         }
     }
+
     return lines;
+}
+
+void asyncGrep(std::string pattern, GrepOptions options, const LineRefs& filter, MappedFile& file, std::function<void(LineRefs, float)> callback)
+{
+    std::thread(
+        [pattern = std::move(pattern), &filter, &file, callback = std::move(callback), options]
+        {
+            LineRefs lines;
+            auto time = utils::measureTime(
+                [&lines, &pattern, &filter, &file, options]
+                {
+                    lines = grep(pattern, options, filter, file);
+                });
+            callback(std::move(lines), time);
+        }).detach();
 }
 
 }  // namespace core

@@ -7,6 +7,12 @@ namespace core
 DEFINE_COMMAND(toggle)
 {
     HELP() = "toggle the value of boolean variable";
+
+    FLAGS()
+    {
+        return {};
+    }
+
     ARGUMENTS()
     {
         return {
