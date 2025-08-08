@@ -1,7 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "core/parser.hpp"
+#include "core/lexer.hpp"
 
 using namespace core;
 

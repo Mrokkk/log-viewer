@@ -37,8 +37,8 @@ pkg_check_modules(GTEST gtest REQUIRED)
 add_executable(test
 
     main.cpp
-    ${PROJECT_SOURCE_DIR}/src/core/parser.cpp
-    parser_tests.cpp
+    ${PROJECT_SOURCE_DIR}/src/core/lexer.cpp
+    lexer_tests.cpp
     ring_buffer_tests.cpp
 
 )

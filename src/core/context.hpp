@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/fwd.hpp"
-#include "core/input_state.hpp"
+#include "core/input.hpp"
 #include "core/mapped_file.hpp"
 #include "core/user_interface.hpp"
 #include "utils/immobile.hpp"

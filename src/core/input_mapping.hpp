@@ -25,5 +25,6 @@ struct InputMappings
 };
 
 bool addInputMapping(std::string keys, const std::string& command, bool force, Context& context);
+void initializeDefaultInputMapping(core::Context& context);
 
 }  // namespace core

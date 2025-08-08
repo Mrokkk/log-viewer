@@ -17,14 +17,15 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "core/context.hpp"
+#include "core/input.hpp"
 #include "core/logger.hpp"
 #include "core/mapped_file.hpp"
-#include "core/operations.hpp"
+#include "core/interpreter.hpp"
 #include "core/variable.hpp"
 #include "sys/system.hpp"
 #include "ui/grepper.hpp"
-#include "ui/picker.hpp"
 #include "ui/palette.hpp"
+#include "ui/picker.hpp"
 #include "ui/scroll.hpp"
 #include "utils/math.hpp"
 #include "utils/ring_buffer.hpp"

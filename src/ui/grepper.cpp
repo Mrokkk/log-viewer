@@ -6,7 +6,8 @@
 
 #include "core/command.hpp"
 #include "core/context.hpp"
-#include "core/operations.hpp"
+#include "core/grep.hpp"
+#include "core/interpreter.hpp"
 #include "ui/ftxui.hpp"
 
 using namespace ftxui;

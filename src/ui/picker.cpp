@@ -5,7 +5,9 @@
 #include <ftxui/screen/colored_string.hpp>
 
 #include "core/command.hpp"
-#include "core/operations.hpp"
+#include "core/dirs.hpp"
+#include "core/fuzzy.hpp"
+#include "core/interpreter.hpp"
 #include "core/variable.hpp"
 #include "ui/palette.hpp"
 #include "utils/string.hpp"

@@ -1,5 +1,5 @@
 #include "core/command.hpp"
-#include "core/operations.hpp"
+#include "core/interpreter.hpp"
 #include "utils/string.hpp"
 
 namespace core

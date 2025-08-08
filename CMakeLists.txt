@@ -53,6 +53,7 @@ endif()
 add_executable(${PROJECT_NAME}
 
     src/core/alias.cpp
+    src/core/app.cpp
     src/core/argparse.cpp
     src/core/command.cpp
     src/core/commands/echo.cpp
@@ -65,11 +66,16 @@ add_executable(${PROJECT_NAME}
     src/core/commands/source.cpp
     src/core/commands/toggle.cpp
     src/core/context.cpp
+    src/core/dirs.cpp
+    src/core/file_load.cpp
+    src/core/fuzzy.cpp
+    src/core/grep.cpp
+    src/core/input.cpp
     src/core/input_mapping.cpp
+    src/core/interpreter.cpp
+    src/core/lexer.cpp
     src/core/logger.cpp
     src/core/mapped_file.cpp
-    src/core/operations.cpp
-    src/core/parser.cpp
     src/core/type.cpp
     src/core/variable.cpp
     src/main.cpp

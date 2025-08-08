@@ -1,6 +1,6 @@
 #include "core/alias.hpp"
 #include "core/command.hpp"
-#include "core/operations.hpp"
+#include "core/file_load.hpp"
 
 namespace core
 {
@@ -23,7 +23,7 @@ DEFINE_COMMAND(open)
 
     EXECUTOR()
     {
-        return asyncViewLoader(args[0].string, context);
+        return asyncLoadFile(args[0].string, context);
     }
 }
 
