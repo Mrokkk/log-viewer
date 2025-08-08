@@ -147,7 +147,7 @@ static bool resize(Ftxui& ui, core::Context& context)
     {
         logger << info << "terminal size: " << ui.terminalSize.dimx << 'x' << ui.terminalSize.dimy;
 
-        ui.mainView.forEachRecursive(
+        ui.mainView.root.forEachRecursive(
             [&ui, &context](ViewNode& view)
             {
                 if (view.type() == ViewNode::Type::view)
@@ -250,17 +250,17 @@ static Elements renderTablines(Ftxui& ui)
 
     vertical.push_back(
         wrapActiveLineIf(
-            ui.mainView.renderTabline(),
-            ui.activeLine == index++));
+            ui.mainView.root.renderTabline(),
+            ui.mainView.activeLine == index++));
 
-    auto view = ui.mainView.activeChild();
+    auto view = ui.mainView.root.activeChild();
 
     while (view->activeChild())
     {
         vertical.push_back(
             wrapActiveLineIf(
                 view->renderTabline(),
-                ui.activeLine == index++));
+                ui.mainView.activeLine == index++));
 
         view = view->activeChild();
     }
@@ -272,11 +272,11 @@ static Element renderView(Ftxui& ui, core::Context& context)
 {
     auto vertical = renderTablines(ui);
 
-    if (ui.currentView->file) [[likely]]
+    if (ui.mainView.currentView->file) [[likely]]
     {
         vertical.push_back(
             flexbox(
-                {vbox(ui.currentView->ringBuffer | toFtxuiText)},
+                {vbox(ui.mainView.currentView->ringBuffer | toFtxuiText)},
                 FlexboxConfig()
                     .Set(FlexboxConfig::Wrap::NoWrap)
                     .Set(FlexboxConfig::AlignItems::FlexStart)
@@ -308,9 +308,9 @@ static Element renderView(Ftxui& ui, core::Context& context)
 
 static Element renderStatusLine(Ftxui& ui, bool isCommand)
 {
-    const auto fileName = ui.currentView
-        ? ui.currentView->file
-            ? ui.currentView->file->path().c_str()
+    const auto fileName = ui.mainView.currentView
+        ? ui.mainView.currentView->file
+            ? ui.mainView.currentView->file->path().c_str()
             : "loading..."
         : "[No Name]";
 
@@ -359,7 +359,7 @@ static Element render(Ftxui& ui, core::Context& context)
     const auto isCommand = ui.active == UIElement::commandLine;
 
     auto children = Elements{
-        ui.currentView
+        ui.mainView.currentView
             ? renderView(ui, context)
             : renderEmptyView(ui, context),
         renderStatusLine(ui, isCommand),
@@ -432,11 +432,11 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
 
 ViewNode* getActiveLineView(Ftxui& ui)
 {
-    auto view = ui.mainView.activeChild();
+    auto view = ui.mainView.root.activeChild();
 
     while (view->activeChild())
     {
-        if (view->depth() == ui.activeLine)
+        if (view->depth() == ui.mainView.activeLine)
         {
             break;
         }
@@ -458,7 +458,7 @@ static bool activeLineLeft(Ftxui& ui, core::Context&)
     if (prev)
     {
         prev->setActive();
-        ui.currentView = prev->parent()->deepestActive()->ptrCast<View>();
+        ui.mainView.currentView = prev->parent()->deepestActive()->ptrCast<View>();
     }
 
     return true;
@@ -476,7 +476,7 @@ static bool activeLineRight(Ftxui& ui, core::Context&)
     if (next)
     {
         next->setActive();
-        ui.currentView = next->parent()->deepestActive()->ptrCast<View>();
+        ui.mainView.currentView = next->parent()->deepestActive()->ptrCast<View>();
     }
 
     return true;
@@ -489,7 +489,7 @@ static bool activeLineUp(Ftxui& ui, core::Context&)
         return false;
     }
 
-    ui.activeLine = (ui.activeLine - 1) | utils::clamp(0, ui.currentView->depth());
+    ui.mainView.activeLine = (ui.mainView.activeLine - 1) | utils::clamp(0, ui.mainView.currentView->depth());
     return true;
 }
 
@@ -500,16 +500,13 @@ static bool activeLineDown(Ftxui& ui, core::Context&)
         return false;
     }
 
-    ui.activeLine = (ui.activeLine + 1) | utils::clamp(0, ui.currentView->depth());
+    ui.mainView.activeLine = (ui.mainView.activeLine + 1) | utils::clamp(0, ui.mainView.currentView->depth());
     return true;
 }
 
 Ftxui::Ftxui()
     : screen(ScreenInteractive::Fullscreen())
     , showLineNumbers(false)
-    , mainView(ViewNode::Type::link, "main")
-    , currentView(nullptr)
-    , activeLine(0)
     , active(UIElement::logView)
     , eventHandlers{
         {Event::PageUp,         whenActive(UIElement::logView, pageUp)},
@@ -592,17 +589,17 @@ std::ostream& Ftxui::operator<<(Severity severity)
 
 void* Ftxui::createView(std::string name, core::Context&)
 {
-    auto& link = mainView
+    auto& link = mainView.root
         .addChild(ViewNode::createLink(std::move(name)))
         .setActive()
         .depth(0);
 
-    currentView = link
+    mainView.currentView = link
         .addChild(View::create("base"))
         .setActive()
         .ptrCast<View>();
 
-    activeLine = 0;
+    mainView.activeLine = 0;
 
     return &link;
 }
@@ -656,9 +653,9 @@ DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the le
 
         ui.showLineNumbers = value.boolean;
 
-        if (ui.currentView and ui.currentView->file)
+        if (ui.mainView.currentView and ui.mainView.currentView->file)
         {
-            reloadLines(*ui.currentView, context);
+            reloadLines(*ui.mainView.currentView, context);
         }
 
         return true;
@@ -676,7 +673,7 @@ DEFINE_READONLY_VARIABLE(path, string, "Path to the opened file")
             return nullptr;
         }
 
-        return &ui.currentView->file->path();
+        return &ui.mainView.currentView->file->path();
     }
 }
 

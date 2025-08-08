@@ -293,7 +293,7 @@ void reloadView(View& view, Ftxui& ui, core::Context& context)
 
 bool isViewLoaded(Ftxui& ui)
 {
-    return ui.currentView and ui.currentView->file;
+    return ui.mainView.currentView and ui.mainView.currentView->file;
 }
 
 }  // namespace ui

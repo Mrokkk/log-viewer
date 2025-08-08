@@ -2,6 +2,7 @@
 
 #include <ranges>
 
+#include <ftxui/component/component_options.hpp>
 #include <ftxui/screen/colored_string.hpp>
 
 #include "core/command.hpp"
@@ -9,6 +10,7 @@
 #include "core/fuzzy.hpp"
 #include "core/interpreter.hpp"
 #include "core/variable.hpp"
+#include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "utils/string.hpp"
 
@@ -49,7 +51,7 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::views:
-            ui.picker.strings = ui.mainView.children()
+            ui.picker.strings = ui.mainView.root.children()
                 | views::transform([](const ViewNodePtr& e){ return e->name(); })
                 | to<utils::Strings>();
             break;
@@ -168,7 +170,7 @@ void pickerAccept(Ftxui& ui, core::Context& context)
 
         case Picker::Type::views:
         {
-            ui.currentView = ui.mainView.childAt(index)
+            ui.mainView.currentView = ui.mainView.root.childAt(index)
                 ->setActive()
                 .deepestActive()
                 ->ptrCast<View>();

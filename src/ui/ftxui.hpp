@@ -16,9 +16,9 @@
 #include "core/mapped_file.hpp"
 #include "core/user_interface.hpp"
 #include "ui/grepper.hpp"
-#include "ui/view.hpp"
+#include "ui/main_view.hpp"
+#include "ui/picker.hpp"
 #include "utils/immobile.hpp"
-#include "utils/string.hpp"
 
 namespace ui
 {
@@ -47,27 +47,6 @@ struct CommandLine final : utils::Immobile
     ftxui::Component input;
 };
 
-struct Picker final : utils::Immobile
-{
-    enum Type
-    {
-        files,
-        views,
-        commands,
-        variables,
-        _last
-    };
-
-    utils::Strings    strings;
-    utils::StringRefs cachedStrings;
-    std::string       inputLine;
-    ftxui::Component  window;
-    ftxui::Component  input;
-    ftxui::Component  content;
-    ftxui::Component  tabs;
-    Type              active;
-};
-
 struct Ftxui final : core::UserInterface
 {
     Ftxui();
@@ -82,9 +61,7 @@ struct Ftxui final : core::UserInterface
     ftxui::ScreenInteractive screen;
     ftxui::Dimensions        terminalSize;
     bool                     showLineNumbers;
-    ViewNode                 mainView;
-    View*                    currentView;
-    int                      activeLine;
+    MainView                 mainView;
     CommandLine              commandLine;
     Picker                   picker;
     Grepper                  grepper;
@@ -93,10 +70,5 @@ struct Ftxui final : core::UserInterface
 };
 
 core::UserInterface& createFtxuiUserInterface(core::Context& context);
-
-bool isViewLoaded(Ftxui& ui);
-void reloadLines(View& view, core::Context& context);
-std::string getLine(View& view, size_t lineIndex, core::Context& context);
-void reloadView(View& view, Ftxui& ui, core::Context& context);
 
 }  // namespace ui

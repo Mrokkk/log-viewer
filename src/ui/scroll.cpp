@@ -12,7 +12,7 @@ bool scrollLeft(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     if (view.xoffset == 0)
     {
@@ -31,7 +31,7 @@ bool scrollRight(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     view.xoffset++;
     reloadLines(view, context);
@@ -45,7 +45,7 @@ bool scrollLineDown(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     if (view.ringBuffer.size() == 0)
     {
@@ -71,7 +71,7 @@ bool scrollLineUp(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     if (view.yoffset == 0)
     {
@@ -91,7 +91,7 @@ bool scrollPageDown(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     if (view.ringBuffer.size() == 0)
     {
@@ -118,7 +118,7 @@ bool scrollPageUp(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     if (view.yoffset == 0)
     {
@@ -144,7 +144,7 @@ bool scrollToEnd(Ftxui& ui, core::Context& context)
         return true;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     const auto lastViewLine = view.lineCount - view.viewHeight;
 
@@ -167,7 +167,7 @@ void scrollTo(Ftxui& ui, ssize_t lineNumber, core::Context& context)
         return;
     }
 
-    auto& view = *ui.currentView;
+    auto& view = *ui.mainView.currentView;
 
     if (lineNumber == -1)
     {

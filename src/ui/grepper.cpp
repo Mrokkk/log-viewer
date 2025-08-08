@@ -190,9 +190,9 @@ DEFINE_COMMAND(grep)
             options.inverted = true;
         }
 
-        auto viewToAdd = ui.currentView->isBase()
-            ? ui.currentView->parent()
-            : ui.currentView;
+        auto viewToAdd = ui.mainView.currentView->isBase()
+            ? ui.mainView.currentView->parent()
+            : ui.mainView.currentView;
 
         auto& newLink = (*viewToAdd)
             .addChild(ViewNode::createLink(pattern))
@@ -203,8 +203,8 @@ DEFINE_COMMAND(grep)
             .setActive()
             .cast<View>();
 
-        auto parentView = ui.currentView;
-        ui.currentView = &base;
+        auto parentView = ui.mainView.currentView;
+        ui.mainView.currentView = &base;
 
         core::asyncGrep(
             pattern,

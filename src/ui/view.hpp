@@ -6,7 +6,9 @@
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include "core/fwd.hpp"
 #include "core/mapped_file.hpp"
+#include "ui/fwd.hpp"
 #include "utils/noncopyable.hpp"
 #include "utils/ring_buffer.hpp"
 
@@ -146,5 +148,10 @@ struct View : ViewNode
     size_t                         lineNrDigits;
     utils::RingBuffer<std::string> ringBuffer;
 };
+
+bool isViewLoaded(Ftxui& ui);
+void reloadLines(View& view, core::Context& context);
+std::string getLine(View& view, size_t lineIndex, core::Context& context);
+void reloadView(View& view, Ftxui& ui, core::Context& context);
 
 }  // namespace ui
