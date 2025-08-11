@@ -29,9 +29,9 @@ Variable* Variables::find(const std::string& name)
         : nullptr;
 }
 
-static void variableToStream(std::ostream& os, const Variable& variable, const Variable::Value& value)
+static void valueToStream(std::ostream& os, const Variable::Value& value)
 {
-    switch (variable.type)
+    switch (value.type)
     {
         case Type::boolean:
             os << std::boolalpha << value.boolean << std::noboolalpha;
@@ -55,10 +55,10 @@ static void variableToStream(std::ostream& os, const Variable& variable, const V
     }
 }
 
-std::string getVariableString(const Variable& variable, const Variable::Value& value)
+std::string getValueString(const Variable::Value& value)
 {
     std::stringstream ss;
-    variableToStream(ss, variable, value);
+    valueToStream(ss, value);
     return ss.str();
 }
 
@@ -66,7 +66,7 @@ std::ostream& operator<<(std::ostream& os, const VariableWithContext& wrapped)
 {
     auto value = wrapped.variable.reader(wrapped.context);
 
-    variableToStream(os, wrapped.variable, value);
+    valueToStream(os, value);
 
     return os;
 }

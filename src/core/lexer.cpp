@@ -21,18 +21,23 @@ std::ostream& operator<<(std::ostream& os, const Token::Type type)
         TOKEN_TYPE_PRINT(comment);
         TOKEN_TYPE_PRINT(stringLiteral);
         TOKEN_TYPE_PRINT(intLiteral);
-        TOKEN_TYPE_PRINT(flagLiteral);
         TOKEN_TYPE_PRINT(booleanLiteral);
         TOKEN_TYPE_PRINT(exclamation);
+        TOKEN_TYPE_PRINT(slash);
+        TOKEN_TYPE_PRINT(pipe);
+        TOKEN_TYPE_PRINT(dot);
+        TOKEN_TYPE_PRINT(add);
+        TOKEN_TYPE_PRINT(sub);
+        TOKEN_TYPE_PRINT(dollar);
         TOKEN_TYPE_PRINT(leftParenthesis);
         TOKEN_TYPE_PRINT(rightParenthesis);
         TOKEN_TYPE_PRINT(leftBracket);
         TOKEN_TYPE_PRINT(rightBracket);
         TOKEN_TYPE_PRINT(percent);
-        TOKEN_TYPE_PRINT(variableReference);
         TOKEN_TYPE_PRINT(identifier);
         TOKEN_TYPE_PRINT(semicolon);
         TOKEN_TYPE_PRINT(newline);
+        TOKEN_TYPE_PRINT(whitespace);
         TOKEN_TYPE_PRINT(end);
     }
     return os << "unknown token{" << static_cast<int>(type) << '}';
@@ -171,16 +176,6 @@ static bool intLiteral(LexerState& state)
     {
         advance(state);
     }
-    else if ((c == '+' or c == '-') and std::isdigit(peekNext(state)))
-    {
-        // FIXME: + and - should not be handled here and certainly
-        // should not be removed from token
-        advance(state);
-        if (c == '+')
-        {
-            start = current(state);
-        }
-    }
     else
     {
         return false;
@@ -221,31 +216,6 @@ static bool comment(LexerState& state)
     }
 
     addToken(Token::Type::comment, start, state);
-
-    return true;
-}
-
-static bool variableReferenceHandle(LexerState& state)
-{
-    if (peek(state) != '$' or not std::isalpha(peekNext(state)))
-    {
-        return false;
-    }
-
-    advance(state);
-
-    const auto start = current(state);
-
-    while (const auto c = peek(state))
-    {
-        if (not std::isalnum(c))
-        {
-            break;
-        }
-        advance(state);
-    }
-
-    addToken(Token::Type::variableReference, start, state);
 
     return true;
 }
@@ -300,6 +270,8 @@ static bool space(LexerState& state)
         return false;
     }
 
+    const auto start = current(state);
+
     while (const auto c = peek(state))
     {
         if (not isSpace(c))
@@ -308,6 +280,9 @@ static bool space(LexerState& state)
         }
         advance(state);
     }
+
+    addToken(Token::Type::whitespace, start, state);
+
     return true;
 }
 
@@ -323,31 +298,6 @@ static bool booleanLiteral(LexerState& state)
     return false;
 }
 
-static bool flagLiteral(LexerState& state)
-{
-    auto c = peek(state);
-
-    if (c != '-')
-    {
-        return false;
-    }
-
-    auto word = peekWord(state).substr(1);
-
-    for (auto c : word)
-    {
-        if (not std::isalnum(c))
-        {
-            return false;
-        }
-    }
-
-    advance(word, state);
-    addToken(Token::Type::flagLiteral, word.data(), current(state), state);
-
-    return true;
-}
-
 static const Tokenhandlers handlers = {
     space,
     comment,
@@ -355,13 +305,17 @@ static const Tokenhandlers handlers = {
     singleChar(';', Token::Type::semicolon),
     singleChar('%', Token::Type::percent),
     singleChar('!', Token::Type::exclamation),
+    singleChar('/', Token::Type::slash),
+    singleChar('|', Token::Type::pipe),
+    singleChar('.', Token::Type::dot),
+    singleChar('+', Token::Type::add),
+    singleChar('-', Token::Type::sub),
     singleChar('(', Token::Type::leftParenthesis),
     singleChar(')', Token::Type::rightParenthesis),
     singleChar('{', Token::Type::leftBracket),
     singleChar('}', Token::Type::rightBracket),
-    variableReferenceHandle,
+    singleChar('$', Token::Type::dollar),
     intLiteral,
-    flagLiteral,
     stringLiteral,
     booleanLiteral,
     identifier,

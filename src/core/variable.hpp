@@ -137,6 +137,6 @@ struct VariableWithContext final
     namespace NAME
 
 std::ostream& operator<<(std::ostream& os, const VariableWithContext& wrapped);
-std::string getVariableString(const Variable& variable, const Variable::Value& value);
+std::string getValueString(const Variable::Value& value);
 
 }  // namespace core

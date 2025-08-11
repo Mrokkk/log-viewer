@@ -1,9 +1,11 @@
 #include "interpreter.hpp"
 
 #include <algorithm>
+#include <expected>
 #include <span>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "core/alias.hpp"
 #include "core/command.hpp"
@@ -18,33 +20,159 @@ namespace core
 
 using TokensSpan = std::span<const Token>;
 
-static bool executeStatement(const TokensSpan& tokens, Context& context)
+std::expected<Variable::Value, bool> resolveReference(const std::string& name, Context& context)
 {
-    if (tokens[0].type != Token::Type::identifier and
-        tokens[0].type != Token::Type::intLiteral and
-        tokens[0].type != Token::Type::exclamation)
+    const auto variable = Variables::find(name);
+
+    if (not variable)
     {
-        *context.ui << error << "Unexpected token: " << tokens[0];
-        return false;
+        *context.ui << error << "No such variable: " << name;
+        return std::unexpected(false);
     }
 
-    std::string commandName;
-    std::string tokenString(tokens[0].value.begin(), tokens[0].value.end());
+    return variable->reader(context);
+}
 
-    if (tokens[0].type == Token::Type::identifier)
+std::expected<std::string, bool> resolveCurrentPath(Context& context)
+{
+    auto path = Variables::find("path");
+
+    if (not path)
     {
-        auto& aliases = Aliases::map();
+        *context.ui << error << "path variable does not exist";
+        return std::unexpected(false);
+    }
 
-        if (aliases.contains(tokenString))
+    auto value = path->reader(context);
+
+    if (not value.string)
+    {
+        *context.ui << error << "path not set";
+        return std::unexpected(false);
+    }
+
+    return *value.string;
+}
+
+static bool executeShellCommand(const TokensSpan& tokens, Context& context)
+{
+    const char* start = nullptr;
+    const char* end = nullptr;
+    std::stringstream command;
+
+    for (size_t i = 0; i < tokens.size(); ++i)
+    {
+        if (tokens[i].type == Token::Type::dollar and i + 1 < tokens.size() and tokens[i + 1].type == Token::Type::identifier)
         {
-            auto& alias = aliases[tokenString];
-            commandName = alias.command;
+            if (start)
+            {
+                end = tokens[i].value.data();
+                command << std::string_view(start, end);
+            }
+
+            ++i;
+            const auto value = resolveReference(std::string(tokens[i].value), context);
+
+            if (not value)
+            {
+                return false;
+            }
+
+            command << getValueString(value.value());
+
+            start = nullptr;
+        }
+        else if (tokens[i].type == Token::Type::percent)
+        {
+            if (start)
+            {
+                end = tokens[i].value.data();
+                command << std::string_view(start, end);
+            }
+
+            const auto value = resolveCurrentPath(context);
+
+            if (not value)
+            {
+                return false;
+            }
+
+            command << value.value();
+            start = nullptr;
+        }
+        else if (tokens[i].type == Token::Type::stringLiteral)
+        {
+            if (start)
+            {
+                end = tokens[i].value.data() - 1;
+                command << std::string_view(start, end);
+            }
+
+            command << tokens[i].value;
+
+            start = tokens[i].value.data() + tokens[i].value.size() + 1;
+        }
+        else if (not start)
+        {
+            start = tokens[i].value.data();
+            end = start + tokens[i].value.size();
+        }
+        else
+        {
+            end = tokens[i].value.data() + tokens[i].value.size();
         }
     }
 
-    if (commandName.empty())
+    if (start and end)
     {
-        commandName = std::move(tokenString);
+        command << std::string_view(start, end);
+    }
+
+    context.ui->executeShell(command.str());
+
+    return true;
+}
+
+static bool executeGoToCommand(const TokensSpan& tokens, Context& context)
+{
+    int index = 0;
+    int multiplier = 1;
+
+    switch (tokens[index].type)
+    {
+        case Token::Type::add:
+            index++;
+            break;
+        case Token::Type::sub:
+            index++;
+            multiplier = -1;
+            break;
+        default:
+            break;
+    }
+
+    if (tokens[index].type != Token::Type::intLiteral)
+    {
+        *context.ui << error << "expected an integer";
+        return false;
+    }
+
+    const auto lineNumber = tokens[index].value | utils::to<long>;
+    context.ui->scrollTo(multiplier * lineNumber, context);
+    return true;
+}
+
+static bool executeCommand(const TokensSpan& tokens, Context& context)
+{
+    std::string commandName(tokens[0].value.begin(), tokens[0].value.end());
+
+    const auto& aliases = Aliases::map();
+
+    const auto alias = aliases.find(commandName);
+
+    if (alias != aliases.end())
+    {
+        commandName = alias->second.command;
     }
 
     bool force{false};
@@ -65,9 +193,34 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
         }
         switch (tokens[i].type)
         {
-            case Token::Type::flagLiteral:
-                flags.insert(std::string(tokens[i].value));
+            case Token::Type::sub:
+                switch (tokens[i + 1].type)
+                {
+                    case Token::Type::intLiteral:
+                        args.emplace_back(
+                            Argument{
+                                .type = Type::integer,
+                                .integer = -1 * (tokens[i + 1].value | utils::to<long>),
+                                .string{tokens[i].value.begin(), tokens[i + 1].value.end()},
+                            });
+                        ++i;
+                        break;
+                    case Token::Type::identifier:
+                        flags.insert(std::string(tokens[i + 1].value));
+                        ++i;
+                        break;
+                    default:
+                        goto error;
+                }
                 break;
+
+            case Token::Type::add:
+                if (tokens[i + 1].type != Token::Type::intLiteral)
+                {
+                    goto error;
+                }
+                ++i;
+                [[fallthrough]];
 
             case Token::Type::intLiteral:
                 args.emplace_back(
@@ -98,48 +251,43 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
 
             case Token::Type::percent:
             {
-                auto path = Variables::find("path");
+                auto maybePath = resolveCurrentPath(context);
 
-                if (not path)
+                if (not maybePath)
                 {
-                    *context.ui << error << "path variable does not exist";
-                    return false;
-                }
-
-                auto value = path->reader(context);
-
-                if (not value.string)
-                {
-                    *context.ui << error << "path not set";
                     return false;
                 }
 
                 args.emplace_back(
                     Argument{
                         .type = Type::string,
-                        .string = *value.string,
+                        .string = std::move(maybePath.value()),
                     });
                 break;
             }
 
-            case Token::Type::variableReference:
+            case Token::Type::dollar:
             {
-                const auto variable = Variables::find(std::string(tokens[i].value));
-
-                if (not variable)
+                if (tokens[i + 1].type != Token::Type::identifier)
                 {
-                    *context.ui << error << "No such variable: " << tokens[i].value;
+                    goto error;
+                }
+                ++i;
+                auto maybeValue = resolveReference(std::string(tokens[i].value), context);
+
+                if (not maybeValue)
+                {
                     return false;
                 }
 
-                const auto value = variable->reader(context);
+                auto& value = maybeValue.value();
+
                 auto argument = Argument{
-                    .type = variable->type,
-                    .string{getVariableString(*variable, value)},
+                    .type = value.type,
+                    .string{getValueString(value)},
                 };
 
-
-                switch (variable->type)
+                switch (value.type)
                 {
                     case Type::boolean:
                         argument.boolean = value.boolean;
@@ -156,32 +304,15 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
                 break;
             }
 
+            case Token::Type::whitespace:
             case Token::Type::comment:
                 continue;
 
+            error:
             default:
                 *context.ui << error << "Unexpected token: " << tokens[i];
                 return false;
         }
-    }
-
-    if (tokens[0].type == Token::Type::exclamation)
-    {
-        std::stringstream ss;
-        for (const auto& arg : args)
-        {
-            ss << arg.string << ' ';
-        }
-        const auto string = ss.str();
-        context.ui->executeShell(string);
-        return true;
-    }
-
-    if (tokens[0].type == Token::Type::intLiteral)
-    {
-        const auto lineNumber = commandName | utils::to<long>;
-        context.ui->scrollTo(lineNumber, context);
-        return true;
     }
 
     const auto command = Commands::find(commandName);
@@ -223,7 +354,30 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
         }
     }
 
-    command->handler(args, flags, force, context);
+    return command->handler(args, flags, force, context);
+}
+
+static bool executeStatement(const TokensSpan& tokens, Context& context)
+{
+    switch (tokens[0].type)
+    {
+        case Token::Type::exclamation:
+            return executeShellCommand(tokens.subspan(1), context);
+
+        case Token::Type::identifier:
+            executeCommand(tokens, context);
+            break;
+
+        case Token::Type::add:
+        case Token::Type::sub:
+        case Token::Type::intLiteral:
+            executeGoToCommand(tokens, context);
+            break;
+
+        default:
+            *context.ui << error << "Unexpected statement beginning: " << tokens[0];
+            return false;
+    }
 
     return true;
 }
@@ -257,6 +411,7 @@ bool executeCode(const std::string& line, Context& context)
                     case Token::Type::end:
                     case Token::Type::newline:
                     case Token::Type::semicolon:
+                    case Token::Type::comment:
                         return true;
                     default:
                         return false;
