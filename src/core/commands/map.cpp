@@ -1,5 +1,5 @@
 #include "core/command.hpp"
-#include "core/input_mapping.hpp"
+#include "core/input.hpp"
 
 namespace core
 {

@@ -71,7 +71,6 @@ add_executable(${PROJECT_NAME}
     src/core/fuzzy.cpp
     src/core/grep.cpp
     src/core/input.cpp
-    src/core/input_mapping.cpp
     src/core/interpreter.cpp
     src/core/lexer.cpp
     src/core/logger.cpp

@@ -6,7 +6,7 @@
 #include "core/context.hpp"
 #include "core/file_load.hpp"
 #include "core/fwd.hpp"
-#include "core/input_mapping.hpp"
+#include "core/input.hpp"
 #include "core/interpreter.hpp"
 #include "core/logger.hpp"
 #include "sys/system.hpp"
