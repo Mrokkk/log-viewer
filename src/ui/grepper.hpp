@@ -5,29 +5,24 @@
 
 #include "core/fwd.hpp"
 #include "ui/fwd.hpp"
-#include "utils/immobile.hpp"
+#include "ui/ui_component.hpp"
 
 namespace ui
 {
 
-struct Grepper : utils::Immobile
+struct Grepper final : UIComponent
 {
-    struct State
-    {
-        std::string   pattern;
-        bool          regex           = false;
-        bool          caseInsensitive = false;
-        bool          inverted        = false;
-    };
+    Grepper();
+    ~Grepper();
+    void takeFocus() override;
+    ftxui::Element render(core::Context& context) override;
+    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) override;
+    operator ftxui::Component&();
 
-    State             state;
-    ftxui::Component  input;
-    ftxui::Components checkboxes;
-    ftxui::Component  window;
+private:
+    void accept(Ftxui& ui, core::Context& context);
+    struct Impl;
+    Impl* pimpl_;
 };
-
-void createGrepper(Ftxui& ui);
-void grepperAccept(Ftxui& ui, core::Context& context);
-ftxui::Element renderGrepper(Ftxui& ui);
 
 }  // namespace ui

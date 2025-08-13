@@ -3,11 +3,11 @@
 #include <iostream>
 
 #include "core/argparse.hpp"
+#include "core/commands/open.hpp"
+#include "core/commands/source.hpp"
 #include "core/context.hpp"
-#include "core/file_load.hpp"
 #include "core/fwd.hpp"
 #include "core/input.hpp"
-#include "core/interpreter.hpp"
 #include "core/logger.hpp"
 #include "sys/system.hpp"
 
@@ -55,14 +55,14 @@ int run(int argc, char* const* argv, Context& context)
         if (std::filesystem::exists(configFile))
         {
             logger << info << "sourcing " << configFile;
-            executeCode("source \"" + configFile.string() + '\"', context);
+            commands::source(configFile.string(), context);
             break;
         }
     }
 
     if (file)
     {
-        asyncLoadFile(std::string(file->string), context);
+        commands::open(std::string(file->string), context);
     }
 
     context.ui->run(context);

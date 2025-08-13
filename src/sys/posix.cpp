@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #include "core/logger.hpp"
-#include "core/mapping.hpp"
+#include "sys/mapping.hpp"
 #include "utils/side_effect.hpp"
 #include "utils/string.hpp"
 
@@ -228,7 +228,7 @@ void crashHandle(const int signal)
     logger.flushToStderr();
 }
 
-core::File fileOpen(std::string path)
+File fileOpen(std::string path)
 {
     int fd = open(path.c_str(), O_RDONLY);
 
@@ -244,19 +244,19 @@ core::File fileOpen(std::string path)
         return {};
     }
 
-    return core::File{
+    return File{
         .path = std::move(path),
         .size = static_cast<size_t>(stat.st_size),
         .fd = fd,
     };
 }
 
-void fileClose(core::File& file)
+void fileClose(File& file)
 {
     close(file.fd);
 }
 
-int remap(const core::File& file, core::Mapping& mapping, size_t newOffset, size_t newLen)
+int remap(const File& file, Mapping& mapping, size_t newOffset, size_t newLen)
 {
     static unsigned int pageMask = ~(static_cast<uintptr_t>(getpagesize()) - 1);
 
@@ -275,7 +275,7 @@ int remap(const core::File& file, core::Mapping& mapping, size_t newOffset, size
         return -1;
     }
 
-    mapping = core::Mapping{
+    mapping = Mapping{
         .ptr = newPtr,
         .offset = pageStart,
         .len = newLen
@@ -284,7 +284,7 @@ int remap(const core::File& file, core::Mapping& mapping, size_t newOffset, size
     return 0;
 }
 
-void unmap(core::Mapping& mapping)
+void unmap(Mapping& mapping)
 {
     if (mapping)
     {
@@ -304,6 +304,15 @@ Paths getConfigFiles()
     }
 
     return {std::filesystem::path(home) / ".config/log-viewer/config"};
+}
+
+int copyToClipboard(std::string string)
+{
+    std::stringstream ss;
+    ss << "echo \'" << std::move(string) << "\' | xclip -sel clip";
+    auto command = ss.str();
+    system(command.c_str());
+    return 0;
 }
 
 }  // namespace sys

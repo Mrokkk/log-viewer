@@ -1,4 +1,4 @@
-#include "mapped_file.hpp"
+#include "file.hpp"
 
 #include <stdexcept>
 #include <string.h>
@@ -10,7 +10,7 @@
 namespace core
 {
 
-MappedFile::MappedFile(std::string path)
+File::File(std::string path)
     : file_(sys::fileOpen(std::move(path)))
     , mapping_{.ptr = nullptr, .offset = 0, .len = 0}
 {
@@ -48,28 +48,28 @@ MappedFile::MappedFile(std::string path)
         });
 }
 
-MappedFile::~MappedFile()
+File::~File()
 {
     sys::unmap(mapping_);
     sys::fileClose(file_);
 }
 
-size_t MappedFile::lineCount() const
+size_t File::lineCount() const
 {
     return lines_.size();
 }
 
-float MappedFile::loadTime() const
+float File::loadTime() const
 {
     return loadTime_;
 }
 
-const std::string& MappedFile::path() const
+const std::string& File::path() const
 {
     return file_.path;
 }
 
-std::string MappedFile::operator[](unsigned long i)
+std::string File::operator[](unsigned long i)
 {
     const auto& line = lines_[i];
 

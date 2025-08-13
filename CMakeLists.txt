@@ -35,19 +35,25 @@ include(FindPkgConfig)
 pkg_check_modules(BACKTRACE REQUIRED libbacktrace)
 
 option(BUILD_TESTS "Build tests" OFF)
+option(OPTIMIZE "Enable compiler optimizations" ON)
 option(SANITIZERS "Enable ASan and UBsan" OFF)
 option(COVERAGE "Enable collecting code coverage in tests" OFF)
 
 message(STATUS "Build tests: ${BUILD_TESTS}")
+message(STATUS "Enable compiler optimizations: ${OPTIMIZE}")
 message(STATUS "Enable ASan and UBsan: ${SANITIZERS}")
 message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS "-pipe -std=c++23 -ggdb3 -O3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fdiagnostics-color=always")
+set(CMAKE_CXX_FLAGS "-pipe -std=c++23 -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fdiagnostics-color=always")
+
+if(OPTIMIZE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+endif()
 
 if(SANITIZERS)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS } -fsanitize=address,undefined -Wl,-lasan -fno-omit-frame-pointer")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined -Wl,-lasan -fno-omit-frame-pointer")
 endif()
 
 add_executable(${PROJECT_NAME}
@@ -67,6 +73,7 @@ add_executable(${PROJECT_NAME}
     src/core/commands/toggle.cpp
     src/core/context.cpp
     src/core/dirs.cpp
+    src/core/file.cpp
     src/core/file_load.cpp
     src/core/fuzzy.cpp
     src/core/grep.cpp
@@ -74,16 +81,19 @@ add_executable(${PROJECT_NAME}
     src/core/interpreter.cpp
     src/core/lexer.cpp
     src/core/logger.cpp
-    src/core/mapped_file.cpp
+    src/core/mode.cpp
     src/core/type.cpp
     src/core/variable.cpp
     src/main.cpp
     src/sys/posix.cpp
+    src/ui/command_line.cpp
+    src/ui/event_handler.cpp
     src/ui/ftxui.cpp
     src/ui/grepper.cpp
     src/ui/main_view.cpp
     src/ui/picker.cpp
-    src/ui/scroll.cpp
+    src/ui/status_line.cpp
+    src/ui/ui_component.cpp
     src/ui/view.cpp
     src/utils/math.cpp
     src/utils/string.cpp

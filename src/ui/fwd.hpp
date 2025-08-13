@@ -4,5 +4,7 @@ namespace ui
 {
 
 struct Ftxui;
+struct View;
+struct ViewNode;
 
 }  // namespace ui

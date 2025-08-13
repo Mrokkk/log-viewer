@@ -6,8 +6,8 @@
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include "core/file.hpp"
 #include "core/fwd.hpp"
-#include "core/mapped_file.hpp"
 #include "ui/fwd.hpp"
 #include "utils/noncopyable.hpp"
 #include "utils/ring_buffer.hpp"
@@ -21,19 +21,18 @@ struct ViewNode;
 using ViewNodePtr = std::unique_ptr<ViewNode>;
 using ViewPtr = std::unique_ptr<View>;
 using ViewNodes = std::list<ViewNodePtr>;
-using ViewNodeIt = ViewNodes::iterator;
 
 struct ViewNode : utils::Noncopyable
 {
     enum class Type
     {
-        link,
+        group,
         view,
     };
 
     ViewNode(Type type, std::string name);
 
-    static ViewNodePtr createLink(std::string name);
+    static ViewNodePtr createGroup(std::string name);
 
     Type type() const
     {
@@ -134,24 +133,36 @@ private:
     ftxui::Component childrenTabs_;
 };
 
-struct View : ViewNode
+struct LineWithNumber
+{
+    std::string line;
+    std::string lineNumber;
+};
+
+using LinesRingBuffer = utils::RingBuffer<LineWithNumber>;
+
+struct View final : ViewNode
 {
     View(std::string name);
     static ViewPtr create(std::string name);
 
-    core::MappedFile*              file;
-    core::LineRefs                 lines;
-    size_t                         lineCount;
-    size_t                         viewHeight;
-    size_t                         yoffset;
-    size_t                         xoffset;
-    size_t                         lineNrDigits;
-    utils::RingBuffer<std::string> ringBuffer;
+    core::File*     file;
+    core::LineRefs  lines;
+    size_t          lineCount;
+    size_t          viewHeight;
+    size_t          lineNrDigits;
+    size_t          yoffset;
+    size_t          xoffset;
+    size_t          ycurrent;
+    bool            selectionMode;
+    size_t          selectionPivot;
+    size_t          selectionStart;
+    size_t          selectionEnd;
+    LinesRingBuffer ringBuffer;
 };
 
-bool isViewLoaded(Ftxui& ui);
 void reloadLines(View& view, core::Context& context);
-std::string getLine(View& view, size_t lineIndex, core::Context& context);
 void reloadView(View& view, Ftxui& ui, core::Context& context);
+LineWithNumber getLine(View& view, size_t lineIndex, core::Context& context);
 
 }  // namespace ui

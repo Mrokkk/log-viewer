@@ -6,7 +6,7 @@
 #include <thread>
 
 #include "core/context.hpp"
-#include "core/mapped_file.hpp"
+#include "core/file.hpp"
 
 namespace core
 {
@@ -26,7 +26,7 @@ bool asyncLoadFile(std::string path, Context& context)
     std::thread(
         [path = std::move(path), &newFile, view, &context]
         {
-            newFile = std::make_unique<MappedFile>(path);
+            newFile = std::make_unique<File>(path);
             context.ui->attachFileToView(*newFile, view, context);
         }).detach();
 

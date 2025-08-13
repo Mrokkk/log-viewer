@@ -2,31 +2,23 @@
 
 #include <ftxui/fwd.hpp>
 
-#include "core/fwd.hpp"
+#include "core/logger.hpp"
 #include "ui/fwd.hpp"
 #include "ui/ui_component.hpp"
 
 namespace ui
 {
 
-struct Picker final : UIComponent
+struct CommandLine final : UIComponent
 {
-    enum Type : int
-    {
-        files,
-        views,
-        commands,
-        variables,
-        _last
-    };
-
-    Picker();
-    ~Picker();
-    void onExit() override;
+    CommandLine();
+    ~CommandLine();
     void takeFocus() override;
     ftxui::Element render(core::Context& context) override;
     bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) override;
-    void show(Ftxui& ui, Picker::Type type, core::Context& context);
+    void clearMessageLine();
+    void clearInputLine();
+    std::ostream& operator<<(Severity severity);
     operator ftxui::Component&();
 
 private:

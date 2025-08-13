@@ -330,10 +330,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
     if (commandArgsCount != args.size())
     {
-        if (hasVariadicArgument and args.size() > commandArgsCount)
-        {
-        }
-        else
+        if (not (hasVariadicArgument and args.size() > commandArgsCount))
         {
             *context.ui << error << "Invalid number of arguments passed to " << commandName
                         << "; expected " << (hasVariadicArgument ? "at least " : "")

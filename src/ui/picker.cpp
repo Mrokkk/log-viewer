@@ -1,23 +1,160 @@
 #include "picker.hpp"
 
 #include <ranges>
+#include <spanstream>
 
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/component_base.hpp>
 #include <ftxui/component/component_options.hpp>
+#include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/colored_string.hpp>
 
 #include "core/command.hpp"
+#include "core/commands/open.hpp"
 #include "core/dirs.hpp"
 #include "core/fuzzy.hpp"
-#include "core/interpreter.hpp"
 #include "core/variable.hpp"
+#include "ui/event_handler.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
+#include "ui/ui_component.hpp"
+#include "ui/view.hpp"
 #include "utils/string.hpp"
 
 using namespace ftxui;
 
 namespace ui
 {
+
+struct Picker::Impl final
+{
+    Impl();
+    Element render(core::Context& context);
+    void onExit();
+    void show(Ftxui& ui, Picker::Type type, core::Context& context);
+    void load(Ftxui& ui, Type type, core::Context& context);
+    void prev(Ftxui& ui, core::Context& context);
+    void next(Ftxui& ui, core::Context& context);
+    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context);
+
+    utils::Strings    strings;
+    utils::StringRefs cachedStrings;
+    std::string       inputLine;
+    Type              active;
+    ftxui::Component  input;
+    ftxui::Component  content;
+    ftxui::Component  tabs;
+    ftxui::Component  window;
+    EventHandlers     eventHandlers;
+
+private:
+    void onFilePickerChange();
+    void accept(Ftxui& ui, core::Context& context);
+};
+
+static std::string pickerName(const Picker::Type type)
+{
+#define TYPE_CONVERT(type) \
+    case Picker::Type::type: return #type
+    switch (type)
+    {
+        TYPE_CONVERT(files);
+        TYPE_CONVERT(views);
+        TYPE_CONVERT(commands);
+        TYPE_CONVERT(variables);
+        case Picker::Type::_last:
+            break;
+    }
+    return "unknown";
+}
+
+static utils::Strings getPickerNames()
+{
+    utils::Strings names;
+    for (int i = 0; i < static_cast<int>(Picker::Type::_last); ++i)
+    {
+        names.push_back(pickerName(static_cast<Picker::Type>(i)));
+    }
+    return names;
+}
+
+Picker::Impl::Impl()
+    : input(
+        Input(
+            &inputLine,
+            InputOption{
+                .multiline = false,
+                .on_change = [this]{ onFilePickerChange(); },
+            }))
+    , content(Container::Vertical({}))
+    , tabs(
+        Toggle(
+            getPickerNames(),
+            std::bit_cast<int*>(&active)))
+    , window(
+        Window({
+            .inner = Container::LockedVertical({
+                tabs,
+                input,
+                content
+            }),
+            .title = "",
+            .resize_left = false,
+            .resize_right = false,
+            .resize_top = false,
+            .resize_down = false,
+        }))
+    , eventHandlers{
+        {Event::Return,     [this](auto& ui, auto& context){ accept(ui, context); return true; }},
+        {Event::Tab,        [this](auto& ui, auto& context){ next(ui, context); return true; }},
+        {Event::TabReverse, [this](auto& ui, auto& context){ prev(ui, context); return true; }},
+    }
+{
+}
+
+Element Picker::Impl::render(core::Context& context)
+{
+    auto& ui = context.ui->get<Ftxui>();
+    const auto resx = ui.terminalSize.dimx / 2;
+    const auto resy = ui.terminalSize.dimy / 2;
+
+    char buffer[128];
+    std::ospanstream ss(buffer);
+
+    ss << cachedStrings.size() << '/' << strings.size();
+
+    return ::ftxui::window(
+        text(""),
+        vbox({
+            tabs->Render(),
+            separator(),
+            hbox({
+                input->Render() | xflex,
+                separator(),
+                text(std::string(ss.span().begin(), ss.span().end()))
+            }),
+            separator(),
+            content->Render() | yframe
+        }) | flex)
+            | size(WIDTH, EQUAL, resx)
+            | size(HEIGHT, EQUAL, resy)
+            | clear_under
+            | center
+            | flex;
+}
+
+void Picker::Impl::onExit()
+{
+    cachedStrings.clear();
+    strings.clear();
+}
+
+void Picker::Impl::show(Ftxui& ui, Picker::Type type, core::Context& context)
+{
+    load(ui, type, context);
+    content->TakeFocus();
+    switchFocus(UIComponent::picker, ui, context);
+}
 
 static const MenuEntryOption menuOption{
     .transform =
@@ -34,9 +171,9 @@ static const MenuEntryOption menuOption{
         }
 };
 
-void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
+void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
 {
-    ui.picker.content->DetachAllChildren();
+    content->DetachAllChildren();
 
     const auto width = ui.terminalSize.dimx / 2 - 4;
     const auto leftWidth = width / 2;
@@ -47,17 +184,17 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
         using namespace std::ranges;
 
         case Picker::Type::files:
-            ui.picker.strings = core::readCurrentDirectoryRecursive();
+            strings = core::readCurrentDirectoryRecursive();
             break;
 
         case Picker::Type::views:
-            ui.picker.strings = ui.mainView.root.children()
+            strings = ui.mainView.root().children()
                 | views::transform([](const ViewNodePtr& e){ return e->name(); })
                 | to<utils::Strings>();
             break;
 
         case Picker::Type::commands:
-            ui.picker.strings = core::Commands::map()
+            strings = core::Commands::map()
                 | views::transform(
                     [leftWidth, width](const auto& e)
                     {
@@ -93,7 +230,7 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::variables:
-            ui.picker.strings = core::Variables::map()
+            strings = core::Variables::map()
                 | views::transform(
                     [&context, leftWidth, width](const auto& e)
                     {
@@ -120,33 +257,72 @@ void loadPicker(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
     }
 
-    ui.picker.cachedStrings = core::fuzzyFilter(ui.picker.strings, "");
+    cachedStrings = core::fuzzyFilter(strings, "");
 
-    for (auto& entry : ui.picker.cachedStrings)
+    for (auto& entry : cachedStrings)
     {
-        ui.picker.content->Add(MenuEntry(entry, menuOption));
+        content->Add(MenuEntry(entry, menuOption));
     }
 
-    if (ui.picker.cachedStrings.size())
+    if (cachedStrings.size())
     {
-        ui.picker.content->SetActiveChild(ui.picker.content->ChildAt(0));
+        content->SetActiveChild(content->ChildAt(0));
     }
 
-    ui.picker.inputLine.clear();
-    ui.picker.active = type;
+    inputLine.clear();
+    active = type;
 }
 
-void showPicker(Ftxui& ui, Picker::Type type, core::Context& context)
+void Picker::Impl::next(Ftxui& ui, core::Context& context)
 {
-    loadPicker(ui, type, context);
+    auto nextType = static_cast<Picker::Type>(active + 1);
 
-    ui.picker.content->TakeFocus();
-    ui.active = UIElement::picker;
+    if (nextType == Picker::Type::_last)
+    {
+        nextType = Picker::Type::files;
+    }
+
+    load(ui, nextType, context);
 }
 
-void pickerAccept(Ftxui& ui, core::Context& context)
+void Picker::Impl::prev(Ftxui& ui, core::Context& context)
 {
-    auto active = ui.picker.content->ActiveChild();
+    auto nextType = static_cast<Picker::Type>(active - 1);
+
+    if (static_cast<int>(nextType < 0))
+    {
+        nextType = static_cast<Picker::Type>(Picker::Type::_last - 1);
+    }
+
+    load(ui, nextType, context);
+}
+
+bool Picker::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
+{
+    auto result = eventHandlers.handleEvent(event, ui, context);
+    if (not result)
+    {
+        content->TakeFocus(); // Make sure that picker view is always focused
+        return input->OnEvent(event);
+    }
+    return result.value();
+}
+
+void Picker::Impl::onFilePickerChange()
+{
+    content->DetachAllChildren();
+
+    cachedStrings = core::fuzzyFilter(strings, inputLine);
+
+    for (auto& entry : cachedStrings)
+    {
+        content->Add(MenuEntry(entry, menuOption));
+    }
+}
+
+void Picker::Impl::accept(Ftxui& ui, core::Context& context)
+{
+    auto active = content->ActiveChild();
 
     if (not active) [[unlikely]]
     {
@@ -155,149 +331,72 @@ void pickerAccept(Ftxui& ui, core::Context& context)
 
     const auto index = static_cast<size_t>(active->Index());
 
-    if (index >= ui.picker.cachedStrings.size()) [[unlikely]]
+    if (index >= cachedStrings.size()) [[unlikely]]
     {
         return;
     }
 
-    switch (ui.picker.active)
+    switch (this->active)
     {
         case Picker::Type::files:
-        {
-            executeCode("open \"" + *ui.picker.cachedStrings[active->Index()] + '\"', context);
+            core::commands::open(*cachedStrings[active->Index()], context);
             break;
-        }
 
-        case Picker::Type::views:
-        {
-            ui.mainView.currentView = ui.mainView.root.childAt(index)
-                ->setActive()
-                .deepestActive()
-                ->ptrCast<View>();
-            break;
-        }
+        //case Picker::Type::views:
+        //{
+            //ui.mainView.currentView = ui.mainView.root.childAt(index)
+                //->setActive()
+                //.deepestActive()
+                //->ptrCast<View>();
+            //break;
+        //}
 
         default:
             break;
     }
 
-    ui.active = UIElement::logView;
+    switchFocus(UIComponent::mainView, ui, context);
 }
 
-void pickerNext(Ftxui& ui, core::Context& context)
+Picker::Picker()
+    : UIComponent(UIComponent::picker)
+    , pimpl_(new Impl)
 {
-    auto nextType = static_cast<Picker::Type>(ui.picker.active + 1);
-
-    if (nextType == Picker::Type::_last)
-    {
-        nextType = Picker::Type::files;
-    }
-
-    loadPicker(ui, nextType, context);
 }
 
-void pickerPrev(Ftxui& ui, core::Context& context)
+Picker::~Picker()
 {
-    auto nextType = static_cast<Picker::Type>(ui.picker.active - 1);
-
-    if (static_cast<int>(nextType < 0))
-    {
-        nextType = static_cast<Picker::Type>(Picker::Type::_last - 1);
-    }
-
-    loadPicker(ui, nextType, context);
+    delete pimpl_;
 }
 
-static std::string pickerName(const Picker::Type type)
+void Picker::onExit()
 {
-#define TYPE_CONVERT(type) \
-    case Picker::Type::type: return #type
-    switch (type)
-    {
-        TYPE_CONVERT(files);
-        TYPE_CONVERT(views);
-        TYPE_CONVERT(commands);
-        TYPE_CONVERT(variables);
-        case Picker::Type::_last:
-            break;
-    }
-    return "unknown";
+    pimpl_->onExit();
 }
 
-static utils::Strings getPickerNames()
+void Picker::takeFocus()
 {
-    utils::Strings names;
-    for (int i = 0; i < static_cast<int>(Picker::Type::_last); ++i)
-    {
-        names.push_back(pickerName(static_cast<Picker::Type>(i)));
-    }
-    return names;
+    pimpl_->content->TakeFocus();
 }
 
-static void onFilePickerChange(Ftxui& ui, core::Context&)
+ftxui::Element Picker::render(core::Context& context)
 {
-    ui.picker.content->DetachAllChildren();
-
-    ui.picker.cachedStrings = core::fuzzyFilter(ui.picker.strings, ui.picker.inputLine);
-
-    for (auto& entry : ui.picker.cachedStrings)
-    {
-        ui.picker.content->Add(MenuEntry(entry, menuOption));
-    }
+    return pimpl_->render(context);
 }
 
-void createPicker(Ftxui& ui, core::Context& context)
+bool Picker::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
 {
-    ui.picker.content = Container::Vertical({});
-    ui.picker.input = Input(
-        &ui.picker.inputLine,
-        InputOption{
-            .multiline = false,
-            .on_change = [&ui, &context]{ onFilePickerChange(ui, context); },
-        }
-    );
-
-    ui.picker.tabs = Toggle(
-        getPickerNames(),
-        std::bit_cast<int*>(&ui.picker.active));
-
-    ui.picker.window = Window({
-        .inner = Container::LockedVertical({
-            ui.picker.tabs,
-            ui.picker.input,
-            ui.picker.content
-        }),
-        .title = "",
-        .resize_left = false,
-        .resize_right = false,
-        .resize_top = false,
-        .resize_down = false,
-    });
+    return pimpl_->handleEvent(event, ui, context);
 }
 
-Element renderPickerWindow(Ftxui& ui, core::Context&)
+void Picker::show(Ftxui& ui, Picker::Type type, core::Context& context)
 {
-    const auto resx = ui.terminalSize.dimx / 2;
-    const auto resy = ui.terminalSize.dimy / 2;
+    pimpl_->show(ui, type, context);
+}
 
-    char buffer[128];
-    std::ospanstream ss(buffer);
-
-    ss << ui.picker.cachedStrings.size() << '/' << ui.picker.strings.size();
-
-    return window(
-        text(""),
-        vbox({
-            ui.picker.tabs->Render(),
-            separator(),
-            hbox({
-                ui.picker.input->Render() | xflex,
-                separator(),
-                text(std::string(ss.span().begin(), ss.span().end()))
-            }),
-            separator(),
-            ui.picker.content->Render() | yframe
-        }) | flex) | size(WIDTH, EQUAL, resx) | size(HEIGHT, EQUAL, resy) | clear_under | center | flex;
+Picker::operator ftxui::Component&()
+{
+    return pimpl_->window;
 }
 
 DEFINE_COMMAND(files)
@@ -316,7 +415,8 @@ DEFINE_COMMAND(files)
 
     EXECUTOR()
     {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::files, context);
+        auto& ui = context.ui->get<Ftxui>();
+        ui.picker.show(ui, Picker::Type::files, context);
         return true;
     }
 }
@@ -337,7 +437,8 @@ DEFINE_COMMAND(views)
 
     EXECUTOR()
     {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::views, context);
+        auto& ui = context.ui->get<Ftxui>();
+        ui.picker.show(ui, Picker::Type::views, context);
         return true;
     }
 }
@@ -358,7 +459,8 @@ DEFINE_COMMAND(commands)
 
     EXECUTOR()
     {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::commands, context);
+        auto& ui = context.ui->get<Ftxui>();
+        ui.picker.show(ui, Picker::Type::commands, context);
         return true;
     }
 }
@@ -379,7 +481,8 @@ DEFINE_COMMAND(variables)
 
     EXECUTOR()
     {
-        showPicker(context.ui->get<Ftxui>(), Picker::Type::variables, context);
+        auto& ui = context.ui->get<Ftxui>();
+        ui.picker.show(ui, Picker::Type::variables, context);
         return true;
     }
 }

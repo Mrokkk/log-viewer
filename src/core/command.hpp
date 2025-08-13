@@ -137,6 +137,7 @@ struct Commands final
         static const char* help; \
         static ::core::CommandArguments arguments(); \
         static ::core::CommandFlags flags(); \
+        static inline const char* name = #NAME; \
         static inline bool registered = (Command::init(), true); \
     }; \
     } \

@@ -1,8 +1,9 @@
 #pragma once
 
+#include "core/file.hpp"
 #include "core/fwd.hpp"
 #include "core/input.hpp"
-#include "core/mapped_file.hpp"
+#include "core/mode.hpp"
 #include "core/user_interface.hpp"
 #include "utils/immobile.hpp"
 
@@ -14,8 +15,9 @@ struct Context final : utils::Immobile
     ~Context();
     static Context create();
 
-    MappedFiles      files;
+    Files            files;
     InputState       inputState;
+    Mode             mode;
     UserInterfacePtr ui;
 
 private:

@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-namespace core
+namespace sys
 {
 
 struct Mapping
@@ -23,4 +23,4 @@ struct Mapping
     }
 };
 
-}  // namespace core
+}  // namespace sys

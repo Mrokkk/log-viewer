@@ -2,8 +2,8 @@
 
 #include <functional>
 
+#include "core/file.hpp"
 #include "core/fwd.hpp"
-#include "core/mapped_file.hpp"
 
 namespace core
 {
@@ -19,7 +19,7 @@ void asyncGrep(
     std::string pattern,
     GrepOptions options,
     const LineRefs& filter,
-    MappedFile& file,
+    File& file,
     std::function<void(LineRefs, float)> callback);
 
 }  // namespace core

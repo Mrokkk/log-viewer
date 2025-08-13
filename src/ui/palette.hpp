@@ -18,6 +18,7 @@ struct Palette
     static inline Color bg4 = 0x353535_rgb;
     static inline Color fg0 = 0xaf8787_rgb;
     static inline Color fg1 = 0x7daea3_rgb;
+    static inline Color fg3 = 0xd75f5f_rgb;
 
     struct StatusLine
     {
@@ -25,6 +26,8 @@ struct Palette
         static constexpr auto& commandBg = Palette::fg1;
         static constexpr auto& normalFg  = Palette::bg0;
         static constexpr auto& normalBg  = Palette::fg0;
+        static constexpr auto& visualFg  = Palette::bg0;
+        static constexpr auto& visualBg  = Palette::fg3;
         static constexpr auto& bg1       = Palette::bg1;
         static constexpr auto& bg2       = Palette::bg2;
         static constexpr auto& bg3       = Palette::bg3;

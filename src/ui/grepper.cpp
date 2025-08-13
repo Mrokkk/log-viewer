@@ -1,5 +1,7 @@
 #include "grepper.hpp"
 
+#include <spanstream>
+
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/component/component_options.hpp>
@@ -9,110 +11,21 @@
 #include "core/grep.hpp"
 #include "core/interpreter.hpp"
 #include "ui/ftxui.hpp"
+#include "ui/ui_component.hpp"
+#include "ui/view.hpp"
 
 using namespace ftxui;
 
 namespace ui
 {
 
-void createGrepper(Ftxui& ui)
+struct State final
 {
-    ui.grepper.input = Input(
-        &ui.grepper.state.pattern,
-        InputOption{
-            .multiline = false,
-        }
-    );
-
-    auto regexCheckbox = Checkbox(
-        CheckboxOption{
-            .label = "regex",
-            .checked = &ui.grepper.state.regex,
-        });
-
-    auto caseInsensitiveCheckbox = Checkbox(
-        CheckboxOption{
-            .label = "case insensitive",
-            .checked = &ui.grepper.state.caseInsensitive,
-        });
-
-    auto invertedCheckbox = Checkbox(
-        CheckboxOption{
-            .label = "inverted",
-            .checked = &ui.grepper.state.inverted,
-        });
-
-    ui.grepper.window = Window({
-        .inner = Container::LockedVertical({
-            ui.grepper.input,
-            regexCheckbox,
-            caseInsensitiveCheckbox,
-            invertedCheckbox,
-        }),
-        .title = "",
-        .resize_left = false,
-        .resize_right = false,
-        .resize_top = false,
-        .resize_down = false,
-    });
-
-    ui.grepper.checkboxes = {
-        regexCheckbox,
-        caseInsensitiveCheckbox,
-        invertedCheckbox
-    };
-}
-
-void grepperAccept(Ftxui& ui, core::Context& context)
-{
-    if (ui.grepper.state.pattern.empty())
-    {
-        return;
-    }
-
-    std::string command = "grep ";
-
-    if (ui.grepper.state.regex)
-    {
-        command += "-r ";
-    }
-    if (ui.grepper.state.caseInsensitive)
-    {
-        command += "-c ";
-    }
-    if (ui.grepper.state.inverted)
-    {
-        command += "-i ";
-    }
-
-    command += '\"';
-    command += ui.grepper.state.pattern;
-    command += '\"';
-
-    core::executeCode(command, context);
-
-    ui.active = UIElement::logView;
-}
-
-Element renderGrepper(Ftxui& ui)
-{
-    Elements verticalBox = {
-        ui.grepper.input->Render(),
-        separator(),
-    };
-
-    for (auto& checkbox : ui.grepper.checkboxes)
-    {
-        verticalBox.push_back(checkbox->Render());
-    }
-
-    return window(
-        text(""),
-        vbox(std::move(verticalBox)) | xflex) | clear_under | center | xflex;
-}
-
-namespace
-{
+    std::string   pattern;
+    bool          regex           = false;
+    bool          caseInsensitive = false;
+    bool          inverted        = false;
+};
 
 DEFINE_COMMAND(grepper)
 {
@@ -132,13 +45,12 @@ DEFINE_COMMAND(grepper)
     {
         auto& ui = context.ui->get<Ftxui>();
 
-        if (ui.active != UIElement::logView or not isViewLoaded(ui))
+        if (ui.active->type != UIComponent::mainView or not ui.mainView.isViewLoaded())
         {
             return false;
         }
 
-        ui.active = UIElement::grepper;
-        ui.grepper.input->TakeFocus();
+        switchFocus(UIComponent::grepper, ui, context);
 
         return true;
     }
@@ -169,49 +81,61 @@ DEFINE_COMMAND(grep)
         const auto& pattern = args[0].string;
         auto& ui = context.ui->get<Ftxui>();
 
-        if (not isViewLoaded(ui))
+        if (not ui.mainView.isViewLoaded())
         {
             ui << error << "no file loaded yet";
             return false;
         }
 
+        std::string optionsString;
+
         core::GrepOptions options;
 
-        if (flags.contains("c"))
-        {
-            options.caseInsensitive = true;
-        }
         if (flags.contains("r"))
         {
+            optionsString += 'r';
             options.regex = true;
+        }
+        if (flags.contains("c"))
+        {
+            optionsString += 'c';
+            options.caseInsensitive = true;
         }
         if (flags.contains("i"))
         {
+            optionsString += 'i';
             options.inverted = true;
         }
 
-        auto viewToAdd = ui.mainView.currentView->isBase()
-            ? ui.mainView.currentView->parent()
-            : ui.mainView.currentView;
+        char buffer[128];
+        std::spanstream ss(buffer);
 
-        auto& newLink = (*viewToAdd)
-            .addChild(ViewNode::createLink(pattern))
-            .setActive();
+        ss << pattern;
 
-        auto& base = newLink
-            .addChild(View::create("base"))
-            .setActive()
-            .cast<View>();
+        if (not optionsString.empty())
+        {
+            ss << " [" << optionsString << ']';
+        }
 
-        auto parentView = ui.mainView.currentView;
-        ui.mainView.currentView = &base;
+        auto& prevCurrentView = *ui.mainView.currentView();
+        auto file = prevCurrentView.file;
+
+        auto& parent = prevCurrentView.isBase()
+            ? *prevCurrentView.parent()
+            : prevCurrentView;
+
+        auto& newView = ui.mainView.createView(
+            std::string(ss.span().begin(), ss.span().end()),
+            &parent);
+
+        auto& base = newView.base().cast<View>();
 
         core::asyncGrep(
             pattern,
             options,
-            parentView->lines,
-            *parentView->file,
-            [&base, &ui, &context, file = parentView->file](core::LineRefs lines, float time)
+            prevCurrentView.lines,
+            *file,
+            [&base, &ui, &context, file](core::LineRefs lines, float time)
             {
                 ui.screen.Post(
                     [&ui, &base, &context, lines = std::move(lines), file, time]
@@ -232,6 +156,177 @@ DEFINE_COMMAND(grep)
     }
 }
 
-}  // namespace
+namespace commands
+{
+
+bool grep(const State& params, core::Context& context)
+{
+    std::string command = "grep ";
+
+    if (params.regex)
+    {
+        command += "-r ";
+    }
+    if (params.caseInsensitive)
+    {
+        command += "-c ";
+    }
+    if (params.inverted)
+    {
+        command += "-i ";
+    }
+
+    command += '\"';
+    command += params.pattern;
+    command += '\"';
+
+    return core::executeCode(command, context);
+}
+
+}  // namespace commands
+
+struct Grepper::Impl final
+{
+    Impl();
+    Element render();
+    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context);
+
+    State             state;
+    ftxui::Component  input;
+    ftxui::Components checkboxes;
+    ftxui::Component  window;
+
+private:
+    bool accept(Ftxui& ui, core::Context& context);
+};
+
+Grepper::Impl::Impl()
+    : input(Input(&state.pattern, InputOption{.multiline = false}))
+{
+    auto regexCheckbox = Checkbox(
+        CheckboxOption{
+            .label = "regex (Alt+R)",
+            .checked = &state.regex,
+        });
+
+    auto caseInsensitiveCheckbox = Checkbox(
+        CheckboxOption{
+            .label = "case insensitive (Alt+C)",
+            .checked = &state.caseInsensitive,
+        });
+
+    auto invertedCheckbox = Checkbox(
+        CheckboxOption{
+            .label = "inverted (Alt+I)",
+            .checked = &state.inverted,
+        });
+
+    window = Window({
+        .inner = Container::LockedVertical({
+            input,
+            regexCheckbox,
+            caseInsensitiveCheckbox,
+            invertedCheckbox,
+        }),
+        .title = "",
+        .resize_left = false,
+        .resize_right = false,
+        .resize_top = false,
+        .resize_down = false,
+    });
+
+    checkboxes = {
+        regexCheckbox,
+        caseInsensitiveCheckbox,
+        invertedCheckbox
+    };
+}
+
+Element Grepper::Impl::render()
+{
+    Elements verticalBox = {
+        input->Render(),
+        separator(),
+    };
+
+    for (auto& checkbox : checkboxes)
+    {
+        verticalBox.push_back(checkbox->Render());
+    }
+
+    return ::window(
+        text(""),
+        vbox(std::move(verticalBox)) | xflex) | clear_under | center | xflex;
+}
+
+bool Grepper::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
+{
+    if (event == Event::Return)
+    {
+        return accept(ui, context);
+    }
+    else if (event == Event::AltR)
+    {
+        state.regex ^= true;
+        return true;
+    }
+    else if (event == Event::AltC)
+    {
+        state.caseInsensitive ^= true;
+        return true;
+    }
+    else if (event == Event::AltI)
+    {
+        state.inverted ^= true;
+        return true;
+    }
+
+    return false;
+}
+
+bool Grepper::Impl::accept(Ftxui& ui, core::Context& context)
+{
+    if (state.pattern.empty())
+    {
+        return true;
+    }
+
+    commands::grep(state, context);
+
+    switchFocus(UIComponent::mainView, ui, context);
+
+    return true;
+}
+
+Grepper::Grepper()
+    : UIComponent(UIComponent::grepper)
+    , pimpl_(new Impl)
+{
+}
+
+Grepper::~Grepper()
+{
+    delete pimpl_;
+}
+
+void Grepper::takeFocus()
+{
+    pimpl_->input->TakeFocus();
+}
+
+ftxui::Element Grepper::render(core::Context&)
+{
+    return pimpl_->render();
+}
+
+bool Grepper::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
+{
+    return pimpl_->handleEvent(event, ui, context);
+}
+
+Grepper::operator ftxui::Component&()
+{
+    return pimpl_->window;
+}
 
 }  // namespace ui

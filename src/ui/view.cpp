@@ -1,5 +1,6 @@
 #include "view.hpp"
 
+#include <spanstream>
 #include <sstream>
 
 #include <ftxui/component/component.hpp>
@@ -92,9 +93,9 @@ ViewNode::ViewNode(Type type, std::string name)
 {
 }
 
-ViewNodePtr ViewNode::createLink(std::string name)
+ViewNodePtr ViewNode::createGroup(std::string name)
 {
-    return std::make_unique<ViewNode>(Type::link, std::move(name));
+    return std::make_unique<ViewNode>(Type::group, std::move(name));
 }
 
 ftxui::Element ViewNode::renderTab() const
@@ -212,9 +213,14 @@ View::View(std::string name)
     , file(nullptr)
     , lineCount(0)
     , viewHeight(0)
+    , lineNrDigits(0)
     , yoffset(0)
     , xoffset(0)
-    , lineNrDigits(0)
+    , ycurrent(0)
+    , selectionMode(false)
+    , selectionPivot(0)
+    , selectionStart(0)
+    , selectionEnd(0)
     , ringBuffer(0)
 {
 }
@@ -224,9 +230,11 @@ ViewPtr View::create(std::string name)
     return std::make_unique<View>(std::move(name));
 }
 
-std::string getLine(View& view, size_t lineIndex, core::Context& context)
+LineWithNumber getLine(View& view, size_t lineIndex, core::Context& context)
 {
     std::stringstream ss;
+    char buffer[32];
+    std::spanstream lineNumberStream(buffer);
 
     auto& ui = context.ui->get<ui::Ftxui>();
 
@@ -237,7 +245,9 @@ std::string getLine(View& view, size_t lineIndex, core::Context& context)
 
     if (ui.showLineNumbers)
     {
-        ss << std::setw(view.lineNrDigits + 1) << std::right
+        lineNumberStream
+           << std::setw(view.lineNrDigits + 1)
+           << std::right
            << ColorWrapped(lineIndex, Palette::View::lineNumberFg)
            << ColorWrapped("│ ", Palette::View::lineNumberFg);
     }
@@ -262,7 +272,10 @@ std::string getLine(View& view, size_t lineIndex, core::Context& context)
         ss << line.c_str() + xoffset;
     }
 
-    return ss.str();
+    return {
+        .line = ss.str(),
+        .lineNumber = std::string(lineNumberStream.span().begin(), lineNumberStream.span().end())
+    };
 }
 
 void reloadLines(View& view, core::Context& context)
@@ -285,15 +298,10 @@ void reloadView(View& view, Ftxui& ui, core::Context& context)
 {
     view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
     view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
-    view.ringBuffer = utils::RingBuffer<std::string>(view.viewHeight);
+    view.ringBuffer = LinesRingBuffer(view.viewHeight);
     view.yoffset = view.yoffset | utils::clamp(0ul, view.lineCount - view.viewHeight);
 
     reloadLines(view, context);
-}
-
-bool isViewLoaded(Ftxui& ui)
-{
-    return ui.mainView.currentView and ui.mainView.currentView->file;
 }
 
 }  // namespace ui

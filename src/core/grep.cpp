@@ -30,7 +30,7 @@ static LineRefs grep(
     const std::string& pattern,
     const GrepOptions& options,
     const LineRefs& filter,
-    MappedFile& file)
+    File& file)
 {
     LineRefs lines;
     size_t lineCount;
@@ -119,7 +119,7 @@ void asyncGrep(
     std::string pattern,
     GrepOptions options,
     const LineRefs& filter,
-    MappedFile& file,
+    File& file,
     std::function<void(LineRefs, float)> callback)
 {
     std::thread(

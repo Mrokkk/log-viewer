@@ -19,7 +19,7 @@ struct UserInterface : utils::Immobile
     virtual void scrollTo(ssize_t lineNumber, Context& context) = 0;
     virtual std::ostream& operator<<(Severity severity) = 0;
     virtual void* createView(std::string name, Context& context) = 0;
-    virtual void attachFileToView(MappedFile& file, void* view, Context& context) = 0;
+    virtual void attachFileToView(File& file, void* view, Context& context) = 0;
 
     template <typename T>
     T& get()

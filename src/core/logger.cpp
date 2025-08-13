@@ -8,7 +8,7 @@
 #include "utils/ring_buffer.hpp"
 
 const Logger logger;
-utils::RingBuffer<std::string> Logger::ringBuffer_(256);
+utils::RingBuffer<std::string> Logger::ringBuffer_(512);
 
 std::ofstream fileStream;
 

@@ -5,7 +5,7 @@ namespace core
 
 struct CommandLine;
 struct Context;
-struct MappedFile;
+struct File;
 struct View;
 
 }  // namespace core
