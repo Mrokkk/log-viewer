@@ -1,37 +1,169 @@
 #pragma once
 
+#include <functional>
+#include <iosfwd>
 #include <string>
-#include <flat_map>
-#include <flat_set>
-#include <string>
+#include <vector>
 
 #include "core/fwd.hpp"
 
 namespace core
 {
 
+struct KeyPress
+{
+    enum class Type : char
+    {
+        character,
+        ctrlCharacter,
+        altCharacter,
+        escape,
+        backspace,
+        del,
+        cr,
+        arrowUp,
+        arrowDown,
+        arrowLeft,
+        arrowRight,
+        ctrlArrowUp,
+        ctrlArrowDown,
+        ctrlArrowLeft,
+        ctrlArrowRight,
+        pageUp,
+        pageDown,
+        home,
+        end,
+        tab,
+        shiftTab,
+        function,
+    };
+
+    Type type;
+    char value = 0;
+
+    constexpr static inline KeyPress character(char c)
+    {
+        return {.type = Type::character, .value = c};
+    }
+
+    constexpr static inline KeyPress ctrl(char c)
+    {
+        return {.type = Type::ctrlCharacter, .value = c};
+    }
+
+    constexpr static inline KeyPress alt(char c)
+    {
+        return {.type = Type::altCharacter, .value = c};
+    }
+
+    constexpr static inline KeyPress function(char c)
+    {
+        return {.type = Type::function, .value = c};
+    }
+
+    std::string name() const;
+
+    static KeyPress escape;
+    static KeyPress cr;
+    static KeyPress backspace;
+    static KeyPress del;
+    static KeyPress arrowUp;
+    static KeyPress arrowDown;
+    static KeyPress arrowLeft;
+    static KeyPress arrowRight;
+    static KeyPress ctrlArrowUp;
+    static KeyPress ctrlArrowDown;
+    static KeyPress ctrlArrowLeft;
+    static KeyPress ctrlArrowRight;
+    static KeyPress pageUp;
+    static KeyPress pageDown;
+    static KeyPress home;
+    static KeyPress end;
+    static KeyPress tab;
+    static KeyPress shiftTab;
+};
+
+using KeyPresses = std::vector<KeyPress>;
+
+constexpr inline bool operator<(const KeyPress lhs, const KeyPress rhs)
+{
+    return lhs.type < rhs.type or (lhs.type == rhs.type and lhs.value < rhs.value);
+}
+
+constexpr inline bool operator==(const KeyPress lhs, const KeyPress rhs)
+{
+    return lhs.type == rhs.type and lhs.value == rhs.value;
+}
+
+struct KeyPressNode;
+
 struct InputState
 {
-    std::string state;
+    InputState();
+    ~InputState();
+
+    KeyPresses    state;
+    KeyPressNode* nodes;
+    KeyPressNode* current;
 };
 
-struct InputMapping
+struct InputMappingFlags
 {
-    std::string keys;
-    std::string command;
+    enum Value : char
+    {
+        none    = 0,
+        normal  = 1 << 0,
+        visual  = 1 << 1,
+        command = 1 << 2,
+        force   = 1 << 3,
+    };
+
+    constexpr InputMappingFlags(Value v)
+        : value(v)
+    {
+    }
+
+    Value value;
 };
 
-using InputMappingMap = std::flat_map<std::string, InputMapping>;
-using InputMappingSet = std::flat_set<std::string>;
-
-struct InputMappings
+constexpr inline InputMappingFlags::Value operator&(const InputMappingFlags lhs, const InputMappingFlags rhs)
 {
-    static InputMappingMap& map();
-    static InputMappingSet& set();
+    return static_cast<InputMappingFlags::Value>(lhs.value & rhs.value);
+}
+
+constexpr inline InputMappingFlags::Value operator|(const InputMappingFlags lhs, const InputMappingFlags rhs)
+{
+    return static_cast<InputMappingFlags::Value>(lhs.value | rhs.value);
+}
+
+constexpr inline InputMappingFlags::Value operator|(const InputMappingFlags::Value lhs, const InputMappingFlags::Value rhs)
+{
+    return static_cast<InputMappingFlags::Value>(char(lhs) | char(rhs));
+}
+
+using BuiltinCommand = std::function<bool(Context& context)>;
+
+bool addInputMapping(
+    std::string_view lhs,
+    std::string_view rhs,
+    InputMappingFlags flags,
+    Context& context);
+
+bool addInputMapping(
+    std::string_view lhs,
+    BuiltinCommand rhs,
+    InputMappingFlags flags,
+    Context& context);
+
+enum class InputSource
+{
+    user,
+    internal,
 };
 
-bool addInputMapping(std::string keys, const std::string& command, bool force, Context& context);
-void initializeDefaultInputMapping(core::Context& context);
-bool registerKeyPress(char c, core::Context& context);
+bool registerKeyPress(KeyPress c, InputSource source, Context& context);
+std::ostream& operator<<(std::ostream& os, const KeyPress k);
+std::string inputStateString(Context& context);
+void initializeInput(Context& context);
 
 }  // namespace core

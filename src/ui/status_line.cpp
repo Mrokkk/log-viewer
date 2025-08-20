@@ -1,6 +1,7 @@
 #include "status_line.hpp"
 
 #include "core/context.hpp"
+#include "core/input.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/ui_component.hpp"
@@ -69,8 +70,12 @@ Element renderStatusLine(Ftxui& ui, core::Context& context)
         text("")
             | color(Palette::StatusLine::bg3)
             | bgcolor(Palette::StatusLine::bg1),
-        text("   ")
-            | bgcolor(Palette::StatusLine::bg3)
+        text(" ")
+            | bgcolor(Palette::StatusLine::bg3),
+        text(core::inputStateString(context))
+            | bgcolor(Palette::StatusLine::bg3),
+        text(" ")
+            | bgcolor(Palette::StatusLine::bg3),
     });
 }
 

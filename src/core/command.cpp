@@ -2,9 +2,34 @@
 
 #include <algorithm>
 #include <iostream>
+#include <string_view>
 
 namespace core
 {
+
+CommandArguments::CommandArguments() = default;
+
+CommandArguments::CommandArguments(std::initializer_list<ArgumentSignature> n)
+    : types_(std::move(n))
+{
+}
+
+const std::vector<CommandArguments::ArgumentSignature>& CommandArguments::get() const
+{
+    return types_;
+}
+
+CommandFlags::CommandFlags() = default;
+
+CommandFlags::CommandFlags(std::initializer_list<std::string> n)
+    : flags_(std::move(n))
+{
+}
+
+const std::flat_set<std::string>& CommandFlags::get() const
+{
+    return flags_;
+}
 
 CommandsMap& Commands::map()
 {

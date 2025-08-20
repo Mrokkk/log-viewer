@@ -21,14 +21,15 @@ namespace ui
 
 struct Ftxui final : core::UserInterface
 {
-    Ftxui();
+    Ftxui(core::Context& context);
     void run(core::Context& context) override;
     void quit(core::Context& context) override;
     void executeShell(const std::string& command) override;
-    void scrollTo(ssize_t lineNumber, core::Context& context) override;
+    void scrollTo(core::Scroll lineNumber, core::Context& context) override;
     std::ostream& operator<<(Severity severity) override;
     void* createView(std::string name, core::Context& context) override;
     void attachFileToView(core::File& file, void* view, core::Context& context) override;
+    void onModeSwitch(core::Mode newMode, core::Context& context) override;
 
     ftxui::ScreenInteractive screen;
     ftxui::Dimensions        terminalSize;

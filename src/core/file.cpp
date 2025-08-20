@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string.h>
 
+#include "core/files.hpp"
 #include "core/logger.hpp"
 #include "sys/system.hpp"
 #include "utils/time.hpp"
@@ -11,11 +12,22 @@ namespace core
 {
 
 File::File(std::string path)
-    : file_(sys::fileOpen(std::move(path)))
+    : loaded_(false)
+    , file_(sys::fileOpen(std::move(path)))
     , mapping_{.ptr = nullptr, .offset = 0, .len = 0}
 {
+}
+
+File::~File()
+{
+    sys::unmap(mapping_);
+    sys::fileClose(file_);
+}
+
+bool File::load()
+{
     loadTime_ = utils::measureTime(
-        [&]
+        [this]
         {
             auto sizeLeft = file_.size;
             size_t offset{0};
@@ -45,13 +57,10 @@ File::File(std::string path)
                 sizeLeft -= toRead;
                 offset += toRead;
             }
-        });
-}
 
-File::~File()
-{
-    sys::unmap(mapping_);
-    sys::fileClose(file_);
+            loaded_ = true;
+        });
+    return true;
 }
 
 size_t File::lineCount() const
@@ -92,6 +101,11 @@ std::string File::operator[](unsigned long i)
 
         return std::string(mapping_.ptrAt<const char*>(line.start), line.len);
     }
+}
+
+File& Files::emplaceBack(std::string path)
+{
+    return files_.emplace_back(std::move(path));
 }
 
 }  // namespace core

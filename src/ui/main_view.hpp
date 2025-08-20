@@ -19,7 +19,7 @@ struct MainView final : UIComponent
     ftxui::Element render(core::Context& context) override;
     void reload(Ftxui& ui, core::Context& context);
     ViewNode& createView(std::string name, ViewNode* parent = nullptr);
-    void scrollTo(Ftxui& ui, ssize_t lineNumber, core::Context& context);
+    void scrollTo(Ftxui& ui, long lineNumber, core::Context& context);
     const char* activeFileName() const;
     bool isViewLoaded() const;
     View* currentView();

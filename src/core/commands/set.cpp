@@ -1,4 +1,7 @@
+#include <ostream>
+
 #include "core/command.hpp"
+#include "core/user_interface.hpp"
 #include "core/variable.hpp"
 
 namespace core

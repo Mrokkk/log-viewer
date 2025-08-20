@@ -12,6 +12,7 @@
 #include "core/context.hpp"
 #include "core/lexer.hpp"
 #include "core/type.hpp"
+#include "core/user_interface.hpp"
 #include "core/variable.hpp"
 #include "utils/string.hpp"
 
@@ -135,30 +136,8 @@ static bool executeShellCommand(const TokensSpan& tokens, Context& context)
 
 static bool executeGoToCommand(const TokensSpan& tokens, Context& context)
 {
-    int index = 0;
-    int multiplier = 1;
-
-    switch (tokens[index].type)
-    {
-        case Token::Type::add:
-            index++;
-            break;
-        case Token::Type::sub:
-            index++;
-            multiplier = -1;
-            break;
-        default:
-            break;
-    }
-
-    if (tokens[index].type != Token::Type::intLiteral)
-    {
-        *context.ui << error << "expected an integer";
-        return false;
-    }
-
-    const auto lineNumber = tokens[index].value | utils::to<long>;
-    context.ui->scrollTo(multiplier * lineNumber, context);
+    const auto lineNumber = tokens[0].value | utils::to<long>;
+    context.ui->scrollTo(static_cast<Scroll>(lineNumber), context);
     return true;
 }
 
@@ -365,8 +344,6 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
             executeCommand(tokens, context);
             break;
 
-        case Token::Type::add:
-        case Token::Type::sub:
         case Token::Type::intLiteral:
             executeGoToCommand(tokens, context);
             break;

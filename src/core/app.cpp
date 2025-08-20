@@ -9,6 +9,8 @@
 #include "core/fwd.hpp"
 #include "core/input.hpp"
 #include "core/logger.hpp"
+#include "core/severity.hpp"
+#include "core/user_interface.hpp"
 #include "sys/system.hpp"
 
 namespace core
@@ -48,7 +50,7 @@ int run(int argc, char* const* argv, Context& context)
         logger.setLogFile(logFile->string);
     }
 
-    initializeDefaultInputMapping(context);
+    initializeInput(context);
 
     for (const auto& configFile : sys::getConfigFiles())
     {

@@ -1,6 +1,7 @@
 #include "ftxui.hpp"
 
 #include <cstdlib>
+#include <flat_map>
 #include <string>
 
 #include <ftxui/component/component.hpp>
@@ -10,8 +11,8 @@
 #include "core/context.hpp"
 #include "core/file.hpp"
 #include "core/input.hpp"
-#include "core/logger.hpp"
 #include "core/mode.hpp"
+#include "core/severity.hpp"
 #include "sys/system.hpp"
 #include "ui/command_line.hpp"
 #include "ui/grepper.hpp"
@@ -32,27 +33,21 @@ static bool abort(Ftxui&, core::Context&)
     return true;
 }
 
-static bool escape(Ftxui& ui, core::Context& context)
-{
-    core::registerKeyPress('\e', context);
-    switchFocus(UIComponent::mainView, ui, context);
-    return false; // Allow UIComponent to handle it as well
-}
-
-static bool ctrlC(Ftxui& ui, core::Context&)
-{
-    ui << info << "Type :qa and press <Enter> to quit";
-    return true;
-}
-
 static bool resize(Ftxui& ui, core::Context&)
 {
     ui.terminalSize = Terminal::Size();
     return false; // Allow UIComponent to handle it as well
 }
 
-static bool ignore(Ftxui&, core::Context&)
+static bool ctrlC(Ftxui&, core::Context& context)
 {
+    core::registerKeyPress(core::KeyPress::ctrl('c'), core::InputSource::user, context);
+    return true;
+}
+
+static bool ctrlZ(Ftxui&, core::Context& context)
+{
+    core::registerKeyPress(core::KeyPress::ctrl('z'), core::InputSource::user, context);
     return true;
 }
 
@@ -90,9 +85,22 @@ static Element render(Ftxui& ui, core::Context& context)
     return vbox(std::move(children)) | flex;
 }
 
+static std::flat_map<Event, core::KeyPress> eventToKeyPress;
+
 static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
 {
-    logger << debug << event.DebugString();
+    if (context.mode != core::Mode::custom)
+    {
+        auto it = eventToKeyPress.find(event);
+
+        if (it != eventToKeyPress.end())
+        {
+            if (core::registerKeyPress(it->second, core::InputSource::user, context))
+            {
+                return true;
+            }
+        }
+    }
 
     auto result = ui.eventHandlers.handleEvent(event, ui, context);
 
@@ -104,18 +112,102 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
     return ui.active->handleEvent(event, ui, context);
 }
 
-Ftxui::Ftxui()
+Ftxui::Ftxui(core::Context& context)
     : screen(ScreenInteractive::Fullscreen())
     , showLineNumbers(false)
     , active(&mainView)
+    , commandLine(context)
     , eventHandlers{
-        {Event::Escape, escape},
-        {Event::CtrlC,  ctrlC},
-        {Event::CtrlZ,  ignore},
         {Event::Resize, resize},
         {Event::F12,    abort},
+        {Event::CtrlC,  ctrlC},
+        {Event::CtrlZ,  ctrlZ},
     }
 {
+    eventToKeyPress = {
+        {Event::Return,         core::KeyPress::cr},
+        {Event::Escape,         core::KeyPress::escape},
+        {Event::ArrowDown,      core::KeyPress::arrowDown},
+        {Event::ArrowUp,        core::KeyPress::arrowUp},
+        {Event::ArrowLeft,      core::KeyPress::arrowLeft},
+        {Event::ArrowRight,     core::KeyPress::arrowRight},
+        {Event::ArrowDownCtrl,  core::KeyPress::ctrlArrowDown},
+        {Event::ArrowUpCtrl,    core::KeyPress::ctrlArrowUp},
+        {Event::ArrowLeftCtrl,  core::KeyPress::ctrlArrowLeft},
+        {Event::ArrowRightCtrl, core::KeyPress::ctrlArrowRight},
+        {Event::PageDown,       core::KeyPress::pageDown},
+        {Event::PageUp,         core::KeyPress::pageUp},
+        {Event::Backspace,      core::KeyPress::backspace},
+        {Event::Delete,         core::KeyPress::del},
+        {Event::Home,           core::KeyPress::home},
+        {Event::End,            core::KeyPress::end},
+        {Event::Tab,            core::KeyPress::tab},
+        {Event::TabReverse,     core::KeyPress::shiftTab},
+        {Event::F1,             core::KeyPress::function(1)},
+        {Event::F2,             core::KeyPress::function(2)},
+        {Event::F3,             core::KeyPress::function(3)},
+        {Event::F4,             core::KeyPress::function(4)},
+        {Event::F5,             core::KeyPress::function(5)},
+        {Event::F6,             core::KeyPress::function(6)},
+        {Event::F7,             core::KeyPress::function(7)},
+        {Event::F8,             core::KeyPress::function(8)},
+        {Event::F9,             core::KeyPress::function(9)},
+        {Event::F10,            core::KeyPress::function(10)},
+        {Event::F11,            core::KeyPress::function(11)},
+        {Event::F12,            core::KeyPress::function(12)},
+        {Event::Character('['), core::KeyPress::character('[')},
+        {Event::Character('\\'), core::KeyPress::character('\\')},
+        {Event::Character(']'), core::KeyPress::character(']')},
+        {Event::Character('^'), core::KeyPress::character('^')},
+        {Event::Character('_'), core::KeyPress::character('_')},
+        {Event::Character('`'), core::KeyPress::character('`')},
+        {Event::Character('{'), core::KeyPress::character('{')},
+        {Event::Character('|'), core::KeyPress::character('|')},
+        {Event::Character('}'), core::KeyPress::character('}')},
+        {Event::Character('~'), core::KeyPress::character('~')},
+    };
+
+    for (char c = '@'; c <= 'Z'; ++c)
+    {
+        char small = c + 0x20;
+        char capital = c;
+        char ctrl = c - 0x40;
+
+        // Small letter
+        eventToKeyPress.emplace(
+            std::make_pair(
+                Event::Character(std::string{small}),
+                core::KeyPress::character(small)));
+
+        // Capital letter
+        eventToKeyPress.emplace(
+            std::make_pair(
+                Event::Character(std::string{capital}),
+                core::KeyPress::character(capital)));
+
+        if (ctrl != '\e' and ctrl != '\t')
+        {
+            // Ctrl+letter
+            eventToKeyPress.emplace(
+                std::make_pair(
+                    Event::Special(std::string{ctrl}),
+                    core::KeyPress::ctrl(small)));
+        }
+
+        // Alt+letter
+        eventToKeyPress.emplace(
+            std::make_pair(
+                Event::Special(std::string{'\e', small}),
+                core::KeyPress::alt(small)));
+    }
+
+    for (char c = ' '; c <= '?'; ++c)
+    {
+        eventToKeyPress.emplace(
+            std::make_pair(
+                Event::Character(std::string{c}),
+                core::KeyPress::character(c)));
+    }
 }
 
 void Ftxui::run(core::Context& context)
@@ -162,9 +254,16 @@ void Ftxui::executeShell(const std::string& cmd)
         }));
 }
 
-void Ftxui::scrollTo(ssize_t lineNumber, core::Context& context)
+void Ftxui::scrollTo(core::Scroll lineNumber, core::Context& context)
 {
-    mainView.scrollTo(*this, lineNumber, context);
+    switch (lineNumber)
+    {
+        case core::Scroll::end:
+            mainView.scrollTo(*this, -1, context);
+            break;
+        default:
+            mainView.scrollTo(*this, static_cast<long>(lineNumber), context);
+    }
 }
 
 std::ostream& Ftxui::operator<<(Severity severity)
@@ -197,12 +296,28 @@ void Ftxui::attachFileToView(core::File& file, void* handle, core::Context& cont
     screen.RequestAnimationFrame();
 }
 
+void Ftxui::onModeSwitch(core::Mode newMode, core::Context& context)
+{
+    switch (newMode)
+    {
+        case core::Mode::command:
+            switchFocus(UIComponent::commandLine, *this, context);
+            break;
+        case core::Mode::normal:
+            if (auto view = mainView.currentView())
+            {
+                view->selectionMode = false;
+            }
+            switchFocus(UIComponent::mainView, *this, context);
+            break;
+        default:
+            break;
+    }
+}
+
 core::UserInterface& createFtxuiUserInterface(core::Context& context)
 {
-    auto ui = std::make_unique<Ftxui>();
-    auto& ref = *ui;
-    context.ui = std::move(ui);
-    return ref;
+    return *(context.ui = new Ftxui(context));
 }
 
 void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context)
@@ -216,18 +331,16 @@ void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context)
     {
         case UIComponent::commandLine:
             ui.active = &ui.commandLine;
-            core::switchMode(core::Mode::command, context);
-            break;
-        case UIComponent::grepper:
-            ui.active = &ui.grepper;
-            core::switchMode(core::Mode::custom, context);
             break;
         case UIComponent::mainView:
             ui.active = &ui.mainView;
-            core::switchMode(core::Mode::normal, context);
             break;
         case UIComponent::picker:
             ui.active = &ui.picker;
+            core::switchMode(core::Mode::custom, context);
+            break;
+        case UIComponent::grepper:
+            ui.active = &ui.grepper;
             core::switchMode(core::Mode::custom, context);
             break;
     }

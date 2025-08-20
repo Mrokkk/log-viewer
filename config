@@ -1,4 +1,5 @@
-map "<c-p>" "files"
-map "<leader>." "files"
-map "<c-g>" "grepper"
+nmap "<c-p>" ":files<cr>"
+nmap "<leader>." ":files<cr>"
+nmap "<c-g>" ":grepper<cr>"
+nmap "b" ":toggle showLineNumbers<cr>"
 echo "Config loaded"

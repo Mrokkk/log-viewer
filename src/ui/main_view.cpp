@@ -7,6 +7,7 @@
 #include <ftxui/dom/elements.hpp>
 
 #include "core/context.hpp"
+#include "core/mode.hpp"
 #include "core/variable.hpp"
 #include "sys/system.hpp"
 #include "ui/event_handler.hpp"
@@ -35,7 +36,7 @@ struct MainView::Impl final
     bool scrollPageDown(core::Context& context);
     bool scrollPageUp(core::Context& context);
     bool scrollToEnd(core::Context& context);
-    void scrollTo(ssize_t lineNumber, core::Context& context);
+    void scrollTo(long lineNumber, core::Context& context);
 
     void reload(Ftxui& ui, core::Context& context);
     ViewNode& createView(std::string name, ViewNode* parentPtr);
@@ -62,7 +63,6 @@ private:
     bool resize(Ftxui& ui, core::Context& context);
     bool escape();
     bool yank(Ftxui& ui, core::Context& context);
-    bool commandLine(Ftxui& ui, core::Context& context);
     bool selectionModeToggle(core::Context& context);
     void selectionUpdate();
 };
@@ -85,9 +85,8 @@ MainView::Impl::Impl()
         {Event::ArrowDownCtrl,  [this](auto&, auto&){ return activeTablineDown(); }},
         {Event::Resize,         [this](auto& ui, auto& context){ return resize(ui, context); }},
         {Event::Escape,         [this](auto&, auto&){ return escape(); }},
-        {Event::Character('y'), [this](auto& ui, auto& context){ return yank(ui, context); }},
-        {Event::Character(':'), [this](auto& ui, auto& context){ return commandLine(ui, context); }},
-        {Event::Character('v'), [this](auto&, auto& context){ return selectionModeToggle(context); }},
+        {Event::y,              [this](auto& ui, auto& context){ return yank(ui, context); }},
+        {Event::v,              [this](auto&, auto& context){ return selectionModeToggle(context); }},
     }
 {
 }
@@ -247,7 +246,7 @@ bool MainView::Impl::scrollPageUp(core::Context& context)
 
     view.yoffset -= view.viewHeight;
 
-    if (static_cast<ssize_t>(view.yoffset) < 0)
+    if (static_cast<long>(view.yoffset) < 0)
     {
         view.yoffset = 0;
     }
@@ -285,7 +284,7 @@ bool MainView::Impl::scrollToEnd(core::Context& context)
     return true;
 }
 
-void MainView::Impl::scrollTo(ssize_t lineNumber, core::Context& context)
+void MainView::Impl::scrollTo(long lineNumber, core::Context& context)
 {
     if (not isViewLoaded())
     {
@@ -597,21 +596,6 @@ bool MainView::Impl::handleEvent(const Event& event, Ftxui& ui, core::Context& c
 
     if (not result)
     {
-        if (event.is_character())
-        {
-            return core::registerKeyPress(event.character()[0], context);
-        }
-
-        const auto& input = event.input();
-        if (input.size() == 1)
-        {
-            if (input[0] < 0x20)
-            {
-                core::registerKeyPress(input[0], context);
-                return true;
-            }
-        }
-
         return false;
     }
 
@@ -670,12 +654,6 @@ bool MainView::Impl::yank(Ftxui& ui, core::Context& context)
     return true;
 }
 
-bool MainView::Impl::commandLine(Ftxui& ui, core::Context& context)
-{
-    switchFocus(UIComponent::commandLine, ui, context);
-    return true;
-}
-
 bool MainView::Impl::selectionModeToggle(core::Context& context)
 {
     if (not isViewLoaded())
@@ -685,6 +663,7 @@ bool MainView::Impl::selectionModeToggle(core::Context& context)
 
     if ((currentView->selectionMode ^= true))
     {
+        core::switchMode(core::Mode::visual, context);
         context.mode = core::Mode::visual;
         currentView->selectionPivot
             = currentView->selectionEnd
@@ -693,7 +672,7 @@ bool MainView::Impl::selectionModeToggle(core::Context& context)
     }
     else
     {
-        context.mode = core::Mode::normal;
+        core::switchMode(core::Mode::normal, context);
     }
 
     return true;
@@ -760,7 +739,7 @@ ViewNode& MainView::createView(std::string name, ViewNode* parentPtr)
     return pimpl_->createView(std::move(name), parentPtr);
 }
 
-void MainView::scrollTo(Ftxui&, ssize_t lineNumber, core::Context& context)
+void MainView::scrollTo(Ftxui&, long lineNumber, core::Context& context)
 {
     pimpl_->scrollTo(lineNumber, context);
 }

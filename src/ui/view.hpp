@@ -31,6 +31,7 @@ struct ViewNode : utils::Noncopyable
     };
 
     ViewNode(Type type, std::string name);
+    virtual ~ViewNode() = default;
 
     static ViewNodePtr createGroup(std::string name);
 

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <list>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -27,18 +25,20 @@ struct File final : utils::Immobile
 {
     File(std::string path);
     ~File();
+
+    bool load();
     size_t lineCount() const;
     float loadTime() const;
     const std::string& path() const;
     std::string operator[](unsigned long i);
+    bool isLoaded() const;
 
 private:
+    bool         loaded_;
     float        loadTime_;
     sys::File    file_;
     Lines        lines_;
     sys::Mapping mapping_;
 };
-
-using Files = std::list<std::unique_ptr<File>>;
 
 }  // namespace core

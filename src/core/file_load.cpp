@@ -1,12 +1,13 @@
 #include "file_load.hpp"
 
 #include <filesystem>
-#include <memory>
 #include <string>
 #include <thread>
 
 #include "core/context.hpp"
 #include "core/file.hpp"
+#include "core/files.hpp"
+#include "core/user_interface.hpp"
 
 namespace core
 {
@@ -21,13 +22,13 @@ bool asyncLoadFile(std::string path, Context& context)
 
     auto view = context.ui->createView(path, context);
 
-    auto& newFile = context.files.emplace_back(nullptr);
+    auto& newFile = context.files.emplaceBack(std::move(path));
 
     std::thread(
-        [path = std::move(path), &newFile, view, &context]
+        [&newFile, view, &context]
         {
-            newFile = std::make_unique<File>(path);
-            context.ui->attachFileToView(*newFile, view, context);
+            newFile.load();
+            context.ui->attachFileToView(newFile, view, context);
         }).detach();
 
     return true;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <charconv>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -19,6 +18,7 @@ struct SplitBy { const char* delimiters; };
 
 static constexpr struct ReadText {}  readText;
 static constexpr struct IsNumeric {} isNumeric;
+static constexpr struct LowerCase {} lowerCase;
 
 template <typename T> static constexpr To<T> to;
 
@@ -29,16 +29,21 @@ Strings     operator|(const char* text, const SplitBy& splitBy);
 std::string operator|(const std::string& path, const ReadText&);
 bool        operator|(const std::string& text, const IsNumeric&);
 bool        operator|(const char* text, const IsNumeric&);
+std::string operator|(std::string text, const LowerCase&);
+std::string operator|(const std::string_view& text, const LowerCase&);
 
 template <typename T>
 concept IsArithmetic = std::is_arithmetic_v<T>;
 
-template <IsArithmetic T, typename U>
-long operator|(const U& text, const To<T>&)
+namespace detail
 {
-    T value{};
-    std::from_chars(text.data(), text.data() + text.size(), value);
-    return value;
+long convert(const std::string_view& text);
+}  // namespace detail
+
+template <IsArithmetic T>
+T operator|(const std::string_view& text, const To<T>&)
+{
+    return static_cast<T>(detail::convert(text));
 }
 
 }  // namespace utils

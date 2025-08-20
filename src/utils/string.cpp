@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstring>
 #include <fstream>
 #include <ranges>
@@ -66,5 +67,31 @@ bool operator|(const char* text, const IsNumeric&)
         text, text + len,
         [](const auto c){ return std::isdigit(c); });
 }
+
+std::string operator|(std::string text, const LowerCase&)
+{
+    std::transform(
+        text.begin(), text.end(),
+        text.begin(),
+        [](char c){ return std::tolower(c); });
+    return text;
+}
+
+std::string operator|(const std::string_view& text, const LowerCase&)
+{
+    return operator|(std::string(text), lowerCase);
+}
+
+namespace detail
+{
+
+long convert(const std::string_view& text)
+{
+    long value{};
+    std::from_chars(text.data(), text.data() + text.size(), value);
+    return value;
+}
+
+}  // namespace detail
 
 }  // namespace utils

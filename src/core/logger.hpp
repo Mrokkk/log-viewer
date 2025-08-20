@@ -3,16 +3,9 @@
 #include <sstream>
 #include <string>
 
+#include "core/severity.hpp"
 #include "utils/immobile.hpp"
 #include "utils/ring_buffer.hpp"
-
-enum Severity
-{
-    debug,
-    info,
-    warning,
-    error,
-};
 
 struct Flusher final : utils::Immobile
 {

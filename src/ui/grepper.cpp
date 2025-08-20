@@ -10,6 +10,7 @@
 #include "core/context.hpp"
 #include "core/grep.hpp"
 #include "core/interpreter.hpp"
+#include "core/mode.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/ui_component.hpp"
 #include "ui/view.hpp"
@@ -45,7 +46,7 @@ DEFINE_COMMAND(grepper)
     {
         auto& ui = context.ui->get<Ftxui>();
 
-        if (ui.active->type != UIComponent::mainView or not ui.mainView.isViewLoaded())
+        if (not ui.mainView.isViewLoaded())
         {
             return false;
         }
@@ -265,6 +266,11 @@ bool Grepper::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Cont
     {
         return accept(ui, context);
     }
+    else if (event == Event::Escape)
+    {
+        switchMode(core::Mode::normal, context);
+        return true;
+    }
     else if (event == Event::AltR)
     {
         state.regex ^= true;
@@ -284,7 +290,7 @@ bool Grepper::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Cont
     return false;
 }
 
-bool Grepper::Impl::accept(Ftxui& ui, core::Context& context)
+bool Grepper::Impl::accept(Ftxui&, core::Context& context)
 {
     if (state.pattern.empty())
     {
@@ -293,7 +299,7 @@ bool Grepper::Impl::accept(Ftxui& ui, core::Context& context)
 
     commands::grep(state, context);
 
-    switchFocus(UIComponent::mainView, ui, context);
+    core::switchMode(core::Mode::normal, context);
 
     return true;
 }

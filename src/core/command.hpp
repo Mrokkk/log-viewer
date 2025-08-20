@@ -36,17 +36,10 @@ struct CommandArguments final
         const char* name;
     };
 
-    CommandArguments() = default;
+    CommandArguments();
+    CommandArguments(std::initializer_list<ArgumentSignature> n);
 
-    CommandArguments(std::initializer_list<ArgumentSignature> n)
-        : types_(std::move(n))
-    {
-    }
-
-    const std::vector<ArgumentSignature>& get() const
-    {
-        return types_;
-    }
+    const std::vector<ArgumentSignature>& get() const;
 
 private:
     std::vector<ArgumentSignature> types_;
@@ -54,17 +47,10 @@ private:
 
 struct CommandFlags final
 {
-    CommandFlags() = default;
+    CommandFlags();
+    CommandFlags(std::initializer_list<std::string> n);
 
-    CommandFlags(std::initializer_list<std::string> n)
-        : flags_(std::move(n))
-    {
-    }
-
-    const std::flat_set<std::string>& get() const
-    {
-        return flags_;
-    }
+    const std::flat_set<std::string>& get() const;
 
 private:
     std::flat_set<std::string> flags_;

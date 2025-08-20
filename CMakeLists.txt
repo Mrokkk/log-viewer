@@ -36,12 +36,12 @@ pkg_check_modules(BACKTRACE REQUIRED libbacktrace)
 
 option(BUILD_TESTS "Build tests" OFF)
 option(OPTIMIZE "Enable compiler optimizations" ON)
-option(SANITIZERS "Enable ASan and UBsan" OFF)
+option(SANITIZE "Enable ASan and UBsan" OFF)
 option(COVERAGE "Enable collecting code coverage in tests" OFF)
 
 message(STATUS "Build tests: ${BUILD_TESTS}")
 message(STATUS "Enable compiler optimizations: ${OPTIMIZE}")
-message(STATUS "Enable ASan and UBsan: ${SANITIZERS}")
+message(STATUS "Enable ASan and UBsan: ${SANITIZE}")
 message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -52,7 +52,7 @@ if(OPTIMIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 endif()
 
-if(SANITIZERS)
+if(SANITIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined -Wl,-lasan -fno-omit-frame-pointer")
 endif()
 
@@ -62,6 +62,7 @@ add_executable(${PROJECT_NAME}
     src/core/app.cpp
     src/core/argparse.cpp
     src/core/command.cpp
+    src/core/command_line.cpp
     src/core/commands/echo.cpp
     src/core/commands/get.cpp
     src/core/commands/help.cpp

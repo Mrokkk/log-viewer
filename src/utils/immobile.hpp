@@ -5,7 +5,7 @@ namespace utils
 
 struct Immobile
 {
-    Immobile() = default;
+    constexpr Immobile() = default;
     Immobile(const Immobile&) = delete;
     Immobile& operator=(const Immobile&) = delete;
     Immobile(Immobile&&) = delete;

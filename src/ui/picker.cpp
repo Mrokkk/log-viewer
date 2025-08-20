@@ -13,6 +13,8 @@
 #include "core/commands/open.hpp"
 #include "core/dirs.hpp"
 #include "core/fuzzy.hpp"
+#include "core/input.hpp"
+#include "core/mode.hpp"
 #include "core/variable.hpp"
 #include "ui/event_handler.hpp"
 #include "ui/ftxui.hpp"
@@ -49,6 +51,7 @@ struct Picker::Impl final
 
 private:
     void onFilePickerChange();
+    void escape(core::Context& context);
     void accept(Ftxui& ui, core::Context& context);
 };
 
@@ -105,6 +108,7 @@ Picker::Impl::Impl()
             .resize_down = false,
         }))
     , eventHandlers{
+        {Event::Escape,     [this](auto&, auto& context){ escape(context); return true; }},
         {Event::Return,     [this](auto& ui, auto& context){ accept(ui, context); return true; }},
         {Event::Tab,        [this](auto& ui, auto& context){ next(ui, context); return true; }},
         {Event::TabReverse, [this](auto& ui, auto& context){ prev(ui, context); return true; }},
@@ -320,7 +324,7 @@ void Picker::Impl::onFilePickerChange()
     }
 }
 
-void Picker::Impl::accept(Ftxui& ui, core::Context& context)
+void Picker::Impl::accept(Ftxui&, core::Context& context)
 {
     auto active = content->ActiveChild();
 
@@ -342,6 +346,21 @@ void Picker::Impl::accept(Ftxui& ui, core::Context& context)
             core::commands::open(*cachedStrings[active->Index()], context);
             break;
 
+        case Picker::Type::commands:
+        {
+            auto string = *cachedStrings[active->Index()];
+            core::registerKeyPress(core::KeyPress::character(':'), core::InputSource::internal, context);
+            for (auto c : string)
+            {
+                core::registerKeyPress(core::KeyPress::character(c), core::InputSource::internal, context);
+                if (c == ' ')
+                {
+                    break;
+                }
+            }
+            break;
+        }
+
         //case Picker::Type::views:
         //{
             //ui.mainView.currentView = ui.mainView.root.childAt(index)
@@ -355,7 +374,15 @@ void Picker::Impl::accept(Ftxui& ui, core::Context& context)
             break;
     }
 
-    switchFocus(UIComponent::mainView, ui, context);
+    if (context.mode == core::Mode::custom)
+    {
+        switchMode(core::Mode::normal, context);
+    }
+}
+
+void Picker::Impl::escape(core::Context& context)
+{
+    switchMode(core::Mode::normal, context);
 }
 
 Picker::Picker()
