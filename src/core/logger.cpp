@@ -1,16 +1,21 @@
 #include "logger.hpp"
 
+#include <atomic>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 
 #include "utils/ring_buffer.hpp"
 
-const Logger logger;
-utils::RingBuffer<std::string> Logger::ringBuffer_(512);
+using StringsRingBuffer = utils::RingBuffer<std::string>;
 
-std::ofstream fileStream;
+const Logger             logger;
+static std::atomic_bool  closed;
+static std::ofstream     fileStream;
+static std::mutex        lock;
+static StringsRingBuffer ringBuffer(512);
 
 Flusher Logger::operator<<(Severity severity) const
 {
@@ -19,9 +24,10 @@ Flusher Logger::operator<<(Severity severity) const
 
 void Logger::flushToStderr()
 {
+    closed = true;
     if (not fileStream.is_open())
     {
-        ringBuffer_.forEach(
+        ringBuffer.forEach(
             [](const auto& line)
             {
                 std::cerr << line << '\n';
@@ -34,13 +40,22 @@ void Logger::setLogFile(std::string_view path)
     fileStream.open(path.data());
 }
 
-void Logger::pushLine(std::string line)
+static void pushLine(std::string line)
 {
+    std::scoped_lock scopedLock(lock);
+
     if (fileStream.is_open())
     {
         fileStream << line << std::endl;
     }
-    ringBuffer_.pushBack(std::move(line));
+
+    if (closed) [[unlikely]]
+    {
+        std::cerr << line << std::endl;
+        return;
+    }
+
+    ringBuffer.pushBack(std::move(line));
 }
 
 Flusher::Flusher(Severity severity)
@@ -64,5 +79,5 @@ Flusher::Flusher(Severity severity)
 Flusher::~Flusher()
 {
     line << "\e[0m";
-    Logger::pushLine(line.str());
+    pushLine(line.str());
 }

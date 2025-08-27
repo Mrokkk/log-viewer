@@ -1,11 +1,15 @@
 #include "open.hpp"
 
+#include <iomanip>
 #include <sstream>
 
 #include "core/alias.hpp"
 #include "core/command.hpp"
-#include "core/file_load.hpp"
 #include "core/interpreter.hpp"
+#include "core/message_line.hpp"
+#include "core/severity.hpp"
+#include "core/view.hpp"
+#include "core/user_interface.hpp"
 
 namespace core
 {
@@ -28,7 +32,48 @@ DEFINE_COMMAND(open)
 
     EXECUTOR()
     {
-        return asyncLoadFile(args[0].string, context);
+        constexpr auto errorHeader = "Error loading file: ";
+        auto& path = args[0].string;
+
+        auto [newView, newViewId] = context.views.allocate();
+
+        auto uiView = context.ui->createView(path, newViewId, Parent::root, context);
+
+        if (uiView.expired()) [[unlikely]]
+        {
+            context.messageLine << error << errorHeader << "Failed to create UI view";
+            context.views.free(newViewId);
+            return false;
+        }
+
+        newView.load(
+            path,
+            context,
+            [uiView, newViewId, &context, errorHeader](TimeOrError result)
+            {
+                if (result)
+                {
+                    auto newView = getView(newViewId, context);
+
+                    if (not newView)
+                    {
+                        return;
+                    }
+
+                    context.messageLine << info
+                        << newView->filePath() << ": lines: " << newView->lineCount() << "; took "
+                        << std::fixed << std::setprecision(3) << result.value() << " s";
+
+                    context.ui->onViewDataLoaded(uiView, context);
+                }
+                else if (context.running)
+                {
+                    context.messageLine << error << errorHeader << result.error();
+                    context.ui->removeView(uiView, context);
+                }
+            });
+
+        return true;
     }
 }
 

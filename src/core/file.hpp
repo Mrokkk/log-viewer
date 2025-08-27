@@ -1,7 +1,7 @@
 #pragma once
 
+#include <expected>
 #include <string>
-#include <vector>
 
 #include "sys/file.hpp"
 #include "sys/mapping.hpp"
@@ -10,35 +10,31 @@
 namespace core
 {
 
-struct Line final
-{
-    const size_t start;
-    const size_t len;
-};
-
-using Lines = std::vector<Line>;
-using LineRefs = std::vector<size_t>;
-
-#define BLOCK_SIZE static_cast<size_t>(16 * 1024 * 1024)
-
 struct File final : utils::Immobile
 {
-    File(std::string path);
+    File();
     ~File();
 
-    bool load();
-    size_t lineCount() const;
-    float loadTime() const;
+    std::expected<bool, std::string> open(std::string path);
+    std::expected<bool, std::string> remap(size_t offset, size_t len);
+    void clone(const File& other);
     const std::string& path() const;
-    std::string operator[](unsigned long i);
-    bool isLoaded() const;
+    size_t size() const;
+
+    bool isAreaMapped(size_t start, size_t len) const
+    {
+        return start >= mapping_.offset and len + start < mapping_.len + mapping_.offset;
+    }
+
+    const char* at(size_t offset)
+    {
+        return mapping_.ptrAt<const char*>(offset);
+    }
 
 private:
-    bool         loaded_;
-    float        loadTime_;
-    sys::File    file_;
-    Lines        lines_;
-    sys::Mapping mapping_;
+    sys::MaybeFile     file_;
+    sys::Mapping       mapping_;
+    int*               refCount_;
 };
 
 }  // namespace core

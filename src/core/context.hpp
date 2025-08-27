@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/entity.hpp"
 #include "core/fwd.hpp"
 #include "core/mode.hpp"
 #include "utils/immobile.hpp"
@@ -19,10 +20,12 @@ private:
     Data* data_;
 
 public:
+    bool           running;
     Mode           mode;
-    Files&         files;
+    Entities<View> views;
     InputState&    inputState;
     CommandLine&   commandLine;
+    MessageLine&   messageLine;
     UserInterface* ui;
 };
 

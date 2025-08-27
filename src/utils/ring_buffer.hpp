@@ -9,7 +9,7 @@ namespace utils
 {
 
 template <typename T>
-struct RingBuffer final : Noncopyable
+struct RingBuffer final : NonCopyable
 {
     RingBuffer(size_t size)
         : start_(0)

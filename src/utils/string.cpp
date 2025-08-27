@@ -4,6 +4,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <ranges>
 #include <sstream>
@@ -17,7 +18,7 @@ SplitBy splitBy(const char* delimiter)
     return SplitBy{.delimiters = delimiter};
 }
 
-std::string operator|(const std::string& path, const ReadText&)
+std::string operator|(const std::string& path, const ReadTextWithoutLimit&)
 {
     std::ifstream file(path);
 
@@ -29,6 +30,16 @@ std::string operator|(const std::string& path, const ReadText&)
     std::stringstream buffer;
     buffer << file.rdbuf();
     return buffer.str();
+}
+
+std::string operator|(const std::string& path, const ReadTextWithLimit& data)
+{
+    if (std::filesystem::file_size(path) > data.fileSizeLimit)
+    {
+        return "";
+    }
+
+    return operator|(path, readText);
 }
 
 Strings operator|(const std::string& text, const SplitBy& splitBy)

@@ -16,7 +16,7 @@
 namespace core
 {
 
-static CommandLineOption file(
+static const CommandLineOption file(
     {
         .type = Type::string,
         .variant = Option::positional,
@@ -24,7 +24,7 @@ static CommandLineOption file(
         .help = "file to open",
     });
 
-static CommandLineOption logFile(
+static const CommandLineOption logFile(
     {
         .type = Type::string,
         .variant = Option::additional,
@@ -37,11 +37,9 @@ int run(int argc, char* const* argv, Context& context)
 {
     sys::initialize();
 
-    auto result = parseArgs(argc, argv);
-
-    if (not result)
+    if (auto result = parseArgs(argc, argv); not result) [[unlikely]]
     {
-        std::cerr << result.error() << '\n';
+        std::cerr << result.error() << std::endl;
         return -1;
     }
 

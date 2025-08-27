@@ -6,8 +6,8 @@
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
 
-#include "core/file.hpp"
 #include "core/fwd.hpp"
+#include "core/views.hpp"
 #include "ui/fwd.hpp"
 #include "utils/noncopyable.hpp"
 #include "utils/ring_buffer.hpp"
@@ -18,11 +18,12 @@ namespace ui
 struct View;
 struct ViewNode;
 
-using ViewNodePtr = std::unique_ptr<ViewNode>;
-using ViewPtr = std::unique_ptr<View>;
+using ViewNodePtr = std::shared_ptr<ViewNode>;
+using ViewPtr = std::shared_ptr<View>;
+using ViewNodeWeakPtr = std::weak_ptr<ViewNode>;
 using ViewNodes = std::list<ViewNodePtr>;
 
-struct ViewNode : utils::Noncopyable
+struct ViewNode : utils::NonCopyable
 {
     enum class Type
     {
@@ -31,7 +32,7 @@ struct ViewNode : utils::Noncopyable
     };
 
     ViewNode(Type type, std::string name);
-    virtual ~ViewNode() = default;
+    virtual ~ViewNode();
 
     static ViewNodePtr createGroup(std::string name);
 
@@ -50,7 +51,6 @@ struct ViewNode : utils::Noncopyable
         return name_;
     }
 
-    ftxui::Element renderTab() const;
     ftxui::Element renderTabline() const;
 
     ViewNode& addChild(ViewNodePtr child);
@@ -66,6 +66,11 @@ struct ViewNode : utils::Noncopyable
     }
 
     ViewNode* childAt(unsigned index);
+
+    ViewNodes& children()
+    {
+        return children_;
+    }
 
     const ViewNodes& children() const
     {
@@ -144,11 +149,11 @@ using LinesRingBuffer = utils::RingBuffer<LineWithNumber>;
 
 struct View final : ViewNode
 {
-    View(std::string name);
-    static ViewPtr create(std::string name);
+    View(std::string name, core::ViewId viewDataId);
+    static ViewPtr create(std::string name, core::ViewId viewDataId);
 
-    core::File*     file;
-    core::LineRefs  lines;
+    bool            loaded;
+    core::ViewId    dataId;
     size_t          lineCount;
     size_t          viewHeight;
     size_t          lineNrDigits;

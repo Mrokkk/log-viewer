@@ -26,14 +26,16 @@ struct Ftxui final : core::UserInterface
     void quit(core::Context& context) override;
     void executeShell(const std::string& command) override;
     void scrollTo(core::Scroll lineNumber, core::Context& context) override;
-    std::ostream& operator<<(Severity severity) override;
-    void* createView(std::string name, core::Context& context) override;
-    void attachFileToView(core::File& file, void* view, core::Context& context) override;
+    core::OpaqueWeakPtr createView(std::string name, core::ViewId viewDataId, core::Parent parent, core::Context& context) override;
+    void removeView(core::OpaqueWeakPtr view, core::Context& context) override;
+    void onViewDataLoaded(core::OpaqueWeakPtr view, core::Context& context) override;
+    core::ViewId getCurrentView() override;
     void onModeSwitch(core::Mode newMode, core::Context& context) override;
 
     ftxui::ScreenInteractive screen;
     ftxui::Dimensions        terminalSize;
     bool                     showLineNumbers;
+    bool                     absoluteLineNumbers;
     UIComponent*             active;
     MainView                 mainView;
     CommandLine              commandLine;

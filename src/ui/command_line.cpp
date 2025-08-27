@@ -1,13 +1,12 @@
 #include "command_line.hpp"
 
-#include <cstring>
-#include <spanstream>
 #include <string>
 
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
 
 #include "core/command_line.hpp"
+#include "core/message_line.hpp"
 #include "core/severity.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
@@ -20,22 +19,13 @@ namespace ui
 struct CommandLine::Impl final
 {
     Impl(core::Context& context);
-
-    Severity         severity;
-    char             buffer[256];
-    std::ospanstream messageLine;
-    ftxui::Component input;
-
     Element render(Ftxui& ui, core::Context& context);
-    void clearMessageLine();
-    std::ostream& getMessageStream(Severity severity);
+
+    ftxui::Component input;
 };
 
 CommandLine::Impl::Impl(core::Context& context)
-    : severity(info)
-    , buffer{}
-    , messageLine(buffer)
-    , input(
+    : input(
         Input(
             &context.commandLine.line,
             InputOption{
@@ -86,29 +76,15 @@ Element CommandLine::Impl::render(Ftxui& ui, core::Context& context)
                 hbox(text(":"), input->Render()));
     }
 
-    switch (severity)
+    switch (context.messageLine.severity())
     {
         case error:
-            return color(Color::Red, text(messageLine.span().data()));
+            return color(Color::Red, text(context.messageLine.get()));
         case warning:
-            return color(Color::Yellow, text(messageLine.span().data()));
+            return color(Color::Yellow, text(context.messageLine.get()));
         default:
-            return text(messageLine.span().data());
+            return text(context.messageLine.get());
     }
-}
-
-void CommandLine::Impl::clearMessageLine()
-{
-    std::memset(buffer, 0, sizeof(pimpl_->buffer));
-    std::ospanstream s(buffer);
-    messageLine.swap(s);
-}
-
-std::ostream& CommandLine::Impl::getMessageStream(Severity s)
-{
-    clearMessageLine();
-    severity = s;
-    return messageLine;
 }
 
 CommandLine::CommandLine(core::Context& context)
@@ -130,16 +106,6 @@ void CommandLine::takeFocus()
 ftxui::Element CommandLine::render(core::Context& context)
 {
     return pimpl_->render(context.ui->get<Ftxui>(), context);
-}
-
-void CommandLine::clearMessageLine()
-{
-    pimpl_->clearMessageLine();
-}
-
-std::ostream& CommandLine::operator<<(Severity severity)
-{
-    return pimpl_->getMessageStream(severity);
 }
 
 CommandLine::operator ftxui::Component&()

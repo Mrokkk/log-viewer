@@ -11,6 +11,7 @@
 #include "core/command.hpp"
 #include "core/context.hpp"
 #include "core/lexer.hpp"
+#include "core/message_line.hpp"
 #include "core/type.hpp"
 #include "core/user_interface.hpp"
 #include "core/variable.hpp"
@@ -27,7 +28,7 @@ std::expected<Variable::Value, bool> resolveReference(const std::string& name, C
 
     if (not variable)
     {
-        *context.ui << error << "No such variable: " << name;
+        context.messageLine << error << "No such variable: " << name;
         return std::unexpected(false);
     }
 
@@ -40,7 +41,7 @@ std::expected<std::string, bool> resolveCurrentPath(Context& context)
 
     if (not path)
     {
-        *context.ui << error << "path variable does not exist";
+        context.messageLine << error << "path variable does not exist";
         return std::unexpected(false);
     }
 
@@ -48,7 +49,7 @@ std::expected<std::string, bool> resolveCurrentPath(Context& context)
 
     if (not value.string)
     {
-        *context.ui << error << "path not set";
+        context.messageLine << error << "path not set";
         return std::unexpected(false);
     }
 
@@ -164,7 +165,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
         {
             if (i > 1)
             {
-                *context.ui << error << "! in unexpected place";
+                context.messageLine << error << "! in unexpected place";
                 return false;
             }
             force = true;
@@ -289,7 +290,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
             error:
             default:
-                *context.ui << error << "Unexpected token: " << tokens[i];
+                context.messageLine << error << "Unexpected token: " << tokens[i];
                 return false;
         }
     }
@@ -298,7 +299,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
     if (not command)
     {
-        *context.ui << error << "Unknown command: " << commandName;
+        context.messageLine << error << "Unknown command: " << commandName;
         return false;
     }
 
@@ -311,7 +312,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
     {
         if (not (hasVariadicArgument and args.size() > commandArgsCount))
         {
-            *context.ui << error << "Invalid number of arguments passed to " << commandName
+            context.messageLine << error << "Invalid number of arguments passed to " << commandName
                         << "; expected " << (hasVariadicArgument ? "at least " : "")
                         << commandArgsCount << ", got " << args.size();
             return false;
@@ -325,7 +326,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
         if (commandType != Type::any and commandType != argType)
         {
-            *context.ui << error << "Argument " << i << "; expected " << commandType << ", got " << argType;
+            context.messageLine << error << "Argument " << i << "; expected " << commandType << ", got " << argType;
             return false;
         }
     }
@@ -349,7 +350,7 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
             break;
 
         default:
-            *context.ui << error << "Unexpected statement beginning: " << tokens[0];
+            context.messageLine << error << "Unexpected statement beginning: " << tokens[0];
             return false;
     }
 
@@ -367,7 +368,7 @@ bool executeCode(const std::string& line, Context& context)
 
     if (not result)
     {
-        *context.ui << error << result.error();
+        context.messageLine << error << result.error();
         return false;
     }
 

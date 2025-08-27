@@ -8,6 +8,8 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/colored_string.hpp>
 
+#include "core/view.hpp"
+#include "core/views.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "utils/math.hpp"
@@ -93,14 +95,14 @@ ViewNode::ViewNode(Type type, std::string name)
 {
 }
 
-ViewNodePtr ViewNode::createGroup(std::string name)
+ViewNode::~ViewNode()
 {
-    return std::make_unique<ViewNode>(Type::group, std::move(name));
+    tab_->Detach();
 }
 
-ftxui::Element ViewNode::renderTab() const
+ViewNodePtr ViewNode::createGroup(std::string name)
 {
-    return tab_->Render();
+    return std::make_shared<ViewNode>(Type::group, std::move(name));
 }
 
 ftxui::Element ViewNode::renderTabline() const
@@ -148,7 +150,7 @@ void ViewNode::setActiveChild(ViewNode& node)
             return;
         }
     }
-    throw std::runtime_error("no such child!");
+    std::abort();
 }
 
 ViewNode* ViewNode::next()
@@ -208,10 +210,10 @@ ViewNode* ViewNode::deepestActive()
     return child;
 }
 
-View::View(std::string name)
+View::View(std::string name, core::ViewId viewDataId)
     : ViewNode(ViewNode::Type::view, std::move(name))
-    , file(nullptr)
-    , lineCount(0)
+    , loaded(false)
+    , dataId(viewDataId)
     , viewHeight(0)
     , lineNrDigits(0)
     , yoffset(0)
@@ -225,9 +227,9 @@ View::View(std::string name)
 {
 }
 
-ViewPtr View::create(std::string name)
+ViewPtr View::create(std::string name, core::ViewId viewDataId)
 {
-    return std::make_unique<View>(std::move(name));
+    return std::make_shared<View>(std::move(name), viewDataId);
 }
 
 LineWithNumber getLine(View& view, size_t lineIndex, core::Context& context)
@@ -236,23 +238,37 @@ LineWithNumber getLine(View& view, size_t lineIndex, core::Context& context)
     char buffer[32];
     std::spanstream lineNumberStream(buffer);
 
-    auto& ui = context.ui->get<ui::Ftxui>();
+    auto viewData = core::getView(view.dataId, context);
 
-    if (not view.lines.empty())
+    if (not viewData)
     {
-        lineIndex = view.lines[lineIndex];
+        return {}; // TODO: do something?
     }
+
+    auto& ui = context.ui->get<ui::Ftxui>();
 
     if (ui.showLineNumbers)
     {
+        auto index = ui.absoluteLineNumbers
+            ? viewData->absoluteLineNumber(lineIndex)
+            : lineIndex;
+
         lineNumberStream
            << std::setw(view.lineNrDigits + 1)
            << std::right
-           << ColorWrapped(lineIndex, Palette::View::lineNumberFg)
+           << ColorWrapped(index, Palette::View::lineNumberFg)
            << ColorWrapped("│ ", Palette::View::lineNumberFg);
     }
 
-    auto line = (*view.file)[lineIndex];
+    const auto result = viewData->readLine(lineIndex);
+
+    if (not result) [[unlikely]]
+    {
+        return {};
+    }
+
+    const auto& line = result.value();
+
     auto xoffset = view.xoffset | utils::clamp(0ul, line.length());
 
     if (line.find("ERR") != std::string::npos)
@@ -296,10 +312,18 @@ static size_t getAvailableViewHeight(Ftxui& ui, View& view)
 
 void reloadView(View& view, Ftxui& ui, core::Context& context)
 {
+    auto viewData = core::getView(view.dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return;
+    }
+
+    view.lineCount = viewData->lineCount();
     view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
-    view.lineNrDigits = utils::numberOfDigits(view.file->lineCount());
+    view.lineNrDigits = utils::numberOfDigits(viewData->fileLineCount());
     view.ringBuffer = LinesRingBuffer(view.viewHeight);
-    view.yoffset = view.yoffset | utils::clamp(0ul, view.lineCount - view.viewHeight);
+    view.yoffset = view.yoffset | utils::clamp(0ul, viewData->lineCount() - view.viewHeight);
 
     reloadLines(view, context);
 }

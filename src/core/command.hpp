@@ -56,7 +56,7 @@ private:
     std::flat_set<std::string> flags_;
 };
 
-struct Command final : utils::Noncopyable
+struct Command final : utils::NonCopyable
 {
     std::string_view name;
     CommandArguments arguments;

@@ -1,11 +1,9 @@
 #pragma once
 
 #include <sstream>
-#include <string>
 
 #include "core/severity.hpp"
 #include "utils/immobile.hpp"
-#include "utils/ring_buffer.hpp"
 
 struct Flusher final : utils::Immobile
 {
@@ -28,12 +26,6 @@ struct Logger final : utils::Immobile
     Flusher operator<<(Severity severity) const;
     static void flushToStderr();
     static void setLogFile(std::string_view path);
-
-private:
-    friend Flusher;
-    static void pushLine(std::string line);
-
-    static utils::RingBuffer<std::string> ringBuffer_;
 };
 
 extern const Logger logger;

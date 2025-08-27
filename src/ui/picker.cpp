@@ -14,6 +14,7 @@
 #include "core/dirs.hpp"
 #include "core/fuzzy.hpp"
 #include "core/input.hpp"
+#include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "core/variable.hpp"
 #include "ui/event_handler.hpp"
@@ -65,6 +66,7 @@ static std::string pickerName(const Picker::Type type)
         TYPE_CONVERT(views);
         TYPE_CONVERT(commands);
         TYPE_CONVERT(variables);
+        TYPE_CONVERT(messages);
         case Picker::Type::_last:
             break;
     }
@@ -257,11 +259,15 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
                 | to<utils::Strings>();
             break;
 
+        case Picker::Type::messages:
+            strings = context.messageLine.history();
+            break;
+
         default:
             break;
     }
 
-    cachedStrings = core::fuzzyFilter(strings, "");
+    cachedStrings = core::fuzzyFilter(strings, "").value_or({});
 
     for (auto& entry : cachedStrings)
     {
@@ -316,7 +322,15 @@ void Picker::Impl::onFilePickerChange()
 {
     content->DetachAllChildren();
 
-    cachedStrings = core::fuzzyFilter(strings, inputLine);
+    auto result = core::fuzzyFilter(strings, inputLine);
+
+    if (not result) [[unlikely]]
+    {
+        cachedStrings.clear();
+        return;
+    }
+
+    cachedStrings = result.value();
 
     for (auto& entry : cachedStrings)
     {
@@ -510,6 +524,28 @@ DEFINE_COMMAND(variables)
     {
         auto& ui = context.ui->get<Ftxui>();
         ui.picker.show(ui, Picker::Type::variables, context);
+        return true;
+    }
+}
+
+DEFINE_COMMAND(messages)
+{
+    HELP() = "show messages picker";
+
+    FLAGS()
+    {
+        return {};
+    }
+
+    ARGUMENTS()
+    {
+        return {};
+    }
+
+    EXECUTOR()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        ui.picker.show(ui, Picker::Type::messages, context);
         return true;
     }
 }

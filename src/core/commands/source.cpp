@@ -5,6 +5,7 @@
 #include "core/command.hpp"
 #include "core/interpreter.hpp"
 #include "utils/string.hpp"
+#include "utils/units.hpp"
 
 namespace core
 {
@@ -27,7 +28,7 @@ DEFINE_COMMAND(source)
 
     EXECUTOR()
     {
-        auto code = args[0].string | utils::readText;
+        auto code = args[0].string | utils::readText(1_MiB);
         return executeCode(code, context);
     }
 }

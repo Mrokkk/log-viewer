@@ -1,7 +1,7 @@
 #include <sstream>
 
 #include "core/command.hpp"
-#include "core/user_interface.hpp"
+#include "core/message_line.hpp"
 
 namespace core
 {
@@ -29,7 +29,7 @@ DEFINE_COMMAND(echo)
         {
             ss << arg.string << ' ';
         }
-        *context.ui << info << ss.rdbuf();
+        context.messageLine << info << ss.rdbuf();
         return true;
     }
 }

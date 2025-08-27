@@ -2,7 +2,6 @@
 
 #include <ftxui/fwd.hpp>
 
-#include "core/severity.hpp"
 #include "ui/ui_component.hpp"
 
 namespace ui
@@ -14,8 +13,6 @@ struct CommandLine final : UIComponent
     ~CommandLine();
     void takeFocus() override;
     ftxui::Element render(core::Context& context) override;
-    void clearMessageLine();
-    std::ostream& operator<<(Severity severity);
     operator ftxui::Component&();
 
 private:

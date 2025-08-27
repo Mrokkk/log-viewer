@@ -21,6 +21,7 @@ struct KeyPress
         backspace,
         del,
         cr,
+        space,
         arrowUp,
         arrowDown,
         arrowLeft,
@@ -65,6 +66,7 @@ struct KeyPress
 
     static KeyPress escape;
     static KeyPress cr;
+    static KeyPress space;
     static KeyPress backspace;
     static KeyPress del;
     static KeyPress arrowUp;

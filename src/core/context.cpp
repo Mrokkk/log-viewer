@@ -1,8 +1,8 @@
 #include "context.hpp"
 
 #include "core/command_line.hpp"
-#include "core/files.hpp"
 #include "core/input.hpp"
+#include "core/message_line.hpp"
 #include "core/user_interface.hpp"
 
 namespace core
@@ -10,24 +10,26 @@ namespace core
 
 struct Context::Data final
 {
-    Files       files;
     InputState  inputState;
     CommandLine commandLine;
+    MessageLine messageLine;
 };
 
 Context::Context()
     : data_(new Data)
+    , running(true)
     , mode(Mode::normal)
-    , files(data_->files)
     , inputState(data_->inputState)
     , commandLine(data_->commandLine)
+    , messageLine(data_->messageLine)
 {
 }
 
 Context::~Context()
 {
-    delete data_;
+    running = false;
     delete ui;
+    delete data_;
 }
 
 Context Context::create()

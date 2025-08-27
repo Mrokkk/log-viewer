@@ -6,7 +6,7 @@
 namespace core
 {
 
-DEFINE_COMMAND(quit)
+DEFINE_COMMAND(quitall)
 {
     HELP() = "quit the program";
 
@@ -27,7 +27,6 @@ DEFINE_COMMAND(quit)
     }
 }
 
-DEFINE_ALIAS(q, quit);
-DEFINE_ALIAS(qa, quit);
+DEFINE_ALIAS(qa, quitall);
 
 }  // namespace core

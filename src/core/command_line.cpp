@@ -304,6 +304,7 @@ bool handleCommandLineKeyPress(KeyPress keyPress, InputSource source, core::Cont
 
     switch (keyPress.type)
     {
+        case KeyPress::Type::space:
         case KeyPress::Type::character:
             requireCompletionUpdate = commandLine.write(keyPress.value);
             break;

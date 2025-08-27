@@ -17,6 +17,7 @@ struct Picker final : UIComponent
         views,
         commands,
         variables,
+        messages,
         _last
     };
 

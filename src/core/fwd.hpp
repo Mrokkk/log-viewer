@@ -6,8 +6,8 @@ namespace core
 struct CommandLine;
 struct Context;
 struct File;
-struct Files;
 struct InputState;
+struct MessageLine;
 struct UserInterface;
 struct View;
 

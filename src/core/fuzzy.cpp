@@ -1,5 +1,7 @@
 #include "fuzzy.hpp"
 
+#include <exception>
+#include <expected>
 #include <queue>
 #include <string>
 
@@ -19,29 +21,38 @@ bool operator<(const ScoredString& lhs, const ScoredString& rhs)
     return lhs.score < rhs.score;
 }
 
-std::priority_queue<ScoredString> extract(
+using PriorityQueueOrError = std::expected<std::priority_queue<ScoredString>, std::string>;
+
+static PriorityQueueOrError extract(
     const std::string& query,
     const utils::Strings& choices,
     const double score_cutoff = 0.0)
 {
     std::priority_queue<ScoredString> results;
 
-    rapidfuzz::fuzz::CachedTokenRatio<std::string::value_type> scorer(query);
-
-    for (const auto& choice : choices)
+    try
     {
-        double score = scorer.similarity(choice, score_cutoff);
+        rapidfuzz::fuzz::CachedTokenRatio<std::string::value_type> scorer(query);
 
-        if (score >= score_cutoff)
+        for (const auto& choice : choices)
         {
-            results.emplace(ScoredString{.string = (std::string*)&choice, .score = score});
+            double score = scorer.similarity(choice, score_cutoff);
+
+            if (score >= score_cutoff)
+            {
+                results.emplace(ScoredString{.string = (std::string*)&choice, .score = score});
+            }
         }
+    }
+    catch (const std::exception& e)
+    {
+        return std::unexpected(e.what());
     }
 
     return results;
 }
 
-utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& pattern)
+StringRefsOrError fuzzyFilter(const utils::Strings& strings, const std::string& pattern)
 {
     utils::StringRefs refs;
 
@@ -56,10 +67,15 @@ utils::StringRefs fuzzyFilter(const utils::Strings& strings, const std::string& 
 
     auto values = extract(pattern, strings, 2);
 
-    while (not values.empty())
+    if (not values) [[unlikely]]
     {
-        refs.push_back(values.top().string);
-        values.pop();
+        return std::unexpected(std::move(values.error()));
+    }
+
+    while (not values->empty())
+    {
+        refs.push_back(values->top().string);
+        values->pop();
     }
 
     return refs;

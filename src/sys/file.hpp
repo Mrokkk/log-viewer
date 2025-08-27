@@ -1,15 +1,20 @@
 #pragma once
 
+#include <expected>
 #include <string>
+
+#include "sys/common.hpp"
 
 namespace sys
 {
 
 struct File final
 {
-    const std::string path;
-    const size_t      size;
-    const int         fd;
+    std::string    path;
+    size_t         size;
+    FileDescriptor fd;
 };
+
+using MaybeFile = std::expected<File, Error>;
 
 }  // namespace sys

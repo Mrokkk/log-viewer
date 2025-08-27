@@ -1,7 +1,5 @@
-#include <ostream>
-
 #include "core/command.hpp"
-#include "core/user_interface.hpp"
+#include "core/message_line.hpp"
 #include "core/variable.hpp"
 
 namespace core
@@ -29,7 +27,7 @@ DEFINE_COMMAND(help)
 
         if (command)
         {
-            *context.ui << info << command->name << ": " << command->help;
+            context.messageLine << info << command->name << ": " << command->help;
             return true;
         }
 
@@ -37,11 +35,11 @@ DEFINE_COMMAND(help)
 
         if (not variable)
         {
-            *context.ui << error << "No help entry for: " << args[0].string;
+            context.messageLine << error << "No help entry for: " << args[0].string;
             return false;
         }
 
-        *context.ui << info << variable->name << ": " << variable->help;
+        context.messageLine << info << variable->name << ": " << variable->help;
         return true;
     }
 }

@@ -3,13 +3,13 @@
 namespace utils
 {
 
-struct Noncopyable
+struct NonCopyable
 {
-    Noncopyable() = default;
-    Noncopyable(const Noncopyable&) = delete;
-    Noncopyable& operator=(const Noncopyable&) = delete;
-    Noncopyable(Noncopyable&&) = default;
-    Noncopyable& operator=(Noncopyable&&) = default;
+    NonCopyable() = default;
+    NonCopyable(const NonCopyable&) = delete;
+    NonCopyable& operator=(const NonCopyable&) = delete;
+    NonCopyable(NonCopyable&&) = default;
+    NonCopyable& operator=(NonCopyable&&) = default;
 };
 
 }  // namespace utils

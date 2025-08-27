@@ -20,7 +20,7 @@ struct Option
         additional,
     };
 
-    struct Value : utils::Noncopyable
+    struct Value : utils::NonCopyable
     {
         Value();
         explicit Value(int value);
@@ -61,8 +61,8 @@ struct CommandLineOption final : utils::Immobile
 {
     CommandLineOption(Option option);
     operator bool() const;
-    Option::Value* operator->();
-    Option::Value& operator*();
+    const Option::Value* operator->() const;
+    const Option::Value& operator*() const;
 
 private:
     Option& option_;

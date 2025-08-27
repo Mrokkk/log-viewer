@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <flat_map>
+#include <memory>
 #include <string>
 
 #include <ftxui/component/component.hpp>
@@ -9,10 +10,9 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "core/context.hpp"
-#include "core/file.hpp"
 #include "core/input.hpp"
 #include "core/mode.hpp"
-#include "core/severity.hpp"
+#include "core/user_interface.hpp"
 #include "sys/system.hpp"
 #include "ui/command_line.hpp"
 #include "ui/grepper.hpp"
@@ -115,6 +115,7 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
 Ftxui::Ftxui(core::Context& context)
     : screen(ScreenInteractive::Fullscreen())
     , showLineNumbers(false)
+    , absoluteLineNumbers(true)
     , active(&mainView)
     , commandLine(context)
     , eventHandlers{
@@ -165,6 +166,7 @@ Ftxui::Ftxui(core::Context& context)
         {Event::Character('|'), core::KeyPress::character('|')},
         {Event::Character('}'), core::KeyPress::character('}')},
         {Event::Character('~'), core::KeyPress::character('~')},
+        {Event::Character(' '), core::KeyPress::space},
     };
 
     for (char c = '@'; c <= 'Z'; ++c)
@@ -266,34 +268,76 @@ void Ftxui::scrollTo(core::Scroll lineNumber, core::Context& context)
     }
 }
 
-std::ostream& Ftxui::operator<<(Severity severity)
+core::OpaqueWeakPtr Ftxui::createView(std::string name, core::ViewId viewDataId, core::Parent parent, core::Context&)
 {
-    return commandLine << severity;
+    if (parent == core::Parent::root)
+    {
+        return mainView.createView(std::move(name), viewDataId, nullptr);
+    }
+
+    auto currentView = mainView.currentView();
+
+    if (not currentView) [[unlikely]]
+    {
+        return {};
+    }
+
+    auto parentView = currentView->isBase()
+        ? currentView->parent()
+        : currentView;
+
+    return mainView.createView(std::move(name), viewDataId, parentView);
 }
 
-void* Ftxui::createView(std::string name, core::Context&)
+void Ftxui::removeView(core::OpaqueWeakPtr handle, core::Context& context)
 {
-    return &mainView.createView(std::move(name));
-}
-
-void Ftxui::attachFileToView(core::File& file, void* handle, core::Context& context)
-{
-    auto& view = *static_cast<ViewNode*>(handle);
-
     screen.Post(
-        [this, &file, &view, &context]
+        [this, handle, &context]
         {
-            auto& base = view.base().cast<View>();
-            base.file = &file;
-            base.lineCount = file.lineCount();
+            if (handle.expired())
+            {
+                return;
+            }
 
-            *this << info
-                << file.path() << ": lines: " << file.lineCount() << "; took "
-                << std::fixed << std::setprecision(3) << file.loadTime() << " s";
+            auto viewNodePtr = std::static_pointer_cast<ViewNode>(handle.lock());
+            auto& viewNode = *viewNodePtr;
+
+            mainView.removeView(viewNode, context);
+        });
+    screen.RequestAnimationFrame();
+}
+
+void Ftxui::onViewDataLoaded(core::OpaqueWeakPtr handle, core::Context& context)
+{
+    screen.Post(
+        [this, handle, &context]
+        {
+            if (handle.expired())
+            {
+                return;
+            }
+
+            auto viewNodePtr = std::static_pointer_cast<ViewNode>(handle.lock());
+            auto& viewNode = *viewNodePtr;
+
+            auto& base = viewNode.base().cast<View>();
+            base.loaded = true;
 
             reloadView(base, *this, context);
         });
     screen.RequestAnimationFrame();
+}
+
+core::ViewId Ftxui::getCurrentView()
+{
+    auto currentView = mainView.currentView();
+
+    if (not currentView) [[unlikely]]
+    {
+        return {};
+    }
+
+    return currentView->dataId;
 }
 
 void Ftxui::onModeSwitch(core::Mode newMode, core::Context& context)

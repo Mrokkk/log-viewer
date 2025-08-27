@@ -1,7 +1,5 @@
-#include <ostream>
-
 #include "core/command.hpp"
-#include "core/user_interface.hpp"
+#include "core/message_line.hpp"
 #include "core/variable.hpp"
 
 namespace core
@@ -29,11 +27,11 @@ DEFINE_COMMAND(get)
 
         if (not variable)
         {
-            *context.ui << error << "Unknown variable: " << args[0].string;
+            context.messageLine << error << "Unknown variable: " << args[0].string;
             return false;
         }
 
-        *context.ui << info << VariableWithContext{*variable, context};
+        context.messageLine << info << VariableWithContext{*variable, context};
 
         return true;
     }

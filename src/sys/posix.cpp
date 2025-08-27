@@ -1,3 +1,4 @@
+#ifdef __unix__
 #include "system.hpp"
 
 #include <algorithm>
@@ -6,6 +7,7 @@
 #include <cstring>
 #include <cxxabi.h>
 #include <dlfcn.h>
+#include <expected>
 #include <fcntl.h>
 #include <ios>
 #include <iostream>
@@ -16,7 +18,6 @@
 
 #include "core/logger.hpp"
 #include "sys/mapping.hpp"
-#include "utils/side_effect.hpp"
 #include "utils/string.hpp"
 
 #define COLOR_BLUE    "\e[34m"
@@ -111,13 +112,7 @@ static int backtraceCallback(void* data, uintptr_t pc, const char* pathname, int
 
 static void backtraceErrorCallback(void*, const char* message, int error)
 {
-    if (error == -1)
-    {
-        printf("Debug info missing\n");
-        return;
-    }
-
-    printf("Backtrace error %d: %s\n", error, message);
+    logger << ::error << "backtrace error[" <<  error << "]: " << message;
 }
 
 template <typename T>
@@ -130,7 +125,7 @@ static T hexTo(const std::string& string)
     return value;
 }
 
-void logLineOfWords(const utils::Strings& words)
+static void logLineOfWords(const utils::Strings& words)
 {
     std::stringstream ss;
 
@@ -142,7 +137,7 @@ void logLineOfWords(const utils::Strings& words)
     logger << info << ss.rdbuf();
 }
 
-static ProcessMappings mappingRead()
+static ProcessMappings mappingRead(bool logMappings)
 {
     // Example of 2 mappings from /proc/self/maps
     // 58868b471000-58868b473000 r--p 00000000 fe:00 12861860                   /usr/bin/cat
@@ -151,7 +146,12 @@ static ProcessMappings mappingRead()
 
     for (const auto& line : "/proc/self/maps" | utils::readText | utils::splitBy("\n"))
     {
-        const auto words = line | utils::splitBy(" ") | utils::sideEffect(logLineOfWords);
+        const auto words = line | utils::splitBy(" ");
+
+        if (logMappings)
+        {
+            logLineOfWords(words);
+        }
 
         if (words.size() == 0)
         {
@@ -171,7 +171,7 @@ static ProcessMappings mappingRead()
     return mappings;
 }
 
-void stacktraceLog(void)
+static void stacktraceLogInternal(bool logMappings)
 {
     if (not backtraceFull)
     {
@@ -181,12 +181,22 @@ void stacktraceLog(void)
 
     auto context = BacktraceContext{
         .index = 0,
-        .maps = mappingRead()
+        .maps = mappingRead(logMappings)
     };
 
     logger << info << "Stacktrace:";
 
     backtraceFull(backtraceState, 1, backtraceCallback, backtraceErrorCallback, static_cast<void*>(&context));
+}
+
+void stacktraceLog(void)
+{
+    stacktraceLogInternal(false);
+}
+
+const char* errorDescribe(Error error)
+{
+    return strerror(error);
 }
 
 void initialize()
@@ -222,26 +232,26 @@ void finalize()
 
 void crashHandle(const int signal)
 {
-    logger << error << "Received SIG" << sigabbrev_np(signal);
-    sys::stacktraceLog();
-    sys::finalize();
     logger.flushToStderr();
+    logger << error << "Received SIG" << sigabbrev_np(signal);
+    sys::stacktraceLogInternal(true);
+    sys::finalize();
 }
 
-File fileOpen(std::string path)
+MaybeFile fileOpen(std::string path)
 {
     int fd = open(path.c_str(), O_RDONLY);
 
     if (fd == -1) [[unlikely]]
     {
-        return {};
+        return std::unexpected(errno);
     }
 
     struct stat stat;
 
     if (fstat(fd, &stat) == -1) [[unlikely]]
     {
-        return {};
+        return std::unexpected(errno);
     }
 
     return File{
@@ -251,12 +261,16 @@ File fileOpen(std::string path)
     };
 }
 
-void fileClose(File& file)
+Error fileClose(File& file)
 {
-    close(file.fd);
+    if (close(file.fd) == -1) [[unlikely]]
+    {
+        return errno;
+    }
+    return 0;
 }
 
-int remap(const File& file, Mapping& mapping, size_t newOffset, size_t newLen)
+Error remap(const File& file, Mapping& mapping, size_t newOffset, size_t newLen)
 {
     static unsigned int pageMask = ~(static_cast<uintptr_t>(getpagesize()) - 1);
 
@@ -272,7 +286,7 @@ int remap(const File& file, Mapping& mapping, size_t newOffset, size_t newLen)
 
     if (newPtr == MAP_FAILED) [[unlikely]]
     {
-        return -1;
+        return errno;
     }
 
     mapping = Mapping{
@@ -284,14 +298,19 @@ int remap(const File& file, Mapping& mapping, size_t newOffset, size_t newLen)
     return 0;
 }
 
-void unmap(Mapping& mapping)
+Error unmap(Mapping& mapping)
 {
     if (mapping)
     {
-        munmap(mapping.ptr, mapping.len);
+        if (munmap(mapping.ptr, mapping.len)) [[unlikely]]
+        {
+            return errno;
+        }
         mapping.ptr = nullptr;
         mapping.len = 0;
     }
+
+    return 0;
 }
 
 Paths getConfigFiles()
@@ -316,3 +335,4 @@ int copyToClipboard(std::string string)
 }
 
 }  // namespace sys
+#endif  // __unix__

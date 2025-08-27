@@ -13,7 +13,7 @@ namespace ui
 
 Element renderStatusLine(Ftxui& ui, core::Context& context)
 {
-    const auto fileName{ui.mainView.activeFileName()};
+    const auto fileName{ui.mainView.activeFileName(context)};
     Color statusFg, statusBg;
     const char* status;
 

@@ -1,7 +1,5 @@
-#include <ostream>
-
 #include "core/command.hpp"
-#include "core/user_interface.hpp"
+#include "core/message_line.hpp"
 #include "core/variable.hpp"
 
 namespace core
@@ -29,19 +27,19 @@ DEFINE_COMMAND(toggle)
 
         if (not variable)
         {
-            *context.ui << error << "Unknown variable: " << args[0].string;
+            context.messageLine << error << "Unknown variable: " << args[0].string;
             return false;
         }
 
         if (variable->type != Type::boolean)
         {
-            *context.ui << error << "Not a boolean: " << args[0].string;
+            context.messageLine << error << "Not a boolean: " << args[0].string;
             return false;
         }
 
         if (variable->access != Variable::Access::readWrite)
         {
-            *context.ui << error << "Not writable: " << args[0].string;
+            context.messageLine << error << "Not writable: " << args[0].string;
             return false;
         }
 

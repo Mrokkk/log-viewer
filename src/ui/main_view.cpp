@@ -1,20 +1,29 @@
 #include "main_view.hpp"
 
+#include <format>
 #include <sstream>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include "core/alias.hpp"
+#include "core/assert.hpp"
+#include "core/command.hpp"
 #include "core/context.hpp"
+#include "core/logger.hpp"
+#include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "core/variable.hpp"
+#include "core/view.hpp"
+#include "core/views.hpp"
 #include "sys/system.hpp"
 #include "ui/event_handler.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/ui_component.hpp"
 #include "ui/view.hpp"
+#include "utils/format.hpp"
 #include "utils/math.hpp"
 
 using namespace ftxui;
@@ -39,7 +48,12 @@ struct MainView::Impl final
     void scrollTo(long lineNumber, core::Context& context);
 
     void reload(Ftxui& ui, core::Context& context);
-    ViewNode& createView(std::string name, ViewNode* parentPtr);
+    ViewNodePtr createView(std::string name, core::ViewId viewDataId, ViewNode* parentPtr);
+    void removeView(ViewNode& view, core::Context& context);
+    void removeViewChildren(ViewNode& view, core::Context& context);
+    ViewNodes::iterator getViewIterator(ViewNode& view, ViewNodes& viewNodes);
+
+    const char* activeFileName(core::Context& context) const;
 
     ViewNode* getActiveLineView();
     bool activeTablineLeft();
@@ -47,7 +61,7 @@ struct MainView::Impl final
     bool activeTablineUp();
     bool activeTablineDown();
 
-    Element render();
+    Element render(core::Context& context);
     Elements renderTablines();
 
     bool handleEvent(const Event& event, Ftxui& ui, core::Context& context);
@@ -93,7 +107,7 @@ MainView::Impl::Impl()
 
 bool MainView::Impl::isViewLoaded() const
 {
-    return currentView and currentView->file;
+    return currentView and currentView->loaded;
 }
 
 bool MainView::Impl::scrollLeft(core::Context& context)
@@ -323,14 +337,17 @@ void MainView::Impl::reload(Ftxui& ui, core::Context& context)
         });
 }
 
-ViewNode& MainView::Impl::createView(std::string name, ViewNode* parentPtr)
+ViewNodePtr MainView::Impl::createView(std::string name, core::ViewId viewDataId, ViewNode* parentPtr)
 {
     auto& parent = parentPtr
         ? *parentPtr
         : root;
 
+    auto groupPtr = ViewNode::createGroup(std::move(name));
+    auto basePtr = View::create("base", viewDataId);
+
     auto& group = parent
-        .addChild(ViewNode::createGroup(std::move(name)))
+        .addChild(groupPtr)
         .setActive();
 
     if (not parentPtr)
@@ -340,11 +357,110 @@ ViewNode& MainView::Impl::createView(std::string name, ViewNode* parentPtr)
     }
 
     currentView = group
-        .addChild(View::create("base"))
+        .addChild(basePtr)
         .setActive()
         .ptrCast<View>();
 
-    return group;
+    return groupPtr;
+}
+
+void MainView::Impl::removeView(ViewNode& view, core::Context& context)
+{
+    assert(view.type() == ViewNode::Type::group, std::format("View {}:{}", view.name(), &view));
+    assert(view.parent(), std::format("View {}:{}", view.name(), &view));
+
+    auto& children = view.parent()->children();
+    auto viewIt = getViewIterator(view, children);
+
+    assert(viewIt != children.end(), std::format("View {}:{} cannot be found in parent's children", view.name(), &view));
+
+    removeViewChildren(view, context);
+
+    logger << debug << __func__ << ": removing " << view.name();
+
+    children.erase(viewIt);
+
+    auto nextIt = children.begin();
+
+    if (nextIt != children.end())
+    {
+        auto& viewNode = **nextIt;
+        viewNode.setActive();
+        if (viewNode.type() == ViewNode::Type::view)
+        {
+            currentView = viewNode.ptrCast<View>();
+        }
+        else
+        {
+            currentView = viewNode.deepestActive()->ptrCast<View>();
+        }
+    }
+    else
+    {
+        currentView = nullptr;
+    }
+}
+
+void MainView::Impl::removeViewChildren(ViewNode& view, core::Context& context)
+{
+    auto& children = view.children();
+
+    for (auto childIt = children.rbegin(); childIt != children.rend(); ++childIt)
+    {
+        auto& childViewNode = **childIt;
+
+        if (&childViewNode == currentView)
+        {
+            currentView = nullptr;
+        }
+
+        removeViewChildren(childViewNode, context);
+
+        logger << debug << __func__ << ": removing " << childViewNode.name() << "; type: " << (int)childViewNode.type();
+
+        if (childViewNode.type() == ViewNode::Type::view)
+        {
+            auto& view = childViewNode.cast<View>();
+            logger << debug << __func__ << ": freeing view data " << view.dataId.index;
+            context.views.free(view.dataId);
+        }
+    }
+
+    children.clear();
+}
+
+ViewNodes::iterator MainView::Impl::getViewIterator(ViewNode& view, ViewNodes& viewNodes)
+{
+    for (auto childIt = viewNodes.begin(); childIt != viewNodes.end(); ++childIt)
+    {
+        if (childIt->get() == &view)
+        {
+            return childIt;
+        }
+    }
+    return viewNodes.end();
+}
+
+const char* MainView::Impl::activeFileName(core::Context& context) const
+{
+    if (not currentView)
+    {
+        return "[No Name]";
+    }
+
+    if (not currentView->loaded)
+    {
+        return "[Loading]";
+    }
+
+    auto viewData = core::getView(currentView->dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return "[Closed]";
+    }
+
+    return viewData->filePath().c_str();
 }
 
 static const MenuEntryOption tabOption{
@@ -562,7 +678,7 @@ bool MainView::Impl::activeTablineDown()
     return true;
 }
 
-Element MainView::Impl::render()
+Element MainView::Impl::render(core::Context& context)
 {
     if (not currentView) [[unlikely]]
     {
@@ -575,12 +691,21 @@ Element MainView::Impl::render()
 
     auto vertical = renderTablines();
 
-    if (currentView->file) [[likely]]
+    if (currentView->loaded) [[likely]]
     {
-        vertical.push_back(
-            hbox(
-                nonSelectableVbox(currentView->ringBuffer | getLineNumbers),
-                vbox(currentView->ringBuffer | getLines(*currentView)) | xflex));
+        auto viewData = core::getView(currentView->dataId, context);
+
+        if (not viewData) [[unlikely]]
+        {
+            vertical.push_back(vbox({text("Closed") | center}) | center | flex);
+        }
+        else
+        {
+            vertical.push_back(
+                hbox(
+                    nonSelectableVbox(currentView->ringBuffer | getLineNumbers),
+                    vbox(currentView->ringBuffer | getLines(*currentView)) | xflex));
+        }
     }
     else
     {
@@ -617,7 +742,7 @@ bool MainView::Impl::escape()
     return true;
 }
 
-bool MainView::Impl::yank(Ftxui& ui, core::Context& context)
+bool MainView::Impl::yank(Ftxui&, core::Context& context)
 {
     if (not isViewLoaded() or not currentView->selectionMode)
     {
@@ -628,20 +753,25 @@ bool MainView::Impl::yank(Ftxui& ui, core::Context& context)
 
     if (lineCount > MAX_LINES_COPIED)
     {
-        ui << error << "cannot yank more than " << MAX_LINES_COPIED << " lines";
+        context.messageLine << error << "cannot yank more than " << MAX_LINES_COPIED << " lines";
         return true;
     }
 
     std::stringstream ss;
 
+    auto viewData = core::getView(currentView->dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return true;
+    }
+
     for (auto i = currentView->selectionStart; i <= currentView->selectionEnd; ++i)
     {
-        auto lineIndex = i;
-        if (not currentView->lines.empty())
+        if (const auto result = viewData->readLine(i))
         {
-            lineIndex = currentView->lines[lineIndex];
+            ss << result.value() << '\n';
         }
-        ss << (*currentView->file)[lineIndex] << '\n';
     }
 
     sys::copyToClipboard(ss.str());
@@ -649,7 +779,7 @@ bool MainView::Impl::yank(Ftxui& ui, core::Context& context)
     currentView->selectionMode = false;
     core::switchMode(core::Mode::normal, context);
 
-    ui << info << lineCount << " lines copied to clipboard";
+    context.messageLine << info << lineCount << " lines copied to clipboard";
 
     return true;
 }
@@ -724,9 +854,9 @@ bool MainView::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& 
     return pimpl_->handleEvent(event, ui, context);
 }
 
-Element MainView::render(core::Context&)
+Element MainView::render(core::Context& context)
 {
-    return pimpl_->render();
+    return pimpl_->render(context);
 }
 
 void MainView::reload(Ftxui& ui, core::Context& context)
@@ -734,9 +864,14 @@ void MainView::reload(Ftxui& ui, core::Context& context)
     pimpl_->reload(ui, context);
 }
 
-ViewNode& MainView::createView(std::string name, ViewNode* parentPtr)
+ViewNodePtr MainView::createView(std::string name, core::ViewId viewDataId, ViewNode* parentPtr)
 {
-    return pimpl_->createView(std::move(name), parentPtr);
+    return pimpl_->createView(std::move(name), viewDataId, parentPtr);
+}
+
+void MainView::removeView(ViewNode& view, core::Context& context)
+{
+    pimpl_->removeView(view, context);
 }
 
 void MainView::scrollTo(Ftxui&, long lineNumber, core::Context& context)
@@ -744,13 +879,9 @@ void MainView::scrollTo(Ftxui&, long lineNumber, core::Context& context)
     pimpl_->scrollTo(lineNumber, context);
 }
 
-const char* MainView::activeFileName() const
+const char* MainView::activeFileName(core::Context& context) const
 {
-    return pimpl_->currentView
-        ? pimpl_->currentView->file
-            ? pimpl_->currentView->file->path().c_str()
-            : "loading..."
-        : "[No Name]";
+    return pimpl_->activeFileName(context);
 }
 
 bool MainView::isViewLoaded() const
@@ -790,14 +921,163 @@ DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the le
     }
 }
 
+DEFINE_READWRITE_VARIABLE(absoluteLineNumbers, boolean, "Print file absolute line numbers")
+{
+    READER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        return ui.absoluteLineNumbers;
+    }
+
+    WRITER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        ui.absoluteLineNumbers = value.boolean;
+        ui.mainView.reload(ui, context);
+        return true;
+    }
+}
+
 DEFINE_READONLY_VARIABLE(path, string, "Path to the opened file")
 {
     READER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        return ui.mainView.isViewLoaded()
-            ? &ui.mainView.currentView()->file->path()
-            : nullptr;
+        if (not ui.mainView.isViewLoaded())
+        {
+            return nullptr;
+        }
+
+        auto viewData = core::getView(ui.mainView.currentView()->dataId, context);
+
+        if (not viewData)
+        {
+            return nullptr;
+        }
+
+        return &viewData->filePath();
+    }
+}
+
+DEFINE_COMMAND(quit)
+{
+    HELP() = "close current view or quit the program";
+
+    FLAGS()
+    {
+        return {};
+    }
+
+    ARGUMENTS()
+    {
+        return {};
+    }
+
+    EXECUTOR()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+
+        auto currentView = ui.mainView.currentView();
+
+        if (not currentView)
+        {
+            ui.quit(context);
+            return true;
+        }
+
+        ViewNode* viewToClose = currentView->isBase()
+            ? currentView->parent()
+            : currentView;
+
+        ui.mainView.removeView(*viewToClose, context);
+
+        return true;
+    }
+}
+
+DEFINE_ALIAS(q, quit);
+
+DEFINE_COMMAND(filter)
+{
+    HELP() = "filter current view";
+
+    FLAGS()
+    {
+        return {};
+    }
+
+    ARGUMENTS()
+    {
+        return {};
+    }
+
+    EXECUTOR()
+    {
+        auto parentViewId = context.ui->getCurrentView();
+
+        auto parentView = getView(parentViewId, context);
+
+        if (not parentView) [[unlikely]]
+        {
+            context.messageLine << error << "No view loaded yet";
+            return false;
+        }
+
+        char buffer[128];
+        std::spanstream ss(buffer);
+
+        auto& ui = context.ui->get<Ftxui>();
+
+        if (not ui.mainView.currentView()->selectionMode)
+        {
+            context.messageLine << error << "Nothing selected";
+            return false;
+        }
+
+        size_t start = ui.mainView.currentView()->selectionStart;
+        size_t end = ui.mainView.currentView()->selectionEnd;
+
+        ss << '<' << start << '-' << end << '>';
+
+        auto [newView, newViewId] = context.views.allocate();
+
+        auto uiView = context.ui->createView(ss.span().data(), newViewId, core::Parent::currentView, context);
+
+        if (uiView.expired()) [[unlikely]]
+        {
+            context.messageLine << error << "failed to create UI view";
+            context.views.free(newViewId);
+            return false;
+        }
+
+        newView.filter(
+            start,
+            end,
+            parentViewId,
+            context,
+            [uiView, newViewId, &context](core::TimeOrError result)
+            {
+                if (result)
+                {
+                    auto newView = getView(newViewId, context);
+
+                    if (newView)
+                    {
+                        context.messageLine << info
+                            << "filtered " << newView->lineCount() << " lines; took "
+                            << std::fixed << std::setprecision(3) << result.value() << " s";
+
+                        context.ui->onViewDataLoaded(uiView, context);
+                    }
+                }
+                else if (context.running)
+                {
+                    context.messageLine << error << "Error filtering view: " << result.error();
+                    context.ui->removeView(uiView, context);
+                }
+            });
+
+        return true;
     }
 }
 

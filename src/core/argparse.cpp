@@ -301,12 +301,12 @@ CommandLineOption::operator bool() const
     return option_.value != nullptr;
 }
 
-Option::Value* CommandLineOption::operator->()
+const Option::Value* CommandLineOption::operator->() const
 {
     return option_.value;
 }
 
-Option::Value& CommandLineOption::operator*()
+const Option::Value& CommandLineOption::operator*() const
 {
     return *option_.value;
 }

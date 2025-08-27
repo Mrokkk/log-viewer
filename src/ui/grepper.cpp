@@ -1,32 +1,21 @@
 #include "grepper.hpp"
 
-#include <spanstream>
-
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/component/component_options.hpp>
 
 #include "core/command.hpp"
+#include "core/commands/grep.hpp"
 #include "core/context.hpp"
-#include "core/grep.hpp"
-#include "core/interpreter.hpp"
+#include "core/grep_options.hpp"
 #include "core/mode.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/ui_component.hpp"
-#include "ui/view.hpp"
 
 using namespace ftxui;
 
 namespace ui
 {
-
-struct State final
-{
-    std::string   pattern;
-    bool          regex           = false;
-    bool          caseInsensitive = false;
-    bool          inverted        = false;
-};
 
 DEFINE_COMMAND(grepper)
 {
@@ -57,142 +46,15 @@ DEFINE_COMMAND(grepper)
     }
 }
 
-DEFINE_COMMAND(grep)
-{
-    HELP() = "filter current view";
-
-    FLAGS()
-    {
-        return {
-            "c",
-            "i",
-            "r",
-        };
-    }
-
-    ARGUMENTS()
-    {
-        return {
-            ARGUMENT(string, "pattern")
-        };
-    }
-
-    EXECUTOR()
-    {
-        const auto& pattern = args[0].string;
-        auto& ui = context.ui->get<Ftxui>();
-
-        if (not ui.mainView.isViewLoaded())
-        {
-            ui << error << "no file loaded yet";
-            return false;
-        }
-
-        std::string optionsString;
-
-        core::GrepOptions options;
-
-        if (flags.contains("r"))
-        {
-            optionsString += 'r';
-            options.regex = true;
-        }
-        if (flags.contains("c"))
-        {
-            optionsString += 'c';
-            options.caseInsensitive = true;
-        }
-        if (flags.contains("i"))
-        {
-            optionsString += 'i';
-            options.inverted = true;
-        }
-
-        char buffer[128];
-        std::spanstream ss(buffer);
-
-        ss << pattern;
-
-        if (not optionsString.empty())
-        {
-            ss << " [" << optionsString << ']';
-        }
-
-        auto& prevCurrentView = *ui.mainView.currentView();
-        auto file = prevCurrentView.file;
-
-        auto& parent = prevCurrentView.isBase()
-            ? *prevCurrentView.parent()
-            : prevCurrentView;
-
-        auto& newView = ui.mainView.createView(
-            std::string(ss.span().begin(), ss.span().end()),
-            &parent);
-
-        auto& base = newView.base().cast<View>();
-
-        core::asyncGrep(
-            pattern,
-            options,
-            prevCurrentView.lines,
-            *file,
-            [&base, &ui, &context, file](core::LineRefs lines, float time)
-            {
-                ui.screen.Post(
-                    [&ui, &base, &context, lines = std::move(lines), file, time]
-                    {
-                        ui << info << "found " << lines.size() << " matches; took "
-                           << std::fixed << std::setprecision(3) << time << " s";
-
-                        base.file = file;
-                        base.lineCount = lines.size();
-                        base.lines = std::move(lines);
-
-                        reloadView(base, ui, context);
-                    });
-                ui.screen.RequestAnimationFrame();
-            });
-
-        return true;
-    }
-}
-
-namespace commands
-{
-
-bool grep(const State& params, core::Context& context)
-{
-    std::string command = "grep ";
-
-    if (params.regex)
-    {
-        command += "-r ";
-    }
-    if (params.caseInsensitive)
-    {
-        command += "-c ";
-    }
-    if (params.inverted)
-    {
-        command += "-i ";
-    }
-
-    command += '\"';
-    command += params.pattern;
-    command += '\"';
-
-    return core::executeCode(command, context);
-}
-
-}  // namespace commands
-
 struct Grepper::Impl final
 {
     Impl();
     Element render();
     bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context);
+    void takeFocus();
 
-    State             state;
+    std::string       pattern;
+    core::GrepOptions options;
     ftxui::Component  input;
     ftxui::Components checkboxes;
     ftxui::Component  window;
@@ -202,24 +64,24 @@ private:
 };
 
 Grepper::Impl::Impl()
-    : input(Input(&state.pattern, InputOption{.multiline = false}))
+    : input(Input(&pattern, InputOption{.multiline = false}))
 {
     auto regexCheckbox = Checkbox(
         CheckboxOption{
             .label = "regex (Alt+R)",
-            .checked = &state.regex,
+            .checked = &options.regex,
         });
 
     auto caseInsensitiveCheckbox = Checkbox(
         CheckboxOption{
             .label = "case insensitive (Alt+C)",
-            .checked = &state.caseInsensitive,
+            .checked = &options.caseInsensitive,
         });
 
     auto invertedCheckbox = Checkbox(
         CheckboxOption{
             .label = "inverted (Alt+I)",
-            .checked = &state.inverted,
+            .checked = &options.inverted,
         });
 
     window = Window({
@@ -273,31 +135,38 @@ bool Grepper::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Cont
     }
     else if (event == Event::AltR)
     {
-        state.regex ^= true;
+        options.regex ^= true;
         return true;
     }
     else if (event == Event::AltC)
     {
-        state.caseInsensitive ^= true;
+        options.caseInsensitive ^= true;
         return true;
     }
     else if (event == Event::AltI)
     {
-        state.inverted ^= true;
+        options.inverted ^= true;
         return true;
     }
 
     return false;
 }
 
+void Grepper::Impl::takeFocus()
+{
+    input->TakeFocus();
+}
+
 bool Grepper::Impl::accept(Ftxui&, core::Context& context)
 {
-    if (state.pattern.empty())
+    if (pattern.empty())
     {
         return true;
     }
 
-    commands::grep(state, context);
+    core::commands::grep(pattern, options, context);
+
+    pattern.clear();
 
     core::switchMode(core::Mode::normal, context);
 
@@ -317,7 +186,7 @@ Grepper::~Grepper()
 
 void Grepper::takeFocus()
 {
-    pimpl_->input->TakeFocus();
+    pimpl_->takeFocus();
 }
 
 ftxui::Element Grepper::render(core::Context&)

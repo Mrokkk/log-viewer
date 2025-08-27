@@ -46,7 +46,7 @@ message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS "-pipe -std=c++23 -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fdiagnostics-color=always")
+set(CMAKE_CXX_FLAGS "-pipe -std=c++23 -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fno-exceptions -fdiagnostics-color=always")
 
 if(OPTIMIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
@@ -61,10 +61,12 @@ add_executable(${PROJECT_NAME}
     src/core/alias.cpp
     src/core/app.cpp
     src/core/argparse.cpp
+    src/core/assert.cpp
     src/core/command.cpp
     src/core/command_line.cpp
     src/core/commands/echo.cpp
     src/core/commands/get.cpp
+    src/core/commands/grep.cpp
     src/core/commands/help.cpp
     src/core/commands/map.cpp
     src/core/commands/open.cpp
@@ -74,17 +76,20 @@ add_executable(${PROJECT_NAME}
     src/core/commands/toggle.cpp
     src/core/context.cpp
     src/core/dirs.cpp
+    src/core/entity.cpp
     src/core/file.cpp
-    src/core/file_load.cpp
     src/core/fuzzy.cpp
-    src/core/grep.cpp
     src/core/input.cpp
     src/core/interpreter.cpp
     src/core/lexer.cpp
     src/core/logger.cpp
+    src/core/message_line.cpp
     src/core/mode.cpp
+    src/core/thread.cpp
     src/core/type.cpp
     src/core/variable.cpp
+    src/core/view.cpp
+    src/core/views.cpp
     src/main.cpp
     src/sys/posix.cpp
     src/ui/command_line.cpp
@@ -98,8 +103,11 @@ add_executable(${PROJECT_NAME}
     src/ui/view.cpp
     src/utils/math.cpp
     src/utils/string.cpp
+    src/utils/time.cpp
 
 )
+
+set_source_files_properties(src/core/fuzzy.cpp PROPERTIES COMPILE_FLAGS -fexceptions)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${BACKTRACE_INCLUDE_DIRS}

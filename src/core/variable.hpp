@@ -12,7 +12,7 @@
 namespace core
 {
 
-struct Variable final : utils::Noncopyable
+struct Variable final : utils::NonCopyable
 {
     enum class Access
     {

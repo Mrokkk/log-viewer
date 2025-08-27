@@ -1,7 +1,5 @@
-#include <ostream>
-
 #include "core/command.hpp"
-#include "core/user_interface.hpp"
+#include "core/message_line.hpp"
 #include "core/variable.hpp"
 
 namespace core
@@ -47,7 +45,7 @@ DEFINE_COMMAND(set)
                     break;
 
                 default:
-                    *context.ui << error << "Unknown type of value: " << args[1].type;
+                    context.messageLine << error << "Unknown type of value: " << args[1].type;
                     return false;
             }
             return true;
@@ -55,11 +53,11 @@ DEFINE_COMMAND(set)
 
         if (variable->access != Variable::Access::readWrite)
         {
-            *context.ui << error << "Not writable: " << args[0].string;
+            context.messageLine << error << "Not writable: " << args[0].string;
             return false;
         }
 
-        *context.ui << error << "Changing not yet implemented: " << args[0].string;
+        context.messageLine << error << "Changing not yet implemented: " << args[0].string;
 
         return true;
     }
