@@ -19,12 +19,12 @@ FetchContent_Declare(ftxui
 
 FetchContent_Declare(rapidfuzz
     GIT_REPOSITORY https://github.com/rapidfuzz/rapidfuzz-cpp.git
-    GIT_TAG main
+    GIT_TAG bfd8e6702b4796fbaffba180e007a1456066a30a
 )
 
 FetchContent_Declare(re2
     GIT_REPOSITORY https://github.com/google/re2.git
-    GIT_TAG main
+    GIT_TAG 85c7c0fb1163b0bd83a7951f5a205ee7b489e33e
 )
 
 FetchContent_MakeAvailable(ftxui)
