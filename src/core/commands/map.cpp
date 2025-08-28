@@ -20,7 +20,12 @@ namespace core
         { \
             const auto& lhs = args[0].string; \
             const auto& rhs = args[1].string; \
-            auto inputFlags = InputMappingFlags::MODE | (force ? InputMappingFlags::force : InputMappingFlags::none); \
+            InputMappingFlags inputFlags; \
+            if (force) \
+            { \
+                inputFlags |= InputMappingFlags::force; \
+            } \
+            inputFlags |= InputMappingFlags::MODE; \
             return addInputMapping(lhs, rhs, inputFlags, context); \
         } \
     }

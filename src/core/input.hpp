@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "core/fwd.hpp"
+#include "utils/bitflag.hpp"
 
 namespace core
 {
@@ -109,39 +110,13 @@ struct InputState
     KeyPressNode* current;
 };
 
-struct InputMappingFlags
+DEFINE_BITFLAG(InputMappingFlags, char,
 {
-    enum Value : char
-    {
-        none    = 0,
-        normal  = 1 << 0,
-        visual  = 1 << 1,
-        command = 1 << 2,
-        force   = 1 << 3,
-    };
-
-    constexpr InputMappingFlags(Value v)
-        : value(v)
-    {
-    }
-
-    Value value;
-};
-
-constexpr inline InputMappingFlags::Value operator&(const InputMappingFlags lhs, const InputMappingFlags rhs)
-{
-    return static_cast<InputMappingFlags::Value>(lhs.value & rhs.value);
-}
-
-constexpr inline InputMappingFlags::Value operator|(const InputMappingFlags lhs, const InputMappingFlags rhs)
-{
-    return static_cast<InputMappingFlags::Value>(lhs.value | rhs.value);
-}
-
-constexpr inline InputMappingFlags::Value operator|(const InputMappingFlags::Value lhs, const InputMappingFlags::Value rhs)
-{
-    return static_cast<InputMappingFlags::Value>(char(lhs) | char(rhs));
-}
+    normal,
+    visual,
+    command,
+    force,
+});
 
 using BuiltinCommand = std::function<bool(Context& context)>;
 

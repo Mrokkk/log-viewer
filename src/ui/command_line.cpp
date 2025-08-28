@@ -10,6 +10,7 @@
 #include "core/severity.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
+#include "ui/text_box.hpp"
 
 using namespace ftxui;
 
@@ -25,13 +26,12 @@ struct CommandLine::Impl final
 };
 
 CommandLine::Impl::Impl(core::Context& context)
-    : input(
-        Input(
-            &context.commandLine.line,
-            InputOption{
-                .multiline = false,
-                .cursor_position = reinterpret_cast<int*>(&context.commandLine.cursor)
-            }))
+    : input(TextBox({
+        .content = &context.commandLine.line,
+        .cursorPosition = &context.commandLine.cursor,
+        .suggestion = &context.commandLine.suggestion,
+        .suggestionColor = Palette::bg5
+    }))
 {
 }
 
@@ -71,6 +71,7 @@ Element CommandLine::Impl::render(Ftxui& ui, core::Context& context)
             }
             elements.push_back(separatorCharacter(" "));
         }
+
         return vbox(
                 hbox(std::move(elements)),
                 hbox(text(":"), input->Render()));

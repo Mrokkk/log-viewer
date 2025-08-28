@@ -1,5 +1,6 @@
 #pragma once
 
+#include <expected>
 #include <string>
 
 #include <ftxui/component/component.hpp>
@@ -8,6 +9,7 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "core/context.hpp"
+#include "core/input.hpp"
 #include "core/user_interface.hpp"
 #include "ui/command_line.hpp"
 #include "ui/event_handler.hpp"
@@ -46,5 +48,6 @@ struct Ftxui final : core::UserInterface
 
 void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context);
 core::UserInterface& createFtxuiUserInterface(core::Context& context);
+std::expected<core::KeyPress, bool> convertEvent(const ftxui::Event& event);
 
 }  // namespace ui

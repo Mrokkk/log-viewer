@@ -38,6 +38,7 @@ add_executable(test
 
     main.cpp
     ${PROJECT_SOURCE_DIR}/src/core/lexer.cpp
+    bitflag_tests.cpp
     lexer_tests.cpp
     ring_buffer_tests.cpp
 

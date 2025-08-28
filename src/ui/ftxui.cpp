@@ -1,6 +1,7 @@
 #include "ftxui.hpp"
 
 #include <cstdlib>
+#include <expected>
 #include <flat_map>
 #include <memory>
 #include <string>
@@ -86,6 +87,18 @@ static Element render(Ftxui& ui, core::Context& context)
 }
 
 static std::flat_map<Event, core::KeyPress> eventToKeyPress;
+
+std::expected<core::KeyPress, bool> convertEvent(const ftxui::Event& event)
+{
+    auto it = eventToKeyPress.find(event);
+
+    if (it == eventToKeyPress.end()) [[unlikely]]
+    {
+        return std::unexpected(false);
+    }
+
+    return it->second;
+}
 
 static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
 {

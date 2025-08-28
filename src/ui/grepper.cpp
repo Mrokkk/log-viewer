@@ -8,8 +8,12 @@
 #include "core/commands/grep.hpp"
 #include "core/context.hpp"
 #include "core/grep_options.hpp"
+#include "core/input.hpp"
 #include "core/mode.hpp"
+#include "core/readline.hpp"
 #include "ui/ftxui.hpp"
+#include "ui/palette.hpp"
+#include "ui/text_box.hpp"
 #include "ui/ui_component.hpp"
 
 using namespace ftxui;
@@ -50,22 +54,35 @@ struct Grepper::Impl final
 {
     Impl();
     Element render();
-    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context);
+    bool handleEvent(const ftxui::Event& event, core::Context& context);
     void takeFocus();
 
-    std::string       pattern;
     core::GrepOptions options;
+    core::Readline    readline;
     ftxui::Component  input;
     ftxui::Components checkboxes;
     ftxui::Component  window;
 
 private:
-    bool accept(Ftxui& ui, core::Context& context);
+    void accept(core::Context& context);
 };
 
 Grepper::Impl::Impl()
-    : input(Input(&pattern, InputOption{.multiline = false}))
+    : input(TextBox({
+        .content = &readline.lineRef(),
+        .cursorPosition = &readline.cursorRef(),
+        .suggestion = &readline.suggestionRef(),
+        .suggestionColor = Palette::bg5
+    }))
 {
+    readline
+        .enableSuggestions()
+        .onAccept(
+            [this](core::InputSource, core::Context& context)
+            {
+                accept(context);
+            });
+
     auto regexCheckbox = Checkbox(
         CheckboxOption{
             .label = "regex (Alt+R)",
@@ -122,13 +139,9 @@ Element Grepper::Impl::render()
         vbox(std::move(verticalBox)) | xflex) | clear_under | center | xflex;
 }
 
-bool Grepper::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
+bool Grepper::Impl::handleEvent(const ftxui::Event& event, core::Context& context)
 {
-    if (event == Event::Return)
-    {
-        return accept(ui, context);
-    }
-    else if (event == Event::Escape)
+    if (event == Event::Escape)
     {
         switchMode(core::Mode::normal, context);
         return true;
@@ -149,7 +162,16 @@ bool Grepper::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Cont
         return true;
     }
 
-    return false;
+    auto keyPress = convertEvent(event);
+
+    if (not keyPress) [[unlikely]]
+    {
+        return false;
+    }
+
+    readline.handleKeyPress(keyPress.value(), core::InputSource::user, context);
+
+    return true;
 }
 
 void Grepper::Impl::takeFocus()
@@ -157,20 +179,20 @@ void Grepper::Impl::takeFocus()
     input->TakeFocus();
 }
 
-bool Grepper::Impl::accept(Ftxui&, core::Context& context)
+void Grepper::Impl::accept(core::Context& context)
 {
+    const auto& pattern = readline.lineRef();
+
     if (pattern.empty())
     {
-        return true;
+        return;
     }
 
     core::commands::grep(pattern, options, context);
 
-    pattern.clear();
+    readline.clear();
 
     core::switchMode(core::Mode::normal, context);
-
-    return true;
 }
 
 Grepper::Grepper()
@@ -194,9 +216,9 @@ ftxui::Element Grepper::render(core::Context&)
     return pimpl_->render();
 }
 
-bool Grepper::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
+bool Grepper::handleEvent(const ftxui::Event& event, Ftxui&, core::Context& context)
 {
-    return pimpl_->handleEvent(event, ui, context);
+    return pimpl_->handleEvent(event, context);
 }
 
 Grepper::operator ftxui::Component&()

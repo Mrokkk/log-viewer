@@ -4,56 +4,31 @@
 
 #include "core/fwd.hpp"
 #include "core/input.hpp"
+#include "core/readline.hpp"
 #include "utils/immobile.hpp"
 #include "utils/string.hpp"
 
 namespace core
 {
 
-struct History final : utils::Immobile
-{
-    struct Iterator final
-    {
-        explicit Iterator(utils::Strings& content);
-        ~Iterator();
-
-        bool isBeginning() const;
-        bool isEnd() const;
-        operator bool() const;
-        const std::string& operator*() const;
-        Iterator& operator--();
-        Iterator& operator++();
-        void reset();
-
-    private:
-        utils::Strings&          content_;
-        utils::Strings::iterator iterator_;
-    };
-
-    History();
-    ~History();
-
-    void pushBack(const std::string& entry);
-    void clear();
-
-    utils::Strings content;
-    Iterator       current;
-};
-
 struct CommandLine : utils::Immobile
 {
     CommandLine();
     ~CommandLine();
 
-    std::string                  line;
-    size_t                       cursor;
-    History                      history;
-    std::string                  savedLine;
-    utils::StringViews           completions;
-    utils::StringViews::iterator currentCompletion;
+    Readline                            readline;
+    const std::string&                  line;
+    const size_t&                       cursor;
+    const utils::StringViews&           completions;
+    const utils::StringViews::iterator& currentCompletion;
+    const std::string&                  suggestion;
+
+private:
+    void accept(Context& context);
 };
 
-void enterCommandLine(InputSource source, core::Context& context);
-bool handleCommandLineKeyPress(KeyPress keyPress, InputSource source, core::Context& context);
+void enterCommandLine(InputSource source, Context& context);
+bool handleCommandLineKeyPress(KeyPress keyPress, InputSource source, Context& context);
+void clearCommandLineHistory(Context& context);
 
 }  // namespace core
