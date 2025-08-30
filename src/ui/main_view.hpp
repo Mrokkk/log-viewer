@@ -33,7 +33,7 @@ struct MainView final : UIComponent
 
 private:
     struct Impl;
-    Impl* pimpl_;
+    Impl* mPimpl;
 };
 
 }  // namespace ui

@@ -2,6 +2,7 @@
 
 #include <ftxui/fwd.hpp>
 
+#include "ui/text_box.hpp"
 #include "ui/ui_component.hpp"
 
 namespace ui
@@ -9,15 +10,14 @@ namespace ui
 
 struct CommandLine final : UIComponent
 {
-    CommandLine(core::Context& context);
+    CommandLine(Ftxui& ui, core::Context& context);
     ~CommandLine();
     void takeFocus() override;
+    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) override;
     ftxui::Element render(core::Context& context) override;
-    operator ftxui::Component&();
 
 private:
-    struct Impl;
-    Impl* pimpl_;
+    TextBox mTextBox;
 };
 
 }  // namespace ui

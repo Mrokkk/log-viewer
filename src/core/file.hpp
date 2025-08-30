@@ -5,36 +5,38 @@
 
 #include "sys/file.hpp"
 #include "sys/mapping.hpp"
-#include "utils/immobile.hpp"
 
 namespace core
 {
 
-struct File final : utils::Immobile
+struct File final
 {
     File();
     ~File();
 
+    File& operator=(const File& other);
+
     std::expected<bool, std::string> open(std::string path);
     std::expected<bool, std::string> remap(size_t offset, size_t len);
-    void clone(const File& other);
     const std::string& path() const;
     size_t size() const;
 
     bool isAreaMapped(size_t start, size_t len) const
     {
-        return start >= mapping_.offset and len + start < mapping_.len + mapping_.offset;
+        return start >= mMapping.offset and len + start < mMapping.len + mMapping.offset;
     }
 
     const char* at(size_t offset)
     {
-        return mapping_.ptrAt<const char*>(offset);
+        return mMapping.ptrAt<const char*>(offset);
     }
 
 private:
-    sys::MaybeFile     file_;
-    sys::Mapping       mapping_;
-    int*               refCount_;
+    void free();
+
+    sys::MaybeFile mFile;
+    sys::Mapping   mMapping;
+    int*           mRefCount;
 };
 
 }  // namespace core

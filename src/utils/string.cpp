@@ -93,6 +93,15 @@ std::string operator|(const std::string_view& text, const LowerCase&)
     return operator|(std::string(text), lowerCase);
 }
 
+std::string operator|(std::string text, const UpperCase&)
+{
+    std::transform(
+        text.begin(), text.end(),
+        text.begin(),
+        [](char c){ return std::toupper(c); });
+    return text;
+}
+
 namespace detail
 {
 

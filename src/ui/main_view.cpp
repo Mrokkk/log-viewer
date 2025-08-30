@@ -835,73 +835,73 @@ void MainView::Impl::selectionUpdate()
 
 MainView::MainView()
     : UIComponent(UIComponent::mainView)
-    , pimpl_(new Impl)
+    , mPimpl(new Impl)
 {
 }
 
 MainView::~MainView()
 {
-    delete pimpl_;
+    delete mPimpl;
 }
 
 void MainView::takeFocus()
 {
-    pimpl_->lines->TakeFocus();
+    mPimpl->lines->TakeFocus();
 }
 
 bool MainView::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
 {
-    return pimpl_->handleEvent(event, ui, context);
+    return mPimpl->handleEvent(event, ui, context);
 }
 
 Element MainView::render(core::Context& context)
 {
-    return pimpl_->render(context);
+    return mPimpl->render(context);
 }
 
 void MainView::reload(Ftxui& ui, core::Context& context)
 {
-    pimpl_->reload(ui, context);
+    mPimpl->reload(ui, context);
 }
 
 ViewNodePtr MainView::createView(std::string name, core::ViewId viewDataId, ViewNode* parentPtr)
 {
-    return pimpl_->createView(std::move(name), viewDataId, parentPtr);
+    return mPimpl->createView(std::move(name), viewDataId, parentPtr);
 }
 
 void MainView::removeView(ViewNode& view, core::Context& context)
 {
-    pimpl_->removeView(view, context);
+    mPimpl->removeView(view, context);
 }
 
 void MainView::scrollTo(Ftxui&, long lineNumber, core::Context& context)
 {
-    pimpl_->scrollTo(lineNumber, context);
+    mPimpl->scrollTo(lineNumber, context);
 }
 
 const char* MainView::activeFileName(core::Context& context) const
 {
-    return pimpl_->activeFileName(context);
+    return mPimpl->activeFileName(context);
 }
 
 bool MainView::isViewLoaded() const
 {
-    return pimpl_->isViewLoaded();
+    return mPimpl->isViewLoaded();
 }
 
 View* MainView::currentView()
 {
-    return pimpl_->currentView;
+    return mPimpl->currentView;
 }
 
 ViewNode& MainView::root()
 {
-    return pimpl_->root;
+    return mPimpl->root;
 }
 
 MainView::operator ftxui::Component&()
 {
-    return pimpl_->lines;
+    return mPimpl->lines;
 }
 
 DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")

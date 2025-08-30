@@ -125,12 +125,18 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
     return ui.active->handleEvent(event, ui, context);
 }
 
+static inline ScreenInteractive createScreen(Ftxui& ui, core::Context& context)
+{
+    resize(ui, context);
+    return ScreenInteractive::Fullscreen();
+}
+
 Ftxui::Ftxui(core::Context& context)
-    : screen(ScreenInteractive::Fullscreen())
+    : screen(createScreen(*this, context))
     , showLineNumbers(false)
     , absoluteLineNumbers(true)
     , active(&mainView)
-    , commandLine(context)
+    , commandLine(*this, context)
     , eventHandlers{
         {Event::Resize, resize},
         {Event::F12,    abort},
@@ -232,7 +238,7 @@ void Ftxui::run(core::Context& context)
             Container::Stacked({
                 picker,
                 grepper,
-                Container::Vertical({mainView, commandLine})
+                mainView
             }),
             [&context, this]
             {
@@ -244,7 +250,6 @@ void Ftxui::run(core::Context& context)
                 return handleEvent(event, *this, context);
             });
 
-    resize(*this, context);
     switchFocus(UIComponent::mainView, *this, context);
 
     screen

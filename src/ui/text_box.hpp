@@ -3,23 +3,19 @@
 #include <cstddef>
 #include <string>
 
-#include <ftxui/component/component_base.hpp>
-#include <ftxui/screen/color.hpp>
-#include <ftxui/util/ref.hpp>
+#include <ftxui/fwd.hpp>
 
 namespace ui
 {
 
-struct TextBoxOptions
+struct TextBox
 {
-    using ConstStringRef = ftxui::Ref<const std::string>;
-
-    ConstStringRef     content;
-    const size_t*      cursorPosition;
-    const std::string* suggestion;
-    ftxui::Color       suggestionColor = ftxui::Color();
+    const std::string&  content;
+    const size_t*       cursorPosition = nullptr;
+    const std::string*  suggestion = nullptr;
+    const ftxui::Color* suggestionColor = nullptr;
 };
 
-ftxui::Component TextBox(TextBoxOptions option);
+ftxui::Element renderTextBox(const TextBox& options);
 
 }  // namespace ui

@@ -12,6 +12,9 @@ namespace utils
 using Strings = std::vector<std::string>;
 using StringViews = std::vector<std::string_view>;
 using StringRefs = std::vector<const std::string*>;
+using StringsIt = Strings::iterator;
+using StringsRefsIt = StringRefs::iterator;
+using StringViewsIt = StringViews::iterator;
 
 template <typename T> struct To {};
 
@@ -28,6 +31,7 @@ struct ReadTextWithoutLimit
 
 static constexpr struct IsNumeric {} isNumeric;
 static constexpr struct LowerCase {} lowerCase;
+static constexpr struct UpperCase {} upperCase;
 static constexpr ReadTextWithoutLimit readText;
 
 template <typename T> static constexpr To<T> to;
@@ -42,6 +46,7 @@ bool        operator|(const std::string& text, const IsNumeric&);
 bool        operator|(const char* text, const IsNumeric&);
 std::string operator|(std::string text, const LowerCase&);
 std::string operator|(const std::string_view& text, const LowerCase&);
+std::string operator|(std::string text, const UpperCase&);
 
 template <typename T>
 concept IsArithmetic = std::is_arithmetic_v<T>;

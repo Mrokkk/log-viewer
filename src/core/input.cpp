@@ -523,29 +523,29 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     logger << info << __func__ << ": " << keyPress << "; mode: " << mode;
 
-    if (keyPress == KeyPress::escape)
-    {
-        clearInputState(inputState);
-        switchMode(Mode::normal, context);
-        return true;
-    }
-    else if (keyPress == KeyPress::character(':') and mode != Mode::command)
+    if (keyPress == KeyPress::character(':') and mode != Mode::command)
     {
         clearInputState(inputState);
         context.messageLine.clear();
-        enterCommandLine(source, context);
+        context.commandLine.enter(source);
         switchMode(Mode::command, context);
         return true;
     }
     else if (mode == Mode::command)
     {
-        if (handleCommandLineKeyPress(keyPress, source, context))
+        if (context.commandLine.handleKeyPress(keyPress, source, context))
         {
             if (context.mode == Mode::command)
             {
                 switchMode(Mode::normal, context);
             }
         }
+        return true;
+    }
+    else if (keyPress == KeyPress::escape)
+    {
+        clearInputState(inputState);
+        switchMode(Mode::normal, context);
         return true;
     }
 

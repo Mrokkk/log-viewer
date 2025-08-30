@@ -85,6 +85,7 @@ add_executable(${PROJECT_NAME}
     src/core/logger.cpp
     src/core/message_line.cpp
     src/core/mode.cpp
+    src/core/picker.cpp
     src/core/readline.cpp
     src/core/thread.cpp
     src/core/type.cpp
@@ -99,6 +100,7 @@ add_executable(${PROJECT_NAME}
     src/ui/grepper.cpp
     src/ui/main_view.cpp
     src/ui/picker.cpp
+    src/ui/picker_entry.cpp
     src/ui/status_line.cpp
     src/ui/text_box.cpp
     src/ui/ui_component.cpp

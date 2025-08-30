@@ -1,12 +1,10 @@
 #pragma once
 
-#include <string>
-
 #include "core/fwd.hpp"
 #include "core/input.hpp"
+#include "core/picker.hpp"
 #include "core/readline.hpp"
 #include "utils/immobile.hpp"
-#include "utils/string.hpp"
 
 namespace core
 {
@@ -16,19 +14,22 @@ struct CommandLine : utils::Immobile
     CommandLine();
     ~CommandLine();
 
-    Readline                            readline;
-    const std::string&                  line;
-    const size_t&                       cursor;
-    const utils::StringViews&           completions;
-    const utils::StringViews::iterator& currentCompletion;
-    const std::string&                  suggestion;
+    inline const Readline* operator->() const
+    {
+        return &readline;
+    }
+
+    void enter(InputSource source);
+    bool handleKeyPress(KeyPress keyPress, InputSource source, Context& context);
+    void clearHistory();
+
+    Readline readline;
 
 private:
+    Picker mFilesPicker;
+    Picker mHistoryPicker;
+
     void accept(Context& context);
 };
-
-void enterCommandLine(InputSource source, Context& context);
-bool handleCommandLineKeyPress(KeyPress keyPress, InputSource source, Context& context);
-void clearCommandLineHistory(Context& context);
 
 }  // namespace core

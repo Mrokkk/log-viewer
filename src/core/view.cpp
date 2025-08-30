@@ -271,7 +271,7 @@ void View::loading()
 
 void View::copyFromParent(View& parentView)
 {
-    file_.clone(parentView.file_);
+    file_ = parentView.file_;
     fileLines_ = parentView.fileLines_;
 }
 

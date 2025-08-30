@@ -20,6 +20,7 @@
 #include "ui/event_handler.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
+#include "ui/picker_entry.hpp"
 #include "ui/ui_component.hpp"
 #include "ui/view.hpp"
 #include "utils/string.hpp"
@@ -166,14 +167,7 @@ static const MenuEntryOption menuOption{
     .transform =
         [](const EntryState& state)
         {
-            if (state.focused)
-            {
-                return text("▌" + state.label) | color(Palette::Picker::activeLineMarker) | bold;
-            }
-            else
-            {
-                return text(" " + state.label);
-            }
+            return renderPickerEntry(state.label, state.focused);
         }
 };
 
@@ -401,43 +395,43 @@ void Picker::Impl::escape(core::Context& context)
 
 Picker::Picker()
     : UIComponent(UIComponent::picker)
-    , pimpl_(new Impl)
+    , mPimpl(new Impl)
 {
 }
 
 Picker::~Picker()
 {
-    delete pimpl_;
+    delete mPimpl;
 }
 
 void Picker::onExit()
 {
-    pimpl_->onExit();
+    mPimpl->onExit();
 }
 
 void Picker::takeFocus()
 {
-    pimpl_->content->TakeFocus();
+    mPimpl->content->TakeFocus();
 }
 
 ftxui::Element Picker::render(core::Context& context)
 {
-    return pimpl_->render(context);
+    return mPimpl->render(context);
 }
 
 bool Picker::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
 {
-    return pimpl_->handleEvent(event, ui, context);
+    return mPimpl->handleEvent(event, ui, context);
 }
 
 void Picker::show(Ftxui& ui, Picker::Type type, core::Context& context)
 {
-    pimpl_->show(ui, type, context);
+    mPimpl->show(ui, type, context);
 }
 
 Picker::operator ftxui::Component&()
 {
-    return pimpl_->window;
+    return mPimpl->window;
 }
 
 DEFINE_COMMAND(files)

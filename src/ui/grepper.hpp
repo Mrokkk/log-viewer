@@ -14,15 +14,15 @@ struct Grepper final : UIComponent
 {
     Grepper();
     ~Grepper();
-    void takeFocus() override;
     ftxui::Element render(core::Context& context) override;
     bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) override;
     operator ftxui::Component&();
 
 private:
     void accept(Ftxui& ui, core::Context& context);
+
     struct Impl;
-    Impl* pimpl_;
+    Impl* mPimpl;
 };
 
 }  // namespace ui

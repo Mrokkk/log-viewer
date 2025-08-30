@@ -1,26 +1,40 @@
 #include "command_line.hpp"
 
+#include <algorithm>
 #include <flat_set>
 
 #include "core/alias.hpp"
 #include "core/command.hpp"
 #include "core/context.hpp"
+#include "core/dirs.hpp"
 #include "core/input.hpp"
 #include "core/interpreter.hpp"
+#include "core/readline.hpp"
 #include "utils/string.hpp"
 
 namespace core
 {
 
+static utils::Strings feedFiles(Context&)
+{
+    return readCurrentDirectoryRecursive();
+}
+
+static utils::Strings feedHistory(CommandLine& commandLine)
+{
+    auto history = commandLine.readline.history();
+    std::reverse(history.begin(), history.end());
+    return history;
+}
+
 CommandLine::CommandLine()
-    : line(readline.lineRef())
-    , cursor(readline.cursorRef())
-    , completions(readline.completions())
-    , currentCompletion(readline.currentCompletion())
-    , suggestion(readline.suggestionRef())
+    : mFilesPicker(&feedFiles)
+    , mHistoryPicker([this](auto&){ return feedHistory(*this); })
 {
     readline
         .enableSuggestions()
+        .connectPicker(mFilesPicker, 't', Readline::AcceptBehaviour::append)
+        .connectPicker(mHistoryPicker, 'r')
         .onAccept(
             [this](InputSource, Context& context)
             {
@@ -52,28 +66,27 @@ CommandLine::~CommandLine() = default;
 
 void CommandLine::accept(Context& context)
 {
-    executeCode(line, context);
+    executeCode(readline.line(), context);
     readline.clear();
 }
 
-void enterCommandLine(InputSource source, Context& context)
+void CommandLine::enter(InputSource source)
 {
-    auto& commandLine = context.commandLine;
-    commandLine.readline.clear();
+    readline.clear();
     if (source == InputSource::user)
     {
-        commandLine.readline.refreshCompletion();
+        readline.refreshCompletion();
     }
 }
 
-bool handleCommandLineKeyPress(KeyPress keyPress, InputSource source, Context& context)
+bool CommandLine::handleKeyPress(KeyPress keyPress, InputSource source, Context& context)
 {
     return context.commandLine.readline.handleKeyPress(keyPress, source, context);
 }
 
-void clearCommandLineHistory(Context& context)
+void CommandLine::clearHistory()
 {
-    context.commandLine.readline.clearHistory();
+    readline.clearHistory();
 }
 
 }  // namespace core

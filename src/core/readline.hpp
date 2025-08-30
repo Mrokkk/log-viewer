@@ -11,13 +11,21 @@
 namespace core
 {
 
-struct Readline : utils::Immobile
+struct Picker;
+
+struct Readline final : utils::Immobile
 {
     Readline();
     ~Readline();
 
     using OnAccept = std::function<void(InputSource, Context&)>;
     using RefreshCompletion = std::function<utils::StringViews(std::string_view)>;
+
+    enum class AcceptBehaviour
+    {
+        replace,
+        append,
+    };
 
     void clear();
     void clearHistory();
@@ -29,12 +37,20 @@ struct Readline : utils::Immobile
     Readline& setupCompletion(RefreshCompletion refreshCompletion);
     Readline& enableSuggestions();
     Readline& disableHistory();
+    void setPageSize(size_t pageSize) const;
 
-    const std::string& lineRef() const;
-    const size_t& cursorRef() const;
-    const std::string& suggestionRef() const;
+    Readline& connectPicker(
+        Picker& picker,
+        char ctrlCharacter,
+        AcceptBehaviour acceptBehaviour = AcceptBehaviour::replace);
+
+    const std::string& line() const;
+    const size_t& cursor() const;
+    const std::string& suggestion() const;
     const utils::StringViews& completions() const;
-    const utils::StringViews::iterator& currentCompletion() const;
+    const utils::StringViewsIt& currentCompletion() const;
+    const Picker* picker() const;
+    const utils::Strings& history() const;
 
 private:
     struct Impl;

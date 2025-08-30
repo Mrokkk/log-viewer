@@ -3,97 +3,73 @@
 #include <string>
 #include <utility>
 
-#include "ftxui/component/component.hpp"
-#include "ftxui/component/component_base.hpp"
-#include "ftxui/component/event.hpp"
-#include "ftxui/component/screen_interactive.hpp"
-#include "ftxui/dom/elements.hpp"
-#include "ftxui/screen/string_internal.hpp"
+#include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/string_internal.hpp>
 
 using namespace ftxui;
 
 namespace ui
 {
 
-namespace
+Element renderTextBox(const TextBox& options)
 {
-
-struct TextBoxBase final : public ComponentBase, public TextBoxOptions
-{
-    TextBoxBase(TextBoxOptions option)
-        : TextBoxOptions(std::move(option))
+    if (not options.cursorPosition)
     {
+        return text(&options.content);
     }
 
-private:
-    Element OnRender() override
+    if (options.content.empty())
     {
-        if (not cursorPosition)
-        {
-            return text(*content);
-        }
+        return hbox(text(" ") | inverted);
+    }
 
-        if (content->empty())
+    if (*options.cursorPosition >= options.content.size())
+    {
+        if (options.suggestion and not options.suggestion->empty())
         {
-            return hbox(text(" ") | inverted);
-        }
-
-        Element element;
-
-        if (*cursorPosition >= content->size())
-        {
-            if (suggestion and not suggestion->empty())
-            {
-                element = hbox({
-                    text(*content),
-                    text(std::string{suggestion->at(0)}) | inverted,
-                    text(suggestion->substr(1)) | color(suggestionColor),
-                });
-            }
-            else
-            {
-                element = hbox({
-                    text(*content),
-                    text(" ") | inverted,
-                });
-            }
+            return hbox({
+                text(&options.content),
+                text(std::string{options.suggestion->at(0)}) | inverted,
+                text(
+                    options.suggestion->substr(1))
+                        | color(options.suggestionColor
+                            ? *options.suggestionColor
+                            : Color()),
+            });
         }
         else
         {
-            const int glyphStart = *cursorPosition;
-            const int glyphEnd = static_cast<int>(GlyphNext(*content, glyphStart));
-            const auto partBeforeCursor = content->substr(0, glyphStart);
-            const auto partAtCursor = content->substr(glyphStart, glyphEnd - glyphStart);
-            const auto partAfterCursor = content->substr(glyphEnd);
+            return hbox({
+                text(&options.content),
+                text(" ") | inverted,
+            });
+        }
+    }
+    else
+    {
+        const int glyphStart = *options.cursorPosition;
+        const int glyphEnd = static_cast<int>(GlyphNext(options.content, glyphStart));
+        const auto partBeforeCursor = options.content.substr(0, glyphStart);
+        const auto partAtCursor = options.content.substr(glyphStart, glyphEnd - glyphStart);
+        const auto partAfterCursor = options.content.substr(glyphEnd);
 
-            Elements e = {
-                text(partBeforeCursor),
-                text(partAtCursor) | inverted,
-                text(partAfterCursor)
-            };
+        Elements e = {
+            text(partBeforeCursor),
+            text(partAtCursor) | inverted,
+            text(partAfterCursor)
+        };
 
-            if (suggestion and not suggestion->empty())
-            {
-                e.push_back(text(suggestion) | color(suggestionColor));
-            }
-
-            element = hbox(e);
+        if (options.suggestion and not options.suggestion->empty())
+        {
+            e.push_back(
+                text(*options.suggestion)
+                    | color(options.suggestionColor
+                        ? *options.suggestionColor
+                        : Color()));
         }
 
-        return element;
+        return hbox(std::move(e));
     }
-
-    bool Focusable() const override final
-    {
-        return false;
-    }
-};
-
-}  // namespace
-
-Component TextBox(TextBoxOptions option)
-{
-    return Make<TextBoxBase>(std::move(option));
 }
 
 }  // namespace ui

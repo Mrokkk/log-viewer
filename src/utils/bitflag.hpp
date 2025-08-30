@@ -129,6 +129,7 @@ constexpr inline T operator&(const T lhs, const U rhs)
         enum class Value __VA_ARGS__; \
         using enum Value; \
         using BitFlag::BitFlag; \
+        bool operator[](Value v) { return !!(value & ::utils::bitFlagValue<NAME>(v)); } \
     }; \
     constexpr inline NAME operator|(NAME::Value lhs, NAME::Value rhs) \
     { \

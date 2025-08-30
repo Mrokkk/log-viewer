@@ -55,25 +55,24 @@ struct Grepper::Impl final
     Impl();
     Element render();
     bool handleEvent(const ftxui::Event& event, core::Context& context);
-    void takeFocus();
 
     core::GrepOptions options;
     core::Readline    readline;
-    ftxui::Component  input;
-    ftxui::Components checkboxes;
-    ftxui::Component  window;
+    TextBox           textBox;
+    Components        checkboxes;
+    Component         window;
 
 private:
     void accept(core::Context& context);
 };
 
 Grepper::Impl::Impl()
-    : input(TextBox({
-        .content = &readline.lineRef(),
-        .cursorPosition = &readline.cursorRef(),
-        .suggestion = &readline.suggestionRef(),
-        .suggestionColor = Palette::bg5
-    }))
+    : textBox({
+        .content = readline.line(),
+        .cursorPosition = &readline.cursor(),
+        .suggestion = &readline.suggestion(),
+        .suggestionColor = &Palette::bg5
+    })
 {
     readline
         .enableSuggestions()
@@ -103,7 +102,6 @@ Grepper::Impl::Impl()
 
     window = Window({
         .inner = Container::LockedVertical({
-            input,
             regexCheckbox,
             caseInsensitiveCheckbox,
             invertedCheckbox,
@@ -125,7 +123,7 @@ Grepper::Impl::Impl()
 Element Grepper::Impl::render()
 {
     Elements verticalBox = {
-        input->Render(),
+        renderTextBox(textBox),
         separator(),
     };
 
@@ -174,14 +172,9 @@ bool Grepper::Impl::handleEvent(const ftxui::Event& event, core::Context& contex
     return true;
 }
 
-void Grepper::Impl::takeFocus()
-{
-    input->TakeFocus();
-}
-
 void Grepper::Impl::accept(core::Context& context)
 {
-    const auto& pattern = readline.lineRef();
+    const auto& pattern = readline.line();
 
     if (pattern.empty())
     {
@@ -197,33 +190,28 @@ void Grepper::Impl::accept(core::Context& context)
 
 Grepper::Grepper()
     : UIComponent(UIComponent::grepper)
-    , pimpl_(new Impl)
+    , mPimpl(new Impl)
 {
 }
 
 Grepper::~Grepper()
 {
-    delete pimpl_;
-}
-
-void Grepper::takeFocus()
-{
-    pimpl_->takeFocus();
+    delete mPimpl;
 }
 
 ftxui::Element Grepper::render(core::Context&)
 {
-    return pimpl_->render();
+    return mPimpl->render();
 }
 
 bool Grepper::handleEvent(const ftxui::Event& event, Ftxui&, core::Context& context)
 {
-    return pimpl_->handleEvent(event, context);
+    return mPimpl->handleEvent(event, context);
 }
 
 Grepper::operator ftxui::Component&()
 {
-    return pimpl_->window;
+    return mPimpl->window;
 }
 
 }  // namespace ui

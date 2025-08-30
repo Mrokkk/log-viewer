@@ -17,44 +17,49 @@ constexpr int e = 1 << 4;
 
 TEST(BitFlagTests, canDoStuff)
 {
-    TestBitFlag flag1;
+    TestBitFlag flag;
 
-    ASSERT_EQ(flag1.value, 0);
+    ASSERT_EQ(flag.value, 0);
 
-    flag1 |= TestBitFlag::a;
-    ASSERT_EQ(flag1.value, 1);
-    ASSERT_EQ(flag1 & TestBitFlag::b, 0);
+    flag |= TestBitFlag::a;
+    ASSERT_EQ(flag.value, 1);
+    ASSERT_EQ(flag[TestBitFlag::a], true);
+    ASSERT_EQ(flag & TestBitFlag::b, 0);
+    ASSERT_EQ(flag[TestBitFlag::b], false);
 
-    flag1 |= TestBitFlag::b;
-    ASSERT_EQ((flag1 & TestBitFlag::a).value, a);
-    ASSERT_EQ((flag1 & TestBitFlag::b).value, b);
-    ASSERT_EQ(flag1.value, a | b);
+    flag |= TestBitFlag::b;
+    ASSERT_EQ((flag & TestBitFlag::a).value, a);
+    ASSERT_EQ((flag & TestBitFlag::b).value, b);
+    ASSERT_EQ(flag.value, a | b);
+    ASSERT_EQ(flag[TestBitFlag::a], true);
+    ASSERT_EQ(flag[TestBitFlag::b], true);
+    ASSERT_EQ(flag[TestBitFlag::c], false);
 
-    flag1 &= TestBitFlag::c;
-    ASSERT_EQ((flag1 & TestBitFlag::a).value, 0);
-    ASSERT_EQ((flag1 & TestBitFlag::b).value, 0);
-    ASSERT_EQ((flag1 & TestBitFlag::c).value, 0);
-    ASSERT_EQ(flag1.value, 0);
+    flag &= TestBitFlag::c;
+    ASSERT_EQ((flag & TestBitFlag::a).value, 0);
+    ASSERT_EQ((flag & TestBitFlag::b).value, 0);
+    ASSERT_EQ((flag & TestBitFlag::c).value, 0);
+    ASSERT_EQ(flag.value, 0);
 
-    flag1 |= TestBitFlag::a | TestBitFlag::b | TestBitFlag::d;
-    ASSERT_EQ((flag1 & TestBitFlag::a).value, a);
-    ASSERT_EQ((flag1 & TestBitFlag::b).value, b);
-    ASSERT_EQ((flag1 & TestBitFlag::c).value, 0);
-    ASSERT_EQ((flag1 & TestBitFlag::d).value, d);
-    ASSERT_EQ(flag1.value, a | b | d);
+    flag |= TestBitFlag::a | TestBitFlag::b | TestBitFlag::d;
+    ASSERT_EQ((flag & TestBitFlag::a).value, a);
+    ASSERT_EQ((flag & TestBitFlag::b).value, b);
+    ASSERT_EQ((flag & TestBitFlag::c).value, 0);
+    ASSERT_EQ((flag & TestBitFlag::d).value, d);
+    ASSERT_EQ(flag.value, a | b | d);
 
-    flag1 ^= TestBitFlag::c;
-    ASSERT_EQ(flag1.value, a | b | c | d);
+    flag ^= TestBitFlag::c;
+    ASSERT_EQ(flag.value, a | b | c | d);
 
-    flag1 ^= TestBitFlag::a;
-    ASSERT_EQ(flag1.value, b | c | d);
+    flag ^= TestBitFlag::a;
+    ASSERT_EQ(flag.value, b | c | d);
 
-    flag1 ^= TestBitFlag::e;
-    ASSERT_EQ(flag1.value, b | c | d | e);
+    flag ^= TestBitFlag::e;
+    ASSERT_EQ(flag.value, b | c | d | e);
 
-    flag1 &= ~TestBitFlag::b;
-    ASSERT_EQ(flag1.value, c | d | e);
+    flag &= ~TestBitFlag::b;
+    ASSERT_EQ(flag.value, c | d | e);
 
-    flag1 = ~TestBitFlag::a;
-    ASSERT_EQ(flag1.value, ~a);
+    flag = ~TestBitFlag::a;
+    ASSERT_EQ(flag.value, ~a);
 }

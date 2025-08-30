@@ -1,10 +1,13 @@
 #include "readline.hpp"
 
+#include <flat_map>
 #include <flat_set>
 #include <ranges>
 
 #include "core/input.hpp"
+#include "core/picker.hpp"
 #include "utils/bitflag.hpp"
+#include "utils/immobile.hpp"
 #include "utils/string.hpp"
 
 namespace core
@@ -19,26 +22,76 @@ struct History final : utils::Immobile
 {
     struct Iterator final
     {
-        explicit Iterator(utils::Strings& content);
-        ~Iterator();
+        Iterator(utils::Strings& content)
+            : mContent(content)
+            , mIterator(mContent.end())
+        {
+        }
 
-        bool isBeginning() const;
-        operator bool() const;
-        const std::string& operator*() const;
-        Iterator& operator--();
-        Iterator& operator++();
-        void reset();
+        bool isBeginning() const
+        {
+            return mIterator == mContent.begin();
+        }
+
+        operator bool() const
+        {
+            return mIterator != mContent.end();
+        }
+
+        const std::string& operator*() const
+        {
+            return *mIterator;
+        }
+
+        Iterator& operator--()
+        {
+            if (mIterator != mContent.begin())
+            {
+                --mIterator;
+            }
+            return *this;
+        }
+
+        Iterator& operator++()
+        {
+            if (mIterator != mContent.end())
+            {
+                ++mIterator;
+            }
+            return *this;
+        }
+
+        void reset()
+        {
+            mIterator = mContent.end();
+        }
 
     private:
-        utils::Strings&          mContent;
-        utils::Strings::iterator mIterator;
+        utils::Strings&  mContent;
+        utils::StringsIt mIterator;
     };
 
-    History();
-    ~History();
+    History()
+        : current(content)
+    {
+    }
 
-    void pushBack(const std::string& entry);
-    void clear();
+    void pushBack(const std::string& entry)
+    {
+        auto result = mContentSet.emplace(entry);
+
+        if (result.second)
+        {
+            content.push_back(entry);
+            current.reset();
+        }
+    }
+
+    void clear()
+    {
+        content.clear();
+        current.reset();
+    }
 
     utils::Strings content;
     Iterator       current;
@@ -46,76 +99,6 @@ struct History final : utils::Immobile
 private:
     StringSet      mContentSet;
 };
-
-History::History()
-    : current(content)
-{
-}
-
-History::~History() = default;
-
-void History::pushBack(const std::string& entry)
-{
-    auto result = mContentSet.emplace(entry);
-
-    if (result.second)
-    {
-        content.push_back(entry);
-        current.reset();
-    }
-}
-
-void History::clear()
-{
-    content.clear();
-    current.reset();
-}
-
-History::Iterator::Iterator(utils::Strings& content)
-    : mContent(content)
-    , mIterator(mContent.end())
-{
-}
-
-History::Iterator::~Iterator() = default;
-
-bool History::Iterator::isBeginning() const
-{
-    return mIterator == mContent.begin();
-}
-
-History::Iterator::operator bool() const
-{
-    return mIterator != mContent.end();
-}
-
-const std::string& History::Iterator::operator*() const
-{
-    return *mIterator;
-}
-
-History::Iterator& History::Iterator::operator--()
-{
-    if (mIterator != mContent.begin())
-    {
-        --mIterator;
-    }
-    return *this;
-}
-
-History::Iterator& History::Iterator::operator++()
-{
-    if (mIterator != mContent.end())
-    {
-        ++mIterator;
-    }
-    return *this;
-}
-
-void History::Iterator::reset()
-{
-    mIterator = mContent.end();
-}
 
 }  // namespace
 
@@ -131,7 +114,7 @@ DEFINE_BITFLAG(Flags, char,
     historyEnabled,
 });
 
-struct Readline::Impl
+struct Readline::Impl final : utils::Immobile
 {
     void clear();
     void clearHistory();
@@ -139,48 +122,74 @@ struct Readline::Impl
     bool handleKeyPress(KeyPress keyPress, InputSource source, Context& context);
     void refreshCompletion();
     void refreshSuggestion();
+    void refreshFuzzy();
 
     void onAccept(OnAccept onAccept);
 
     void setupCompletion(RefreshCompletion refreshCompletion);
     void enableSuggestions();
     void disableHistory();
+    void setPageSize(size_t pageSize);
+    void connectPicker(Picker& picker, char ctrlCharacter, AcceptBehaviour acceptBehaviour);
 
-    const std::string& lineRef() const;
-    const size_t& cursorRef() const;
-    const std::string& suggestionRef() const;
+    const std::string& line() const;
+    const size_t& cursor() const;
+    const std::string& suggestion() const;
 
     const utils::StringViews& completions() const;
-    const utils::StringViews::iterator& currentCompletion() const;
+    const utils::StringViewsIt& currentCompletion() const;
+    const Picker* picker() const;
+    const utils::Strings& history() const;
 
 private:
+    void saveLine();
+    void saveAndClearLine();
+    void restoreLine();
+    void copyToClipboard(size_t start, size_t end);
+    bool pasteFromClipboard();
     void clearCompletions();
     void moveCursorLeft();
     bool moveCursorRight();
     bool write(char c);
     bool write(const std::string& string);
     void selectPrevHistoryEntry();
-    void selectNextHistoryEntry();
+    bool selectNextHistoryEntry();
     void jumpToBeginning();
     void jumpToEnd();
     void jumpToPrevWord();
     void jumpToNextWord();
     bool erasePrevCharacter();
     bool eraseNextCharacter();
-    bool eraseWord();
-    void accept(InputSource source, Context& context);
+    bool cutPrevWord();
+    bool cutNextWord();
+    bool accept(InputSource source, Context& context);
     void complete(Completion type);
+    bool activatePicker(char c, Context& context);
+    void refresh();
 
-    std::string                  mLine;
-    size_t                       mCursor = 0;
-    Flags                        mFlags = Flags::historyEnabled;
-    History                      mHistory;
-    std::string                  mSavedLine;
-    utils::StringViews           mCompletions;
-    utils::StringViews::iterator mCurrentCompletion;
-    OnAccept                     mOnAccept;
-    RefreshCompletion            mRefreshCompletion;
-    std::string                  mSuggestion;
+    struct PickerData final
+    {
+        Picker*         picker;
+        AcceptBehaviour acceptBehaviour;
+    };
+
+    using Pickers = std::flat_map<char, PickerData>;
+
+    std::string          mLine;
+    size_t               mCursor = 0;
+    size_t               mPageSize = 0;
+    Flags                mFlags = Flags::historyEnabled;
+    History              mHistory;
+    std::string          mSavedLine;
+    std::string          mClipboard;
+    utils::StringViews   mCompletions;
+    utils::StringViewsIt mCurrentCompletion;
+    OnAccept             mOnAccept;
+    RefreshCompletion    mRefreshCompletion;
+    std::string          mSuggestion;
+    Pickers              mPickers;
+    Picker*              mPicker = nullptr;
+    AcceptBehaviour      mPickerBehaviour = AcceptBehaviour::replace;
 };
 
 void Readline::Impl::clear()
@@ -190,6 +199,11 @@ void Readline::Impl::clear()
     clearCompletions();
     mSuggestion.clear();
     mHistory.current.reset();
+    if (mPicker)
+    {
+        mPicker->clear();
+        mPicker = nullptr;
+    }
 }
 
 void Readline::Impl::clearHistory()
@@ -199,13 +213,13 @@ void Readline::Impl::clearHistory()
 
 bool Readline::Impl::handleKeyPress(KeyPress keyPress, InputSource source, Context& context)
 {
-    bool requireCompletionUpdate{false};
+    bool requireRefresh{false};
 
     switch (keyPress.type)
     {
         case KeyPress::Type::space:
         case KeyPress::Type::character:
-            requireCompletionUpdate = write(keyPress.value);
+            requireRefresh = write(keyPress.value);
             break;
 
         case KeyPress::Type::arrowLeft:
@@ -213,7 +227,7 @@ bool Readline::Impl::handleKeyPress(KeyPress keyPress, InputSource source, Conte
             break;
 
         case KeyPress::Type::arrowRight:
-            requireCompletionUpdate = moveCursorRight();
+            requireRefresh = moveCursorRight();
             break;
 
         case KeyPress::Type::arrowUp:
@@ -221,7 +235,21 @@ bool Readline::Impl::handleKeyPress(KeyPress keyPress, InputSource source, Conte
             break;
 
         case KeyPress::Type::arrowDown:
-            selectNextHistoryEntry();
+            requireRefresh = selectNextHistoryEntry();
+            break;
+
+        case KeyPress::Type::pageUp:
+            if (mPicker)
+            {
+                mPicker->move(mPageSize);
+            }
+            break;
+
+        case KeyPress::Type::pageDown:
+            if (mPicker)
+            {
+                mPicker->move(-mPageSize);
+            }
             break;
 
         case KeyPress::Type::ctrlArrowLeft:
@@ -249,39 +277,77 @@ bool Readline::Impl::handleKeyPress(KeyPress keyPress, InputSource source, Conte
             break;
 
         case KeyPress::Type::backspace:
-            requireCompletionUpdate = erasePrevCharacter();
+            requireRefresh = erasePrevCharacter();
             break;
 
         case KeyPress::Type::del:
-            requireCompletionUpdate = eraseNextCharacter();
+            requireRefresh = eraseNextCharacter();
             break;
 
         case KeyPress::Type::ctrlCharacter:
+            if (activatePicker(keyPress.value, context))
+            {
+                break;
+            }
             switch (keyPress.value)
             {
+                case 'a':
+                    mCursor = 0;
+                    break;
+
+                case 'e':
+                    mCursor = mLine.size();
+                    break;
+
                 case 'c':
-                    clear();
-                    return true;
+                    goto exitReadline;
 
                 case 'w':
-                    requireCompletionUpdate = eraseWord();
+                    requireRefresh = cutPrevWord();
+                    break;
+
+                case 'y':
+                    requireRefresh = pasteFromClipboard();
+                    break;
+            }
+            break;
+
+        case KeyPress::Type::altCharacter:
+            switch (keyPress.value)
+            {
+                case 'd':
+                    requireRefresh = cutNextWord();
                     break;
             }
             break;
 
         case KeyPress::Type::cr:
-            accept(source, context);
+            if (accept(source, context))
+            {
+                return true;
+            }
+            requireRefresh = true;
+            break;
+
+        exitReadline:
+        case KeyPress::Type::escape:
+            if (mPicker)
+            {
+                mPicker->clear();
+                mPicker = nullptr;
+                restoreLine();
+                return false;
+            }
             return true;
 
         default:
-            requireCompletionUpdate = write(keyPress.name());
+            requireRefresh = write(keyPress.name());
             break;
     }
 
-    if (requireCompletionUpdate and source == InputSource::user)
+    if (requireRefresh and source == InputSource::user)
     {
-        refreshCompletion();
-        refreshSuggestion();
+        refresh();
     }
 
     return false;
@@ -298,7 +364,7 @@ void Readline::Impl::refreshCompletion()
 
 void Readline::Impl::refreshSuggestion()
 {
-    if (mFlags & Flags::suggestionsEnabled)
+    if (mFlags[Flags::suggestionsEnabled])
     {
         for (std::string_view suggestion : mHistory.content | std::ranges::views::reverse)
         {
@@ -333,17 +399,27 @@ void Readline::Impl::disableHistory()
     mFlags &= ~Flags::historyEnabled;
 }
 
-const std::string& Readline::Impl::lineRef() const
+void Readline::Impl::setPageSize(size_t pageSize)
+{
+    mPageSize = pageSize;
+}
+
+void Readline::Impl::connectPicker(Picker& picker, char ctrlCharacter, AcceptBehaviour acceptBehaviour)
+{
+    mPickers.emplace(std::make_pair(ctrlCharacter, PickerData{.picker = &picker, .acceptBehaviour = acceptBehaviour}));
+}
+
+const std::string& Readline::Impl::line() const
 {
     return mLine;
 }
 
-const size_t& Readline::Impl::cursorRef() const
+const size_t& Readline::Impl::cursor() const
 {
     return mCursor;
 }
 
-const std::string& Readline::Impl::suggestionRef() const
+const std::string& Readline::Impl::suggestion() const
 {
     return mSuggestion;
 }
@@ -353,9 +429,52 @@ const utils::StringViews& Readline::Impl::completions() const
     return mCompletions;
 }
 
-const utils::StringViews::iterator& Readline::Impl::currentCompletion() const
+const utils::StringViewsIt& Readline::Impl::currentCompletion() const
 {
     return mCurrentCompletion;
+}
+
+const Picker* Readline::Impl::picker() const
+{
+    return mPicker;
+}
+
+const utils::Strings& Readline::Impl::history() const
+{
+    return mHistory.content;
+}
+
+void Readline::Impl::saveLine()
+{
+    mSavedLine = mLine;
+}
+
+void Readline::Impl::saveAndClearLine()
+{
+    mSavedLine = std::move(mLine);
+    mCursor = 0;
+}
+
+void Readline::Impl::restoreLine()
+{
+    mLine = std::move(mSavedLine);
+    mCursor = mLine.size();
+}
+
+void Readline::Impl::copyToClipboard(size_t start, size_t end)
+{
+    mClipboard = std::string(mLine.begin() + start, mLine.begin() + end);
+}
+
+bool Readline::Impl::pasteFromClipboard()
+{
+    if (mClipboard.empty())
+    {
+        return false;
+    }
+
+    write(mClipboard);
+    return true;
 }
 
 void Readline::Impl::clearCompletions()
@@ -378,7 +497,7 @@ bool Readline::Impl::moveCursorRight()
     {
         ++mCursor;
     }
-    else if (mFlags & Flags::suggestionsEnabled and not mSuggestion.empty())
+    else if (mFlags[Flags::suggestionsEnabled] and not mSuggestion.empty())
     {
         return write(mSuggestion);
     }
@@ -400,42 +519,55 @@ bool Readline::Impl::write(const std::string& string)
 
 void Readline::Impl::selectPrevHistoryEntry()
 {
-    if (not (mFlags & Flags::historyEnabled))
+    if (mPicker)
+    {
+        mPicker->move(1);
+        return;
+    }
+
+    if (not mFlags[Flags::historyEnabled] or mHistory.current.isBeginning())
     {
         return;
     }
-    if (mHistory.current.isBeginning())
-    {
-        return;
-    }
+
     if (not mHistory.current)
     {
-        mSavedLine = mLine;
+        saveLine();
     }
+
     --mHistory.current;
     mLine = *mHistory.current;
     mCursor = mLine.size();
+
     clearCompletions();
+    mSuggestion.clear();
 }
 
-void Readline::Impl::selectNextHistoryEntry()
+bool Readline::Impl::selectNextHistoryEntry()
 {
-    if (not (mFlags & Flags::historyEnabled))
+    if (mPicker)
     {
-        return;
+        mPicker->move(-1);
+        return false;
     }
+
+    if (not mFlags[Flags::historyEnabled] or not mHistory.current)
+    {
+        return false;
+    }
+
     if (++mHistory.current)
     {
         mLine = *mHistory.current;
         mCursor = mLine.size();
+
+        clearCompletions();
+        mSuggestion.clear();
+        return false;
     }
-    else
-    {
-        mLine = mSavedLine;
-        mCursor = mLine.size();
-    }
-    clearCompletions();
-    mSuggestion.clear();
+
+    restoreLine();
+    return true;
 }
 
 void Readline::Impl::jumpToBeginning()
@@ -459,7 +591,7 @@ void Readline::Impl::jumpToPrevWord()
         if (mCursor > 0)
         {
             auto it = mLine.rfind(' ', --mCursor);
-            mCursor = it != std::string::npos
+            mCursor = it != mLine.npos
                 ? it
                 : 0;
         }
@@ -471,7 +603,7 @@ void Readline::Impl::jumpToNextWord()
     if (mCursor < mLine.size())
     {
         auto it = mLine.find(' ', ++mCursor);
-        mCursor = it != std::string::npos
+        mCursor = it != mLine.npos
             ? it
             : mLine.size();
     }
@@ -497,12 +629,12 @@ bool Readline::Impl::eraseNextCharacter()
     return false;
 }
 
-bool Readline::Impl::eraseWord()
+bool Readline::Impl::cutPrevWord()
 {
     if (mCursor > 0)
     {
         auto it = mLine.rfind(' ', mCursor - 1);
-        if (it == std::string::npos)
+        if (it == mLine.npos)
         {
             it = 0;
         }
@@ -517,6 +649,7 @@ bool Readline::Impl::eraseWord()
                 it--;
             }
         }
+        copyToClipboard(it, mCursor);
         mLine.erase(it, mCursor - it);
         mCursor = it;
         return true;
@@ -524,25 +657,79 @@ bool Readline::Impl::eraseWord()
     return false;
 }
 
-void Readline::Impl::accept(InputSource source, Context& context)
+bool Readline::Impl::cutNextWord()
 {
-    if (source == InputSource::user and (mFlags & Flags::historyEnabled))
+    auto size = mLine.size();
+
+    if (size > 0 and mCursor < mLine.size() - 1)
+    {
+        auto it = mLine.find(' ', mCursor + 1);
+
+        if (it == mLine.npos)
+        {
+            copyToClipboard(mCursor, size);
+            mLine.erase(mCursor, size - mCursor);
+        }
+        else
+        {
+            copyToClipboard(mCursor, it);
+            mLine.erase(mCursor, it - mCursor);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+bool Readline::Impl::accept(InputSource source, Context& context)
+{
+    if (mPicker)
+    {
+        auto line = mPicker->atCursor();
+
+        if (line)
+        {
+            switch (mPickerBehaviour)
+            {
+                case AcceptBehaviour::append:
+                    restoreLine();
+                    write(*line);
+                    break;
+
+                case AcceptBehaviour::replace:
+                    mLine = *line;
+                    mCursor = mLine.size();
+                    break;
+            }
+        }
+
+        mPicker->clear();
+        mPicker = nullptr;
+
+        return false;
+    }
+
+    if (source == InputSource::user and mFlags[Flags::historyEnabled] and not mLine.empty())
     {
         mHistory.pushBack(mLine);
     }
+
     if (mOnAccept)
     {
         mOnAccept(source, context);
     }
+
+    return true;
 }
 
 void Readline::Impl::complete(Completion type)
 {
-    if (not mCompletions.empty())
+    if (not mCompletions.empty() and not mPicker)
     {
-        utils::StringViews::iterator pivot;
-        utils::StringViews::iterator nextPivot;
-        utils::StringViews::iterator next;
+        utils::StringViewsIt pivot;
+        utils::StringViewsIt nextPivot;
+        utils::StringViewsIt next;
 
         switch (type)
         {
@@ -558,20 +745,62 @@ void Readline::Impl::complete(Completion type)
                 break;
         }
 
-        if (mCurrentCompletion == pivot)
+        if (mCurrentCompletion == mCompletions.end())
         {
-            mCurrentCompletion = nextPivot;
+            saveLine();
         }
-        else
-        {
-            mCurrentCompletion = next;
-        }
+
+        mCurrentCompletion = mCurrentCompletion == pivot
+            ? nextPivot
+            : next;
 
         if (mCurrentCompletion != mCompletions.end())
         {
             mLine = *mCurrentCompletion;
             mCursor = mLine.size();
+            mSuggestion.clear();
         }
+        else
+        {
+            restoreLine();
+        }
+    }
+}
+
+bool Readline::Impl::activatePicker(char c, Context& context)
+{
+    auto pickerIt = mPickers.find(c);
+
+    if (pickerIt == mPickers.end())
+    {
+        return false;
+    }
+
+    if (mPicker)
+    {
+        mPicker->clear();
+    }
+
+    saveAndClearLine();
+    auto& data = pickerIt->second;
+    mPicker = data.picker;
+    mPickerBehaviour = data.acceptBehaviour;
+    mPicker->load(context);
+
+    return true;
+}
+
+void Readline::Impl::refresh()
+{
+    if (mPicker)
+    {
+        mPicker->filter(mLine);
+        mSuggestion.clear();
+    }
+    else
+    {
+        refreshCompletion();
+        refreshSuggestion();
     }
 }
 
@@ -611,6 +840,12 @@ Readline& Readline::onAccept(OnAccept onAccept)
     return *this;
 }
 
+Readline& Readline::connectPicker(Picker& picker, char ctrlCharacter, AcceptBehaviour acceptBehaviour)
+{
+    mPimpl->connectPicker(picker, ctrlCharacter, acceptBehaviour);
+    return *this;
+}
+
 Readline& Readline::setupCompletion(RefreshCompletion refreshCompletion)
 {
     mPimpl->setupCompletion(std::move(refreshCompletion));
@@ -629,19 +864,24 @@ Readline& Readline::disableHistory()
     return *this;
 }
 
-const std::string& Readline::lineRef() const
+void Readline::setPageSize(size_t pageSize) const
 {
-    return mPimpl->lineRef();
+    mPimpl->setPageSize(pageSize);
 }
 
-const size_t& Readline::cursorRef() const
+const std::string& Readline::line() const
 {
-    return mPimpl->cursorRef();
+    return mPimpl->line();
 }
 
-const std::string& Readline::suggestionRef() const
+const size_t& Readline::cursor() const
 {
-    return mPimpl->suggestionRef();
+    return mPimpl->cursor();
+}
+
+const std::string& Readline::suggestion() const
+{
+    return mPimpl->suggestion();
 }
 
 const utils::StringViews& Readline::completions() const
@@ -649,9 +889,19 @@ const utils::StringViews& Readline::completions() const
     return mPimpl->completions();
 }
 
-const utils::StringViews::iterator& Readline::currentCompletion() const
+const utils::StringViewsIt& Readline::currentCompletion() const
 {
     return mPimpl->currentCompletion();
+}
+
+const Picker* Readline::picker() const
+{
+    return mPimpl->picker();
+}
+
+const utils::Strings& Readline::history() const
+{
+    return mPimpl->history();
 }
 
 }  // namespace core
