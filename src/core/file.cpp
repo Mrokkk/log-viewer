@@ -1,10 +1,10 @@
 #include "file.hpp"
 
 #include <expected>
-#include <sstream>
 
 #include "core/assert.hpp"
 #include "sys/system.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -33,16 +33,16 @@ File& File::operator=(const File& other)
 
 static std::string getErrorMessage(const std::string& path, sys::Error error)
 {
-    std::stringstream ss;
-    ss << path << ": cannot open: " << sys::errorDescribe(error);
-    return ss.str();
+    utils::Buffer buf;
+    buf << path << ": cannot open: " << sys::errorDescribe(error);
+    return buf.str();
 }
 
 static std::string getErrorMessage(const sys::File& file, size_t blockSize, size_t offset, sys::Error error)
 {
-    std::stringstream ss;
-    ss << file.path << ": cannot map block of size " << blockSize << " at offset " << offset << ": " << sys::errorDescribe(error);
-    return ss.str();
+    utils::Buffer buf;
+    buf << file.path << ": cannot map block of size " << blockSize << " at offset " << offset << ": " << sys::errorDescribe(error);
+    return buf.str();
 }
 
 std::expected<bool, std::string> File::open(std::string path)

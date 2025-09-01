@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <expected>
 #include <span>
-#include <sstream>
 #include <string>
 #include <string_view>
 
@@ -15,6 +14,7 @@
 #include "core/type.hpp"
 #include "core/user_interface.hpp"
 #include "core/variable.hpp"
+#include "utils/buffer.hpp"
 #include "utils/string.hpp"
 
 namespace core
@@ -28,7 +28,7 @@ std::expected<Variable::Value, bool> resolveReference(const std::string& name, C
 
     if (not variable)
     {
-        context.messageLine << error << "No such variable: " << name;
+        context.messageLine.error() << "No such variable: " << name;
         return std::unexpected(false);
     }
 
@@ -41,7 +41,7 @@ std::expected<std::string, bool> resolveCurrentPath(Context& context)
 
     if (not path)
     {
-        context.messageLine << error << "path variable does not exist";
+        context.messageLine.error() << "path variable does not exist";
         return std::unexpected(false);
     }
 
@@ -49,7 +49,7 @@ std::expected<std::string, bool> resolveCurrentPath(Context& context)
 
     if (not value.string)
     {
-        context.messageLine << error << "path not set";
+        context.messageLine.error() << "path not set";
         return std::unexpected(false);
     }
 
@@ -60,7 +60,7 @@ static bool executeShellCommand(const TokensSpan& tokens, Context& context)
 {
     const char* start = nullptr;
     const char* end = nullptr;
-    std::stringstream command;
+    utils::Buffer command;
 
     for (size_t i = 0; i < tokens.size(); ++i)
     {
@@ -165,7 +165,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
         {
             if (i > 1)
             {
-                context.messageLine << error << "! in unexpected place";
+                context.messageLine.error() << "! in unexpected place";
                 return false;
             }
             force = true;
@@ -290,7 +290,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
             error:
             default:
-                context.messageLine << error << "Unexpected token: " << tokens[i];
+                context.messageLine.error() << "Unexpected token: " << tokens[i];
                 return false;
         }
     }
@@ -299,7 +299,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
     if (not command)
     {
-        context.messageLine << error << "Unknown command: " << commandName;
+        context.messageLine.error() << "Unknown command: " << commandName;
         return false;
     }
 
@@ -312,7 +312,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
     {
         if (not (hasVariadicArgument and args.size() > commandArgsCount))
         {
-            context.messageLine << error << "Invalid number of arguments passed to " << commandName
+            context.messageLine.error() << "Invalid number of arguments passed to " << commandName
                         << "; expected " << (hasVariadicArgument ? "at least " : "")
                         << commandArgsCount << ", got " << args.size();
             return false;
@@ -326,7 +326,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 
         if (commandType != Type::any and commandType != argType)
         {
-            context.messageLine << error << "Argument " << i << "; expected " << commandType << ", got " << argType;
+            context.messageLine.error() << "Argument " << i << "; expected " << commandType << ", got " << argType;
             return false;
         }
     }
@@ -350,7 +350,7 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
             break;
 
         default:
-            context.messageLine << error << "Unexpected statement beginning: " << tokens[0];
+            context.messageLine.error() << "Unexpected statement beginning: " << tokens[0];
             return false;
     }
 
@@ -368,7 +368,7 @@ bool executeCode(const std::string& line, Context& context)
 
     if (not result)
     {
-        context.messageLine << error << result.error();
+        context.messageLine.error() << result.error();
         return false;
     }
 

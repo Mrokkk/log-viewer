@@ -1,14 +1,12 @@
 #include "variable.hpp"
 
-#include <ios>
 #include <map>
-#include <ostream>
-#include <sstream>
 #include <type_traits>
 #include <utility>
 
 #include "core/context.hpp"
 #include "core/type.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -29,25 +27,29 @@ Variable* Variables::find(const std::string& name)
         : nullptr;
 }
 
-static void valueToStream(std::ostream& os, const Variable::Value& value)
+static void valueToStream(utils::Buffer& buf, const Variable::Value& value)
 {
     switch (value.type)
     {
+        case Type::null:
+            buf << "<none>";
+            break;
+
         case Type::boolean:
-            os << std::boolalpha << value.boolean << std::noboolalpha;
+            buf << value.boolean;
             break;
 
         case Type::integer:
-            os << value.integer;
+            buf << value.integer;
             break;
 
         case Type::string:
             if (not value.ptr)
             {
-                os << "<none>";
+                buf << "<none>";
                 return;
             }
-            os << *value.string;
+            buf << *value.string;
             break;
 
         default:
@@ -57,18 +59,18 @@ static void valueToStream(std::ostream& os, const Variable::Value& value)
 
 std::string getValueString(const Variable::Value& value)
 {
-    std::stringstream ss;
-    valueToStream(ss, value);
-    return ss.str();
+    utils::Buffer buf;
+    valueToStream(buf, value);
+    return buf.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const VariableWithContext& wrapped)
+utils::Buffer& operator<<(utils::Buffer& buf, const VariableWithContext& wrapped)
 {
     auto value = wrapped.variable.reader(wrapped.context);
 
-    valueToStream(os, value);
+    valueToStream(buf, value);
 
-    return os;
+    return buf;
 }
 
 template <typename T>

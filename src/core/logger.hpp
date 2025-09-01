@@ -1,31 +1,107 @@
 #pragma once
 
-#include <sstream>
+#include <string_view>
+#include <vector>
 
+#include "core/log_entry.hpp"
 #include "core/severity.hpp"
 #include "utils/immobile.hpp"
+#include "utils/buffer.hpp"
+#include "utils/source_location.hpp"
 
-struct Flusher final : utils::Immobile
+using LogEntries = std::vector<LogEntry>;
+
+#ifndef LOG_HEADER
+#define LOG_HEADER nullptr
+#endif
+
+#ifndef LOG_FLAGS
+#define LOG_FLAGS
+#endif
+
+struct Logger final
 {
-    Flusher(Severity severity);
-    ~Flusher();
-
-    template <typename T>
-    Flusher& operator<<(const T& value)
+    struct Flusher final : utils::Immobile
     {
-        line << value;
-        return *this;
+        Flusher(
+            Severity severity,
+            LogEntryFlags flags,
+            const char* header,
+            utils::SourceLocation loc,
+            utils::Buffer& buffer);
+
+        constexpr ~Flusher()
+        {
+            Logger::registerLogEntry(mSeverity, mFlags, mHeader, mLocation);
+        }
+
+        constexpr utils::Buffer& buffer()
+        {
+            return mBuffer;
+        }
+
+        template <typename T>
+        constexpr utils::Buffer& operator<<(T&& value)
+        {
+            return mBuffer << std::forward<T>(value);
+        }
+
+    private:
+        const Severity              mSeverity;
+        const LogEntryFlags         mFlags;
+        const char* const           mHeader;
+        const utils::SourceLocation mLocation;
+        utils::Buffer&        mBuffer;
+    };
+
+    constexpr static Flusher debug(
+        LogEntryFlags flags = LogEntryFlags(LOG_FLAGS),
+        const char* header = LOG_HEADER,
+        utils::SourceLocation loc = utils::SourceLocation::current())
+    {
+        return log(Severity::debug, flags, header, loc);
     }
 
-private:
-    std::ostringstream line;
-};
+    constexpr static Flusher info(
+        LogEntryFlags flags = LogEntryFlags(LOG_FLAGS),
+        const char* header = LOG_HEADER,
+        utils::SourceLocation loc = utils::SourceLocation::current())
+    {
+        return log(Severity::info, flags, header, loc);
+    }
 
-struct Logger final : utils::Immobile
-{
-    Flusher operator<<(Severity severity) const;
+    constexpr static Flusher warning(
+        LogEntryFlags flags = LogEntryFlags(LOG_FLAGS),
+        const char* header = LOG_HEADER,
+        utils::SourceLocation loc = utils::SourceLocation::current())
+    {
+        return log(Severity::warning, flags, header, loc);
+    }
+
+    constexpr static Flusher error(
+        LogEntryFlags flags = LogEntryFlags(LOG_FLAGS),
+        const char* header = LOG_HEADER,
+        utils::SourceLocation loc = utils::SourceLocation::current())
+    {
+        return log(Severity::error, flags, header, loc);
+    }
+
     static void flushToStderr();
     static void setLogFile(std::string_view path);
+    static LogEntries logEntries();
+
+private:
+    static Flusher log(
+        Severity severity,
+        LogEntryFlags flags,
+        const char* header,
+        utils::SourceLocation loc);
+
+    static void registerLogEntry(
+        Severity severity,
+        LogEntryFlags flags,
+        const char* header,
+        utils::SourceLocation loc);
 };
 
-extern const Logger logger;
+constexpr static Logger logger;

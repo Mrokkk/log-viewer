@@ -1,7 +1,6 @@
-#include <sstream>
-
 #include "core/command.hpp"
 #include "core/message_line.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -24,12 +23,12 @@ DEFINE_COMMAND(echo)
 
     EXECUTOR()
     {
-        std::stringstream ss;
+        utils::Buffer buf;
         for (const auto& arg : args)
         {
-            ss << arg.string << ' ';
+            buf << arg.string << ' ';
         }
-        context.messageLine << info << ss.rdbuf();
+        context.messageLine.info() << buf.view();
         return true;
     }
 }

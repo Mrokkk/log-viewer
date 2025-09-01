@@ -1,7 +1,7 @@
 #include "picker.hpp"
 
 #include <ranges>
-#include <spanstream>
+#include <sstream>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
@@ -14,6 +14,7 @@
 #include "core/dirs.hpp"
 #include "core/fuzzy.hpp"
 #include "core/input.hpp"
+#include "core/logger.hpp"
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "core/variable.hpp"
@@ -23,6 +24,7 @@
 #include "ui/picker_entry.hpp"
 #include "ui/ui_component.hpp"
 #include "ui/view.hpp"
+#include "utils/buffer.hpp"
 #include "utils/string.hpp"
 
 using namespace ftxui;
@@ -68,6 +70,7 @@ static std::string pickerName(const Picker::Type type)
         TYPE_CONVERT(commands);
         TYPE_CONVERT(variables);
         TYPE_CONVERT(messages);
+        TYPE_CONVERT(logs);
         case Picker::Type::_last:
             break;
     }
@@ -125,10 +128,9 @@ Element Picker::Impl::render(core::Context& context)
     const auto resx = ui.terminalSize.dimx / 2;
     const auto resy = ui.terminalSize.dimy / 2;
 
-    char buffer[128];
-    std::ospanstream ss(buffer);
+    utils::Buffer buf;
 
-    ss << cachedStrings.size() << '/' << strings.size();
+    buf << cachedStrings.size() << '/' << strings.size();
 
     return ::ftxui::window(
         text(""),
@@ -138,7 +140,7 @@ Element Picker::Impl::render(core::Context& context)
             hbox({
                 input->Render() | xflex,
                 separator(),
-                text(std::string(ss.span().begin(), ss.span().end()))
+                text(buf.str())
             }),
             separator(),
             content->Render() | yframe
@@ -171,6 +173,13 @@ static const MenuEntryOption menuOption{
         }
 };
 
+static const Color severityToColor[4] = {
+    Palette::bg5,
+    Color(),
+    Color::Yellow,
+    Color::Red,
+};
+
 void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
 {
     content->DetachAllChildren();
@@ -198,7 +207,7 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
                 | views::transform(
                     [leftWidth, width](const auto& e)
                     {
-                        std::stringstream commandDesc;
+                        utils::Buffer commandDesc;
 
                         commandDesc << e.second.name << " ";
 
@@ -219,7 +228,7 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
                             }
                         }
 
-                        std::stringstream ss;
+                        std::ostringstream ss;
                         ss << std::left << std::setw(leftWidth) << commandDesc.str()
                            << std::right << std::setw(width - leftWidth)
                            << ColorWrapped(e.second.help, Palette::Picker::additionalInfoFg);
@@ -234,7 +243,7 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
                 | views::transform(
                     [&context, leftWidth, width](const auto& e)
                     {
-                        std::stringstream variableDesc;
+                        utils::Buffer variableDesc;
                         variableDesc << e.second.name << '{';
                         if (not e.second.writer)
                         {
@@ -243,8 +252,8 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
 
                         variableDesc << e.second.type << "} : " << core::VariableWithContext{e.second, context};
 
-                        std::stringstream ss;
-                        ss << std::left << std::setw(leftWidth) << variableDesc.str()
+                        std::ostringstream ss;
+                        ss << std::left << std::setw(leftWidth) << variableDesc.view()
                            << std::right << std::setw(width - leftWidth)
                            << ColorWrapped(e.second.help, Palette::Picker::additionalInfoFg);
 
@@ -255,6 +264,20 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
 
         case Picker::Type::messages:
             strings = context.messageLine.history();
+            break;
+
+        case Picker::Type::logs:
+            strings = logger.logEntries()
+                | views::transform(
+                    [](const LogEntry& entry)
+                    {
+                        std::ostringstream ss;
+                        ss << ColorWrapped(std::put_time(std::localtime(&entry.time), "%F %T"), Color::Green)
+                           << ' ' << ColorWrapped(entry.header, Color::Blue)
+                           << ": " << ColorWrapped(entry.message, severityToColor[static_cast<int>(entry.severity)]);
+                        return ss.str();
+                    })
+                | to<utils::Strings>();
             break;
 
         default:

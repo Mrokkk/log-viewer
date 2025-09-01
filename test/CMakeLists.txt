@@ -39,6 +39,7 @@ add_executable(test
     main.cpp
     ${PROJECT_SOURCE_DIR}/src/core/lexer.cpp
     bitflag_tests.cpp
+    buffer_tests.cpp
     lexer_tests.cpp
     ring_buffer_tests.cpp
 
@@ -63,7 +64,7 @@ if(COVERAGE)
 endif()
 
 add_custom_target(tests-run
-    COMMAND ./test
+    COMMAND ./test --gtest_color=yes
     DEPENDS test
 )
 

@@ -1,7 +1,8 @@
 #pragma once
 
-#include <iosfwd>
 #include "core/fwd.hpp"
+#include "utils/buffer.hpp"
+#include "utils/fwd.hpp"
 
 namespace core
 {
@@ -15,6 +16,6 @@ enum class Mode
 };
 
 bool switchMode(Mode newMode, core::Context& context);
-std::ostream& operator<<(std::ostream& os, Mode mode);
+utils::Buffer& operator<<(utils::Buffer& buf, Mode mode);
 
 }  // namespace core

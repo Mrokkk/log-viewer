@@ -1,9 +1,8 @@
 #include "mode.hpp"
 
-#include <ostream>
-
 #include "core/context.hpp"
 #include "core/user_interface.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -15,11 +14,11 @@ bool switchMode(Mode newMode, core::Context& context)
     return true;
 }
 
-std::ostream& operator<<(std::ostream& os, Mode mode)
+utils::Buffer& operator<<(utils::Buffer& buf, Mode mode)
 {
 #define PRINT_MODE(MODE) \
     case Mode::MODE: \
-        return os << #MODE
+        return buf << #MODE
     switch (mode)
     {
         PRINT_MODE(normal);
@@ -27,7 +26,7 @@ std::ostream& operator<<(std::ostream& os, Mode mode)
         PRINT_MODE(command);
         PRINT_MODE(custom);
         default:
-            return os << "unexpected{" << int(mode) << '}';
+            return buf << "unexpected{" << int(mode) << '}';
     }
 }
 

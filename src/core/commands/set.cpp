@@ -45,7 +45,7 @@ DEFINE_COMMAND(set)
                     break;
 
                 default:
-                    context.messageLine << error << "Unknown type of value: " << args[1].type;
+                    context.messageLine.error() << "Unknown type of value: " << args[1].type;
                     return false;
             }
             return true;
@@ -53,11 +53,11 @@ DEFINE_COMMAND(set)
 
         if (variable->access != Variable::Access::readWrite)
         {
-            context.messageLine << error << "Not writable: " << args[0].string;
+            context.messageLine.error() << "Not writable: " << args[0].string;
             return false;
         }
 
-        context.messageLine << error << "Changing not yet implemented: " << args[0].string;
+        context.messageLine.error() << "Changing not yet implemented: " << args[0].string;
 
         return true;
     }

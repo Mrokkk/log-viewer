@@ -234,7 +234,7 @@ ViewPtr View::create(std::string name, core::ViewId viewDataId)
 
 LineWithNumber getLine(View& view, size_t lineIndex, core::Context& context)
 {
-    std::stringstream ss;
+    std::ostringstream ss;
     char buffer[32];
     std::spanstream lineNumberStream(buffer);
 

@@ -1,7 +1,5 @@
+#define LOG_HEADER "MainView"
 #include "main_view.hpp"
-
-#include <format>
-#include <sstream>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
@@ -23,6 +21,7 @@
 #include "ui/palette.hpp"
 #include "ui/ui_component.hpp"
 #include "ui/view.hpp"
+#include "utils/buffer.hpp"
 #include "utils/format.hpp"
 #include "utils/math.hpp"
 
@@ -366,17 +365,17 @@ ViewNodePtr MainView::Impl::createView(std::string name, core::ViewId viewDataId
 
 void MainView::Impl::removeView(ViewNode& view, core::Context& context)
 {
-    assert(view.type() == ViewNode::Type::group, std::format("View {}:{}", view.name(), &view));
-    assert(view.parent(), std::format("View {}:{}", view.name(), &view));
+    assert(view.type() == ViewNode::Type::group, utils::format("View {}:{} type is {}", view.name(), &view, view.type()));
+    assert(view.parent(), utils::format("View {}:{} has no parent", view.name(), &view));
 
     auto& children = view.parent()->children();
     auto viewIt = getViewIterator(view, children);
 
-    assert(viewIt != children.end(), std::format("View {}:{} cannot be found in parent's children", view.name(), &view));
+    assert(viewIt != children.end(), utils::format("View {}:{} cannot be found in parent's children", view.name(), &view));
 
     removeViewChildren(view, context);
 
-    logger << debug << __func__ << ": removing " << view.name();
+    logger.debug() << "removing " << view.name();
 
     children.erase(viewIt);
 
@@ -416,12 +415,12 @@ void MainView::Impl::removeViewChildren(ViewNode& view, core::Context& context)
 
         removeViewChildren(childViewNode, context);
 
-        logger << debug << __func__ << ": removing " << childViewNode.name() << "; type: " << (int)childViewNode.type();
+        logger.debug() << "removing " << childViewNode.name() << "; type: " << (int)childViewNode.type();
 
         if (childViewNode.type() == ViewNode::Type::view)
         {
             auto& view = childViewNode.cast<View>();
-            logger << debug << __func__ << ": freeing view data " << view.dataId.index;
+            logger.debug() << "freeing view data " << view.dataId.index;
             context.views.free(view.dataId);
         }
     }
@@ -753,11 +752,11 @@ bool MainView::Impl::yank(Ftxui&, core::Context& context)
 
     if (lineCount > MAX_LINES_COPIED)
     {
-        context.messageLine << error << "cannot yank more than " << MAX_LINES_COPIED << " lines";
+        context.messageLine.error() << "cannot yank more than " << MAX_LINES_COPIED << " lines";
         return true;
     }
 
-    std::stringstream ss;
+    utils::Buffer buf;
 
     auto viewData = core::getView(currentView->dataId, context);
 
@@ -770,16 +769,16 @@ bool MainView::Impl::yank(Ftxui&, core::Context& context)
     {
         if (const auto result = viewData->readLine(i))
         {
-            ss << result.value() << '\n';
+            buf << result.value() << '\n';
         }
     }
 
-    sys::copyToClipboard(ss.str());
+    sys::copyToClipboard(buf.str());
 
     currentView->selectionMode = false;
     core::switchMode(core::Mode::normal, context);
 
-    context.messageLine << info << lineCount << " lines copied to clipboard";
+    context.messageLine.info() << lineCount << " lines copied to clipboard";
 
     return true;
 }
@@ -1019,33 +1018,32 @@ DEFINE_COMMAND(filter)
 
         if (not parentView) [[unlikely]]
         {
-            context.messageLine << error << "No view loaded yet";
+            context.messageLine.error() << "No view loaded yet";
             return false;
         }
 
-        char buffer[128];
-        std::spanstream ss(buffer);
+        utils::Buffer buf;
 
         auto& ui = context.ui->get<Ftxui>();
 
         if (not ui.mainView.currentView()->selectionMode)
         {
-            context.messageLine << error << "Nothing selected";
+            context.messageLine.error() << "Nothing selected";
             return false;
         }
 
         size_t start = ui.mainView.currentView()->selectionStart;
         size_t end = ui.mainView.currentView()->selectionEnd;
 
-        ss << '<' << start << '-' << end << '>';
+        buf << '<' << start << '-' << end << '>';
 
         auto [newView, newViewId] = context.views.allocate();
 
-        auto uiView = context.ui->createView(ss.span().data(), newViewId, core::Parent::currentView, context);
+        auto uiView = context.ui->createView(buf.str(), newViewId, core::Parent::currentView, context);
 
         if (uiView.expired()) [[unlikely]]
         {
-            context.messageLine << error << "failed to create UI view";
+            context.messageLine.error() << "failed to create UI view";
             context.views.free(newViewId);
             return false;
         }
@@ -1063,16 +1061,16 @@ DEFINE_COMMAND(filter)
 
                     if (newView)
                     {
-                        context.messageLine << info
+                        context.messageLine.info()
                             << "filtered " << newView->lineCount() << " lines; took "
-                            << std::fixed << std::setprecision(3) << result.value() << " s";
+                            << result.value() << " s";
 
                         context.ui->onViewDataLoaded(uiView, context);
                     }
                 }
                 else if (context.running)
                 {
-                    context.messageLine << error << "Error filtering view: " << result.error();
+                    context.messageLine.error() << "Error filtering view: " << result.error();
                     context.ui->removeView(uiView, context);
                 }
             });

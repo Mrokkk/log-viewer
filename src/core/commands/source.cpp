@@ -1,9 +1,8 @@
 #include "source.hpp"
 
-#include <sstream>
-
 #include "core/command.hpp"
 #include "core/interpreter.hpp"
+#include "utils/buffer.hpp"
 #include "utils/string.hpp"
 #include "utils/units.hpp"
 
@@ -38,9 +37,9 @@ namespace commands
 
 bool source(const std::string& filename, Context& context)
 {
-    std::stringstream ss;
-    ss << source::Command::name << " \"" << filename << '\"';
-    return executeCode(ss.str(), context);
+    utils::Buffer buf;
+    buf << source::Command::name << " \"" << filename << '\"';
+    return executeCode(buf.str(), context);
 }
 
 }  // namespace commands

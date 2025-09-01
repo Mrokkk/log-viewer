@@ -1,7 +1,7 @@
 #include "core/command.hpp"
 
 #include <algorithm>
-#include <iostream>
+#include <cstdio>
 #include <string_view>
 
 namespace core
@@ -59,7 +59,7 @@ void Commands::$register(Command command)
 
     if (variadicArgument != commandArgs.end() and variadicArgument != commandArgs.end() - 1) [[unlikely]]
     {
-        std::cerr << __func__ << ": " << command.name << ": variadic argument can appear only as last one\n";
+        std::fprintf(stderr, "%s: %s: variadic argument can appear only as last one\n", __func__, command.name.data());
         std::abort();
     }
 
@@ -67,7 +67,7 @@ void Commands::$register(Command command)
 
     if (not result.second) [[unlikely]]
     {
-        std::cerr << __func__ << ": " << command.name << ": already defined\n";
+        std::fprintf(stderr, "%s: %s: already defined\n", __func__, command.name.data());
         std::abort();
     }
 }

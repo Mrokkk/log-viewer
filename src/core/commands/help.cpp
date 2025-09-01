@@ -27,7 +27,7 @@ DEFINE_COMMAND(help)
 
         if (command)
         {
-            context.messageLine << info << command->name << ": " << command->help;
+            context.messageLine.info() << command->name << ": " << command->help;
             return true;
         }
 
@@ -35,11 +35,11 @@ DEFINE_COMMAND(help)
 
         if (not variable)
         {
-            context.messageLine << error << "No help entry for: " << args[0].string;
+            context.messageLine.error() << "No help entry for: " << args[0].string;
             return false;
         }
 
-        context.messageLine << info << variable->name << ": " << variable->help;
+        context.messageLine.info() << variable->name << ": " << variable->help;
         return true;
     }
 }

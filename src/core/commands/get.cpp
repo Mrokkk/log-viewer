@@ -27,11 +27,11 @@ DEFINE_COMMAND(get)
 
         if (not variable)
         {
-            context.messageLine << error << "Unknown variable: " << args[0].string;
+            context.messageLine.error() << "Unknown variable: " << args[0].string;
             return false;
         }
 
-        context.messageLine << info << VariableWithContext{*variable, context};
+        context.messageLine.info() << VariableWithContext{*variable, context};
 
         return true;
     }

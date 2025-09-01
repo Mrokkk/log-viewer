@@ -1,12 +1,9 @@
 #pragma once
 
-#include <type_traits>
+#include "utils/enum_traits.hpp"
 
 namespace utils
 {
-
-template <typename T>
-concept IsEnum = std::is_enum_v<T>;
 
 namespace detail
 {
@@ -129,7 +126,7 @@ constexpr inline T operator&(const T lhs, const U rhs)
         enum class Value __VA_ARGS__; \
         using enum Value; \
         using BitFlag::BitFlag; \
-        bool operator[](Value v) { return !!(value & ::utils::bitFlagValue<NAME>(v)); } \
+        constexpr bool operator[](Value v) const { return !!(value & ::utils::bitFlagValue<NAME>(v)); } \
     }; \
     constexpr inline NAME operator|(NAME::Value lhs, NAME::Value rhs) \
     { \
@@ -138,6 +135,10 @@ constexpr inline T operator&(const T lhs, const U rhs)
     constexpr inline NAME operator~(NAME::Value v) \
     { \
         return NAME(~(::utils::bitFlagValue<NAME>(v))); \
+    } \
+    constexpr inline unsigned bitIndex(NAME::Value v) \
+    { \
+        return static_cast<unsigned>(v); \
     }
 
 }  // namespace utils

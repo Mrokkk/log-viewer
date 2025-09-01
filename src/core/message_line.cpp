@@ -1,69 +1,54 @@
 #include "message_line.hpp"
 
-#include <cstring>
 #include <mutex>
-#include <ostream>
 
 #include "core/severity.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
 
-MessageLine::Flusher::Flusher(std::ostream& stream, std::mutex& lock)
-    : stream_(stream)
-    , lock_(lock)
+MessageLine::Flusher::Flusher(utils::Buffer& buffer, std::mutex& lock)
+    : mBuffer(buffer)
+    , mLock(lock)
 {
 }
 
 MessageLine::Flusher::~Flusher()
 {
-    lock_.unlock();
+    mLock.unlock();
 }
 
 MessageLine::MessageLine()
-    : severity_(info)
-    , buffer_{}
-    , stream_(buffer_)
+    : mSeverity(Severity::info)
 {
 }
 
 MessageLine::~MessageLine() = default;
 
-MessageLine::Flusher MessageLine::operator<<(Severity severity)
-{
-    lock_.lock();
-
-    clear();
-
-    severity_ = severity;
-    return Flusher(stream_, lock_);
-}
-
 void MessageLine::clear()
 {
-    if (buffer_[0] != '\0')
+    if (mBuffer.length())
     {
-        history_.emplace_back(stream_.span().data());
+        mHistory.emplace_back(mBuffer.str());
     }
 
-    std::memset(buffer_, 0, sizeof(buffer_));
-    std::ospanstream s(buffer_);
-    stream_.swap(s);
+    mBuffer.clear();
 }
 
 Severity MessageLine::severity() const
 {
-    return severity_;
+    return mSeverity;
 }
 
-std::string MessageLine::get() const
+std::string MessageLine::str() const
 {
-    return stream_.span().data();
+    return mBuffer.str();
 }
 
 const utils::Strings& MessageLine::history() const
 {
-    return history_;
+    return mHistory;
 }
 
 }  // namespace core

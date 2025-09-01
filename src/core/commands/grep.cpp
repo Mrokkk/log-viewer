@@ -1,12 +1,10 @@
-#include <iomanip>
-
 #include "core/command.hpp"
 #include "core/grep_options.hpp"
 #include "core/interpreter.hpp"
 #include "core/message_line.hpp"
-#include "core/severity.hpp"
 #include "core/user_interface.hpp"
 #include "core/view.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -55,7 +53,7 @@ DEFINE_COMMAND(grep)
 
         if (not parentView) [[unlikely]]
         {
-            context.messageLine << error << "no view loaded yet";
+            context.messageLine.error() << "no view loaded yet";
             return false;
         }
 
@@ -74,23 +72,22 @@ DEFINE_COMMAND(grep)
             optionsString += 'i';
         }
 
-        char buffer[128];
-        std::spanstream ss(buffer);
+        utils::Buffer buf;
 
-        ss << pattern;
+        buf << pattern;
 
         if (not optionsString.empty())
         {
-            ss << " [" << optionsString << ']';
+            buf << " [" << optionsString << ']';
         }
 
         auto [newView, newViewId] = context.views.allocate();
 
-        auto uiView = context.ui->createView(ss.span().data(), newViewId, Parent::currentView, context);
+        auto uiView = context.ui->createView(buf.str(), newViewId, Parent::currentView, context);
 
         if (uiView.expired()) [[unlikely]]
         {
-            context.messageLine << error << "failed to create UI view";
+            context.messageLine.error() << "failed to create UI view";
             context.views.free(newViewId);
             return false;
         }
@@ -108,16 +105,16 @@ DEFINE_COMMAND(grep)
 
                     if (newView)
                     {
-                        context.messageLine << info
+                        context.messageLine.info()
                             << "found " << newView->lineCount() << " matches; took "
-                            << std::fixed << std::setprecision(3) << result.value() << " s";
+                            << result.value() << " s";
 
                         context.ui->onViewDataLoaded(uiView, context);
                     }
                 }
                 else if (context.running)
                 {
-                    context.messageLine << error << "Error grepping view: " << result.error();
+                    context.messageLine.error() << "Error grepping view: " << result.error();
                     context.ui->removeView(uiView, context);
                 }
             });

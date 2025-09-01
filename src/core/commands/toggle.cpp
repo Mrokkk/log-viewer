@@ -27,19 +27,19 @@ DEFINE_COMMAND(toggle)
 
         if (not variable)
         {
-            context.messageLine << error << "Unknown variable: " << args[0].string;
+            context.messageLine.error() << "Unknown variable: " << args[0].string;
             return false;
         }
 
         if (variable->type != Type::boolean)
         {
-            context.messageLine << error << "Not a boolean: " << args[0].string;
+            context.messageLine.error() << "Not a boolean: " << args[0].string;
             return false;
         }
 
         if (variable->access != Variable::Access::readWrite)
         {
-            context.messageLine << error << "Not writable: " << args[0].string;
+            context.messageLine.error() << "Not writable: " << args[0].string;
             return false;
         }
 

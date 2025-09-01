@@ -3,19 +3,19 @@
 #include <cctype>
 #include <expected>
 #include <functional>
-#include <iostream>
-#include <sstream>
 #include <string_view>
 #include <vector>
+
+#include "utils/buffer.hpp"
 
 namespace core
 {
 
-std::ostream& operator<<(std::ostream& os, const Token::Type type)
+utils::Buffer& operator<<(utils::Buffer& buf, const Token::Type type)
 {
 #define TOKEN_TYPE_PRINT(type) \
     case Token::Type::type: \
-        return os << #type
+        return buf << #type
     switch (type)
     {
         TOKEN_TYPE_PRINT(comment);
@@ -40,19 +40,19 @@ std::ostream& operator<<(std::ostream& os, const Token::Type type)
         TOKEN_TYPE_PRINT(whitespace);
         TOKEN_TYPE_PRINT(end);
     }
-    return os << "unknown token{" << static_cast<int>(type) << '}';
+    return buf << "unknown token{" << static_cast<int>(type) << '}';
 }
 
-std::ostream& operator<<(std::ostream& os, const Token& token)
+utils::Buffer& operator<<(utils::Buffer& buf, const Token& token)
 {
-    return os << token.type << '{' << token.value << '}';
+    return buf << token.type << '{' << token.value << '}';
 }
 
 struct LexerState
 {
-    Tokens            tokens;
-    const char*       current;
-    std::stringstream error;
+    Tokens        tokens;
+    const char*   current;
+    utils::Buffer error;
 };
 
 using TokenHandler = std::function<bool(LexerState&)>;

@@ -1,9 +1,24 @@
+#include <ostream>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "core/lexer.hpp"
+#include "utils/buffer.hpp"
 
 using namespace core;
+
+namespace core
+{
+
+std::ostream& operator<<(std::ostream& os, Token::Type type)
+{
+    utils::Buffer buf;
+    buf << type;
+    return os << buf.view();
+}
+
+}  // namespace core
 
 #define ASSERT_NEXT_TOKEN(TYPE, VALUE) \
     do \

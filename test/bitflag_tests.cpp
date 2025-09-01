@@ -15,6 +15,12 @@ constexpr int c = 1 << 2;
 constexpr int d = 1 << 3;
 constexpr int e = 1 << 4;
 
+static_assert(bitIndex(TestBitFlag::a) == 0);
+static_assert(bitIndex(TestBitFlag::b) == 1);
+static_assert(bitIndex(TestBitFlag::c) == 2);
+static_assert(bitIndex(TestBitFlag::d) == 3);
+static_assert(bitIndex(TestBitFlag::e) == 4);
+
 TEST(BitFlagTests, canDoStuff)
 {
     TestBitFlag flag;

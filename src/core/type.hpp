@@ -1,6 +1,6 @@
 #pragma once
 
-#include <iosfwd>
+#include "utils/fwd.hpp"
 
 namespace core
 {
@@ -15,6 +15,6 @@ enum class Type
     boolean,
 };
 
-std::ostream& operator<<(std::ostream& os, const Type type);
+utils::Buffer& operator<<(utils::Buffer& buf, const Type type);
 
 }  // namespace core

@@ -155,12 +155,12 @@ Element CommandLine::render(core::Context& context)
 
     switch (context.messageLine.severity())
     {
-        case error:
-            return color(Color::Red, text(context.messageLine.get()));
-        case warning:
-            return color(Color::Yellow, text(context.messageLine.get()));
+        case Severity::error:
+            return color(Color::Red, text(context.messageLine.str()));
+        case Severity::warning:
+            return color(Color::Yellow, text(context.messageLine.str()));
         default:
-            return text(context.messageLine.get());
+            return text(context.messageLine.str());
     }
 }
 

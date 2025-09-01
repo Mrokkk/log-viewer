@@ -1,3 +1,4 @@
+#define LOG_HEADER "App"
 #include "app.hpp"
 
 #include <iostream>
@@ -9,7 +10,6 @@
 #include "core/fwd.hpp"
 #include "core/input.hpp"
 #include "core/logger.hpp"
-#include "core/severity.hpp"
 #include "core/user_interface.hpp"
 #include "sys/system.hpp"
 
@@ -54,7 +54,7 @@ int run(int argc, char* const* argv, Context& context)
     {
         if (std::filesystem::exists(configFile))
         {
-            logger << info << "sourcing " << configFile;
+            logger.info() << "sourcing " << configFile;
             commands::source(configFile.string(), context);
             break;
         }

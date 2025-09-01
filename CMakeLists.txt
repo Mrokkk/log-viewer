@@ -6,6 +6,7 @@ find_program(CCACHE ccache)
 if(CCACHE)
     message(STATUS "Using ccache: ${CCACHE}")
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE}")
+    set(CMAKE_CXX_FLAGS "-fdiagnostics-color=always")
 endif()
 
 include(FetchContent)
@@ -46,7 +47,7 @@ message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS "-pipe -std=c++23 -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fno-exceptions -fdiagnostics-color=always")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pipe -std=c++23 -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fno-exceptions")
 
 if(OPTIMIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
@@ -136,6 +137,12 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS)
             ${CMAKE_SOURCE_DIR}/compile_commands.json
     )
 endif()
+
+execute_process(
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ${CMAKE_SOURCE_DIR}/scripts/build.sh
+        ${CMAKE_BINARY_DIR}/build
+)
 
 if(BUILD_TESTS)
     add_subdirectory(test)

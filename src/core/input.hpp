@@ -1,12 +1,12 @@
 #pragma once
 
 #include <functional>
-#include <iosfwd>
 #include <string>
 #include <vector>
 
 #include "core/fwd.hpp"
 #include "utils/bitflag.hpp"
+#include "utils/fwd.hpp"
 
 namespace core
 {
@@ -139,7 +139,7 @@ enum class InputSource
 };
 
 bool registerKeyPress(KeyPress c, InputSource source, Context& context);
-std::ostream& operator<<(std::ostream& os, const KeyPress k);
+utils::Buffer& operator<<(utils::Buffer& buf, const KeyPress k);
 std::string inputStateString(Context& context);
 void initializeInput(Context& context);
 

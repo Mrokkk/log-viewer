@@ -1,4 +1,5 @@
 #ifdef __unix__
+#define LOG_FLAGS LogEntryFlags::noSourceLocation
 #include "system.hpp"
 
 #include <algorithm>
@@ -16,14 +17,17 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "core/log_entry.hpp"
 #include "core/logger.hpp"
 #include "sys/mapping.hpp"
+#include "utils/buffer.hpp"
 #include "utils/string.hpp"
 
 #define COLOR_BLUE    "\e[34m"
 #define COLOR_YELLOW  "\e[33m"
 #define COLOR_GREEN   "\e[32m"
-#define COLOR_RESET   "\e[0m"
+#define COLOR_RED     "\e[31m"
+#define COLOR_RESET   "\e[m"
 
 namespace sys
 {
@@ -77,7 +81,7 @@ static int backtraceCallback(void* data, uintptr_t pc, const char* pathname, int
 {
     auto ctx = static_cast<BacktraceContext*>(data);
 
-    if (pathname != NULL || function != NULL)
+    if (pathname != NULL or function != NULL)
     {
         int status;
         std::string mappingName;
@@ -96,13 +100,13 @@ static int backtraceCallback(void* data, uintptr_t pc, const char* pathname, int
             function = mappingName.c_str();
         }
 
-        logger << info << '#' << ctx->index << " " COLOR_BLUE << (void*)pc << COLOR_RESET " in " COLOR_YELLOW << function
-                       << COLOR_RESET " at " COLOR_GREEN << pathname << COLOR_RESET ":" << lineNumber;
+        logger.info() << '#' << ctx->index << " " COLOR_BLUE << (void*)pc << COLOR_RESET " in " COLOR_YELLOW << function
+                      << COLOR_RESET " at " COLOR_GREEN << pathname << COLOR_RESET ":" << lineNumber;
     }
     else
     {
         auto mappingName = mappingNameFind(ctx->maps, pc);
-        logger << info << '#' << ctx->index << " " COLOR_BLUE << (void*)pc << COLOR_RESET " in " COLOR_YELLOW << mappingName << COLOR_RESET;
+        logger.info() << '#' << ctx->index << " " COLOR_BLUE << (void*)pc << COLOR_RESET " in " COLOR_YELLOW << mappingName << COLOR_RESET;
     }
 
     ctx->index++;
@@ -112,7 +116,7 @@ static int backtraceCallback(void* data, uintptr_t pc, const char* pathname, int
 
 static void backtraceErrorCallback(void*, const char* message, int error)
 {
-    logger << ::error << "backtrace error[" <<  error << "]: " << message;
+    logger.error() << "backtrace error[" <<  error << "]: " << message;
 }
 
 template <typename T>
@@ -127,14 +131,14 @@ static T hexTo(const std::string& string)
 
 static void logLineOfWords(const utils::Strings& words)
 {
-    std::stringstream ss;
+    utils::Buffer buf;
 
     for (const auto& w : words)
     {
-        ss << w << ' ';
+        buf << w << ' ';
     }
 
-    logger << info << ss.rdbuf();
+    logger.info().buffer() = std::move(buf);
 }
 
 static ProcessMappings mappingRead(bool logMappings)
@@ -175,7 +179,7 @@ static void stacktraceLogInternal(bool logMappings)
 {
     if (not backtraceFull)
     {
-        logger << warning << "libbacktrace unavailable; cannot collect stacktrace";
+        logger.warning() << "libbacktrace unavailable; cannot collect stacktrace";
         return;
     }
 
@@ -184,7 +188,7 @@ static void stacktraceLogInternal(bool logMappings)
         .maps = mappingRead(logMappings)
     };
 
-    logger << info << "Stacktrace:";
+    logger.info() << "Stacktrace:";
 
     backtraceFull(backtraceState, 1, backtraceCallback, backtraceErrorCallback, static_cast<void*>(&context));
 }
@@ -233,7 +237,7 @@ void finalize()
 void crashHandle(const int signal)
 {
     logger.flushToStderr();
-    logger << error << "Received SIG" << sigabbrev_np(signal);
+    logger.error() << "Received SIG" << sigabbrev_np(signal);
     sys::stacktraceLogInternal(true);
     sys::finalize();
 }
@@ -332,6 +336,40 @@ int copyToClipboard(std::string string)
     auto command = ss.str();
     system(command.c_str());
     return 0;
+}
+
+void printLogEntry(const LogEntry& entry, std::ostream& os)
+{
+    std::string_view file(entry.location.file);
+
+    os << COLOR_GREEN "[" << std::put_time(std::localtime(&entry.time), "%F %T") << "]" COLOR_RESET " ";
+
+    if (entry.header)
+    {
+        os << COLOR_BLUE "[" << entry.header << "]" COLOR_RESET " ";
+    }
+
+    if (not entry.flags[LogEntryFlags::noSourceLocation])
+    {
+        os << entry.location.func << ": ";
+    }
+
+    switch (entry.severity)
+    {
+        case Severity::debug:
+            os << "\e[38;5;245m";
+            break;
+        case Severity::warning:
+            os << COLOR_YELLOW;
+            break;
+        case Severity::error:
+            os << COLOR_RED;
+            break;
+        default:
+            break;
+    }
+
+    os << entry.message << COLOR_RESET "\n";
 }
 
 }  // namespace sys

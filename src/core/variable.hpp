@@ -3,10 +3,11 @@
 #include <cstddef>
 #include <flat_map>
 #include <functional>
-#include <iosfwd>
 
 #include "core/fwd.hpp"
 #include "core/type.hpp"
+#include "utils/buffer.hpp"
+#include "utils/fwd.hpp"
 #include "utils/noncopyable.hpp"
 
 namespace core
@@ -136,7 +137,7 @@ struct VariableWithContext final
     } \
     namespace NAME
 
-std::ostream& operator<<(std::ostream& os, const VariableWithContext& wrapped);
+utils::Buffer& operator<<(utils::Buffer& buf, const VariableWithContext& wrapped);
 std::string getValueString(const Variable::Value& value);
 
 }  // namespace core

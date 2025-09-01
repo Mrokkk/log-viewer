@@ -6,11 +6,11 @@
 #include <iomanip>
 #include <ios>
 #include <iostream>
-#include <sstream>
 #include <string_view>
 #include <vector>
 
 #include "core/type.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -58,32 +58,32 @@ namespace core
             continue;
         }
 
-        std::stringstream ss;
+        utils::Buffer buf;
 
-        ss << "  ";
+        buf << "  ";
 
         if (option.shortName)
         {
-            ss << "-" << option.shortName;
+            buf << "-" << option.shortName;
             if (not option.longName.empty())
             {
-                ss << ", ";
+                buf << ", ";
             }
             else
             {
-                ss << "  ";
+                buf << "  ";
             }
         }
         else
         {
-            ss << "    ";
+            buf << "    ";
         }
         if (not option.longName.empty())
         {
-            ss << "--" << option.longName;
+            buf << "--" << option.longName;
         }
 
-        std::cerr << std::left << std::setw(columnWidth) << ss.str() << std::setw(0) << option.help << '\n';
+        std::cerr << std::left << std::setw(columnWidth) << buf.str() << std::setw(0) << option.help << '\n';
     }
 
     std::cerr << std::endl;
@@ -127,7 +127,7 @@ static void saveValue(Option& option)
 
 std::expected<int, std::string> parseArgs(int argc, char* const* argv)
 {
-    std::stringstream error;
+    utils::Buffer error;
     std::string shortopts = "-";
     std::vector<option> longopts;
 

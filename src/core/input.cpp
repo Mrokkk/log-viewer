@@ -1,3 +1,4 @@
+#define LOG_HEADER "Input"
 #include "input.hpp"
 
 #include <cctype>
@@ -11,8 +12,8 @@
 #include "core/logger.hpp"
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
-#include "core/severity.hpp"
 #include "core/user_interface.hpp"
+#include "utils/buffer.hpp"
 #include "utils/string.hpp"
 
 namespace core
@@ -81,6 +82,61 @@ KeyPress KeyPress::end{            .type = Type::end};
 KeyPress KeyPress::tab{            .type = Type::tab};
 KeyPress KeyPress::shiftTab{       .type = Type::shiftTab};
 
+utils::Buffer& operator<<(utils::Buffer& buf, const KeyPress k)
+{
+    switch (k.type)
+    {
+        case KeyPress::Type::character:
+            return buf << "Character{" << k.value << '}';
+        case KeyPress::Type::ctrlCharacter:
+            return buf << "CtrlCharacter{" << k.value << '}';
+        case KeyPress::Type::altCharacter:
+            return buf << "AltCharacter{" << k.value << '}';
+        case KeyPress::Type::escape:
+            return buf << "Escape{}";
+        case KeyPress::Type::backspace:
+            return buf << "Backspace{}";
+        case KeyPress::Type::del:
+            return buf << "Delete{}";
+        case KeyPress::Type::cr:
+            return buf << "Cr{}";
+        case KeyPress::Type::space:
+            return buf << "Space{}";
+        case KeyPress::Type::arrowUp:
+            return buf << "ArrowUp{}";
+        case KeyPress::Type::arrowDown:
+            return buf << "ArrowDown{}";
+        case KeyPress::Type::arrowLeft:
+            return buf << "ArrowLeft{}";
+        case KeyPress::Type::arrowRight:
+            return buf << "ArrowRight{}";
+        case KeyPress::Type::ctrlArrowUp:
+            return buf << "CtrlArrowUp{}";
+        case KeyPress::Type::ctrlArrowDown:
+            return buf << "CtrlArrowDown{}";
+        case KeyPress::Type::ctrlArrowLeft:
+            return buf << "CtrlArrowLeft{}";
+        case KeyPress::Type::ctrlArrowRight:
+            return buf << "CtrlArrowRight{}";
+        case KeyPress::Type::pageUp:
+            return buf << "PageUp{}";
+        case KeyPress::Type::pageDown:
+            return buf << "PageDown{}";
+        case KeyPress::Type::home:
+            return buf << "Home{}";
+        case KeyPress::Type::end:
+            return buf << "End{}";
+        case KeyPress::Type::tab:
+            return buf << "Tab{}";
+        case KeyPress::Type::shiftTab:
+            return buf << "ShiftTab{}";
+        case KeyPress::Type::function:
+            return buf << "F" << int(k.value) << "{}";
+    }
+
+    return buf << "Unknown{" << int(k.type) << '}';
+}
+
 constexpr static std::string_view constevalName(KeyPress k)
 {
     switch (k.type)
@@ -124,7 +180,7 @@ constexpr static std::string_view constevalName(KeyPress k)
         case KeyPress::Type::character:
         case KeyPress::Type::ctrlCharacter:
         case KeyPress::Type::altCharacter:
-            logger << error << __func__ << ": unexpected key: " << k;
+            logger.error() << "unexpected key: " << k;
             std::abort();
     }
     return "";
@@ -132,26 +188,26 @@ constexpr static std::string_view constevalName(KeyPress k)
 
 std::string KeyPress::name() const
 {
-    std::stringstream ss;
+    utils::Buffer buf;
     switch (type)
     {
         case KeyPress::Type::character:
-            ss << value;
+            buf << value;
             break;
         case KeyPress::Type::ctrlCharacter:
-            ss << "<c-" << value << '>';
+            buf << "<c-" << value << '>';
             break;
         case KeyPress::Type::altCharacter:
-            ss << "<a-" << value << '>';
+            buf << "<a-" << value << '>';
             break;
         case KeyPress::Type::function:
-            ss << "<f" << int(value) << '>';
+            buf << "<f" << int(value) << '>';
             break;
         default:
-            ss << '<' << constevalName(*this) << '>';
+            buf << '<' << constevalName(*this) << '>';
             break;
     }
-    return ss.str();
+    return buf.str();
 }
 
 KeyPressNode::KeyPressNode(KeyPress k)
@@ -161,11 +217,12 @@ KeyPressNode::KeyPressNode(KeyPress k)
 }
 
 InputState::InputState()
-    : nodes(new KeyPressNode[3]{
-        KeyPress::character('\0'),
-        KeyPress::character('\0'),
-        KeyPress::character('\0')
-    })
+    : nodes(
+        new KeyPressNode[3]{
+            KeyPress::character('\0'),
+            KeyPress::character('\0'),
+            KeyPress::character('\0')
+        })
     , current(nullptr)
 {
     state.reserve(128);
@@ -369,61 +426,6 @@ bool InputMapping::operator()(core::Context& context)
     return false;
 }
 
-std::ostream& operator<<(std::ostream& os, const KeyPress k)
-{
-    switch (k.type)
-    {
-        case KeyPress::Type::character:
-            return os << "Character{" << k.value << '}';
-        case KeyPress::Type::ctrlCharacter:
-            return os << "CtrlCharacter{" << k.value << '}';
-        case KeyPress::Type::altCharacter:
-            return os << "AltCharacter{" << k.value << '}';
-        case KeyPress::Type::escape:
-            return os << "Escape{}";
-        case KeyPress::Type::backspace:
-            return os << "Backspace{}";
-        case KeyPress::Type::del:
-            return os << "Delete{}";
-        case KeyPress::Type::cr:
-            return os << "Cr{}";
-        case KeyPress::Type::space:
-            return os << "Space{}";
-        case KeyPress::Type::arrowUp:
-            return os << "ArrowUp{}";
-        case KeyPress::Type::arrowDown:
-            return os << "ArrowDown{}";
-        case KeyPress::Type::arrowLeft:
-            return os << "ArrowLeft{}";
-        case KeyPress::Type::arrowRight:
-            return os << "ArrowRight{}";
-        case KeyPress::Type::ctrlArrowUp:
-            return os << "CtrlArrowUp{}";
-        case KeyPress::Type::ctrlArrowDown:
-            return os << "CtrlArrowDown{}";
-        case KeyPress::Type::ctrlArrowLeft:
-            return os << "CtrlArrowLeft{}";
-        case KeyPress::Type::ctrlArrowRight:
-            return os << "CtrlArrowRight{}";
-        case KeyPress::Type::pageUp:
-            return os << "PageUp{}";
-        case KeyPress::Type::pageDown:
-            return os << "PageDown{}";
-        case KeyPress::Type::home:
-            return os << "Home{}";
-        case KeyPress::Type::end:
-            return os << "End{}";
-        case KeyPress::Type::tab:
-            return os << "Tab{}";
-        case KeyPress::Type::shiftTab:
-            return os << "ShiftTab{}";
-        case KeyPress::Type::function:
-            return os << "F" << int(k.value) << "{}";
-    }
-
-    return os << "Unknown{" << int(k.type) << '}';
-}
-
 static void updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root)
 {
     auto currentNode = &root;
@@ -454,7 +456,7 @@ static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, Inpu
 
     if (not converted) [[unlikely]]
     {
-        context.messageLine << error << converted.error();
+        context.messageLine.error() << converted.error();
         return false;
     }
 
@@ -472,7 +474,7 @@ static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, Inpu
 
     if (not result.second) [[unlikely]]
     {
-        context.messageLine << error << "Mapping already exists (use ! to overwrite)";
+        context.messageLine.error() << "Mapping already exists (use ! to overwrite)";
         return false;
     }
 
@@ -498,7 +500,7 @@ bool addInputMapping(std::string_view lhs, std::string_view rhs, InputMappingFla
 
     if (not converted) [[unlikely]]
     {
-        context.messageLine << error << converted.error();
+        context.messageLine.error() << converted.error();
         return false;
     }
 
@@ -521,7 +523,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
     auto& inputState = context.inputState;
     auto mode = context.mode;
 
-    logger << info << __func__ << ": " << keyPress << "; mode: " << mode;
+    logger.debug() << keyPress << "; mode: " << mode;
 
     if (keyPress == KeyPress::character(':') and mode != Mode::command)
     {
@@ -589,12 +591,12 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
 std::string inputStateString(Context& context)
 {
-    std::stringstream ss;
+    utils::Buffer buf;
     for (auto& k : context.inputState.state)
     {
-        ss << k.name();
+        buf << k.name();
     }
-    return ss.str();
+    return buf.str();
 }
 
 void initializeInput(Context& context)
@@ -615,7 +617,7 @@ void initializeInput(Context& context)
         "<c-c>",
         [](Context& context)
         {
-            context.messageLine << info << "Type :qa and press <Enter> to quit";
+            context.messageLine.info() << "Type :qa and press <Enter> to quit";
             return true;
         },
         InputMappingFlags::normal | InputMappingFlags::visual,

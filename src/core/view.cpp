@@ -2,7 +2,6 @@
 
 #include <cstring>
 #include <expected>
-#include <format>
 #include <string_view>
 #include <type_traits>
 
@@ -257,14 +256,14 @@ size_t View::fileLineCount() const
 
 const std::string& View::filePath() const
 {
-    assert(type_ != cast(Type::uninitialized), std::format("View {} type is uninitialized", this));
+    assert(type_ != cast(Type::uninitialized), utils::format("View {} type is uninitialized", this));
     return file_.path();
 }
 
 void View::loading()
 {
-    assert(state_ == cast(State::uninitialized), std::format("View {} state is {}", this, stringify<State>(state_)));
-    assert(type_ == cast(Type::uninitialized), std::format("View {} type is {}", this, stringify<Type>(type_)));
+    assert(state_ == cast(State::uninitialized), utils::format("View {} state is {}", this, stringify<State>(state_)));
+    assert(type_ == cast(Type::uninitialized), utils::format("View {} type is {}", this, stringify<Type>(type_)));
 
     state_ = cast(State::loading);
 }

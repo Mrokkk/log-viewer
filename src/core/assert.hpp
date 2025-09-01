@@ -37,7 +37,11 @@ namespace core
         void(0); \
     })
 
-#define assert(...)      REAL_VAR_MACRO_2(ASSERT_1, ASSERT_2, __VA_ARGS__)
+#ifndef NDEBUG
+#define assert(...) REAL_VAR_MACRO_2(ASSERT_1, ASSERT_2, __VA_ARGS__)
+#else
+#define assert(...) void(0)
+#endif
 
 namespace detail
 {

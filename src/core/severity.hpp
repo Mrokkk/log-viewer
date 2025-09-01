@@ -1,6 +1,6 @@
 #pragma once
 
-enum Severity
+enum Severity : char
 {
     debug,
     info,

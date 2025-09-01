@@ -1,15 +1,12 @@
 #include "open.hpp"
 
-#include <iomanip>
-#include <sstream>
-
 #include "core/alias.hpp"
 #include "core/command.hpp"
 #include "core/interpreter.hpp"
 #include "core/message_line.hpp"
-#include "core/severity.hpp"
 #include "core/view.hpp"
 #include "core/user_interface.hpp"
+#include "utils/buffer.hpp"
 
 namespace core
 {
@@ -41,7 +38,7 @@ DEFINE_COMMAND(open)
 
         if (uiView.expired()) [[unlikely]]
         {
-            context.messageLine << error << errorHeader << "Failed to create UI view";
+            context.messageLine.error() << errorHeader << "Failed to create UI view";
             context.views.free(newViewId);
             return false;
         }
@@ -60,15 +57,15 @@ DEFINE_COMMAND(open)
                         return;
                     }
 
-                    context.messageLine << info
+                    context.messageLine.info()
                         << newView->filePath() << ": lines: " << newView->lineCount() << "; took "
-                        << std::fixed << std::setprecision(3) << result.value() << " s";
+                        << result.value() << " s";
 
                     context.ui->onViewDataLoaded(uiView, context);
                 }
                 else if (context.running)
                 {
-                    context.messageLine << error << errorHeader << result.error();
+                    context.messageLine.error() << errorHeader << result.error();
                     context.ui->removeView(uiView, context);
                 }
             });
@@ -84,9 +81,9 @@ namespace commands
 
 bool open(const std::string& path, Context& context)
 {
-    std::stringstream ss;
-    ss << open::Command::name << " \"" << path << "\"";
-    return executeCode(ss.str(), context);
+    utils::Buffer buf;
+    buf << open::Command::name << " \"" << path << "\"";
+    return executeCode(buf.str(), context);
 }
 
 }  // namespace commands

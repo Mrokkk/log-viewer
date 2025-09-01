@@ -3,23 +3,28 @@
 #include <atomic>
 #include <ctime>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <string_view>
 
+#include "core/severity.hpp"
+#include "sys/log_printer.hpp"
+#include "utils/buffer.hpp"
 #include "utils/ring_buffer.hpp"
+#include "utils/source_location.hpp"
 
-using StringsRingBuffer = utils::RingBuffer<std::string>;
+using LogRingBuffer = utils::RingBuffer<LogEntry>;
 
-const Logger             logger;
-static std::atomic_bool  closed;
-static std::ofstream     fileStream;
-static std::mutex        lock;
-static StringsRingBuffer ringBuffer(512);
+static std::atomic_bool closed;
+static std::ofstream    fileStream;
+static std::mutex       lock;
+static LogRingBuffer    ringBuffer(1024);
 
-Flusher Logger::operator<<(Severity severity) const
+static thread_local utils::Buffer buffer;
+
+Logger::Flusher Logger::log(Severity severity, LogEntryFlags flags, const char* header, utils::SourceLocation loc)
 {
-    return Flusher(severity);
+    return Flusher(severity, flags, header, loc, buffer);
 }
 
 void Logger::flushToStderr()
@@ -28,10 +33,11 @@ void Logger::flushToStderr()
     if (not fileStream.is_open())
     {
         ringBuffer.forEach(
-            [](const auto& line)
+            [](const LogEntry& entry)
             {
-                std::cerr << line << '\n';
+                sys::printLogEntry(entry, std::cerr);
             });
+        std::cerr.flush();
     }
 }
 
@@ -40,44 +46,59 @@ void Logger::setLogFile(std::string_view path)
     fileStream.open(path.data());
 }
 
-static void pushLine(std::string line)
+LogEntries Logger::logEntries()
 {
+    LogEntries logs;
+    logs.reserve(ringBuffer.size());
+    ringBuffer.forEach(
+        [&logs](const auto& entry)
+        {
+            logs.push_back(entry);
+        });
+    return logs;
+}
+
+void Logger::registerLogEntry(Severity severity, LogEntryFlags flags, const char* header, utils::SourceLocation loc)
+{
+    LogEntry entry{
+        .severity = severity,
+        .flags = flags,
+        .time = std::time(nullptr),
+        .location = loc,
+        .header = header,
+        .message = buffer.str(),
+    };
+
+    buffer.clear();
+
     std::scoped_lock scopedLock(lock);
 
     if (fileStream.is_open())
     {
-        fileStream << line << std::endl;
+        sys::printLogEntry(entry, fileStream);
+        fileStream.flush();
     }
 
     if (closed) [[unlikely]]
     {
-        std::cerr << line << std::endl;
+        sys::printLogEntry(entry, std::cerr);
+        std::cerr.flush();
         return;
     }
 
-    ringBuffer.pushBack(std::move(line));
+    ringBuffer.pushBack(std::move(entry));
 }
 
-Flusher::Flusher(Severity severity)
+Logger::Flusher::Flusher(
+    Severity severity,
+    LogEntryFlags flags,
+    const char* header,
+    utils::SourceLocation loc,
+    utils::Buffer& buffer)
+    : mSeverity(severity)
+    , mFlags(flags)
+    , mHeader(header)
+    , mLocation(loc)
+    , mBuffer(buffer)
 {
-    std::time_t t = std::time(nullptr);
-    line << "\e[32m[" << std::put_time(std::localtime(&t), "%F %T") << "]\e[0m ";
-
-    switch (severity)
-    {
-        case warning:
-            line << "\e[33m";
-            break;
-        case error:
-            line << "\e[31m";
-            break;
-        default:
-            break;
-    }
-}
-
-Flusher::~Flusher()
-{
-    line << "\e[0m";
-    pushLine(line.str());
 }

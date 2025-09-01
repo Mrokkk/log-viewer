@@ -18,6 +18,7 @@ struct Picker final : UIComponent
         commands,
         variables,
         messages,
+        logs,
         _last
     };
 

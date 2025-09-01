@@ -1,14 +1,14 @@
 #include "type.hpp"
 
-#include <ostream>
+#include "utils/buffer.hpp"
 
 namespace core
 {
 
-std::ostream& operator<<(std::ostream& os, const Type type)
+utils::Buffer& operator<<(utils::Buffer& buf, const Type type)
 {
 #define TYPE_PRINT(type) \
-    case Type::type: return os << #type
+    case Type::type: return buf << #type
     switch (type)
     {
         TYPE_PRINT(any);
@@ -18,7 +18,7 @@ std::ostream& operator<<(std::ostream& os, const Type type)
         TYPE_PRINT(string);
         TYPE_PRINT(boolean);
         default:
-            return os << "unknown{" << static_cast<int>(type) << '}';
+            return buf << "unknown{" << static_cast<int>(type) << '}';
     }
 }
 
