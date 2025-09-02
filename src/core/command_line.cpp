@@ -44,20 +44,22 @@ CommandLine::CommandLine()
             [](std::string_view pattern)
             {
                 std::flat_set<std::string_view> result;
-                for (const auto& [_, command] : Commands::map())
-                {
-                    if (command.name.starts_with(pattern))
+                Commands::forEach(
+                    [&result, &pattern](const Command& command)
                     {
-                        result.insert(command.name);
-                    }
-                }
-                for (const auto& [_, alias] : Aliases::map())
-                {
-                    if (alias.name.starts_with(pattern))
+                        if (command.name.starts_with(pattern))
+                        {
+                            result.insert(command.name);
+                        }
+                    });
+                Aliases::forEach(
+                    [&result, &pattern](const Alias& alias)
                     {
-                        result.insert(alias.name);
-                    }
-                }
+                        if (alias.name.starts_with(pattern))
+                        {
+                            result.insert(alias.name);
+                        }
+                    });
                 return utils::StringViews(result.begin(), result.end());
             });
 }

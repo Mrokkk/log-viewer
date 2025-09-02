@@ -203,39 +203,38 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::commands:
-            strings = core::Commands::map()
-                | views::transform(
-                    [leftWidth, width](const auto& e)
+            strings.clear();
+            core::Commands::forEach(
+                [this, leftWidth, width](const core::Command& command)
+                {
+                    utils::Buffer commandDesc;
+
+                    commandDesc << command.name << " ";
+
+                    for (const auto& flag : command.flags.get())
                     {
-                        utils::Buffer commandDesc;
+                        commandDesc << "[-" << flag << "] ";
+                    }
 
-                        commandDesc << e.second.name << " ";
-
-                        for (const auto& flag : e.second.flags.get())
+                    for (const auto& arg : command.arguments.get())
+                    {
+                        if (arg.type == core::Type::variadic)
                         {
-                            commandDesc << "[-" << flag << "] ";
+                            commandDesc << '[' << arg.name << "]... ";
                         }
-
-                        for (const auto& arg : e.second.arguments.get())
+                        else
                         {
-                            if (arg.type == core::Type::variadic)
-                            {
-                                commandDesc << '[' << arg.name << "]... ";
-                            }
-                            else
-                            {
-                                commandDesc << '[' << arg.type << ':' << arg.name << "] ";
-                            }
+                            commandDesc << '[' << arg.type << ':' << arg.name << "] ";
                         }
+                    }
 
-                        std::ostringstream ss;
-                        ss << std::left << std::setw(leftWidth) << commandDesc.str()
-                           << std::right << std::setw(width - leftWidth)
-                           << ColorWrapped(e.second.help, Palette::Picker::additionalInfoFg);
+                    std::ostringstream ss;
+                    ss << std::left << std::setw(leftWidth) << commandDesc.str()
+                       << std::right << std::setw(width - leftWidth)
+                       << ColorWrapped(command.help, Palette::Picker::additionalInfoFg);
 
-                        return ss.str();
-                    })
-                | to<utils::Strings>();
+                    strings.emplace_back(ss.str());
+                });
             break;
 
         case Picker::Type::variables:

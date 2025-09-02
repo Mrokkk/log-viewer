@@ -146,13 +146,11 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
 {
     std::string commandName(tokens[0].value.begin(), tokens[0].value.end());
 
-    const auto& aliases = Aliases::map();
+    const auto alias = Aliases::find(commandName);
 
-    const auto alias = aliases.find(commandName);
-
-    if (alias != aliases.end())
+    if (alias)
     {
-        commandName = alias->second.command;
+        commandName = alias->command;
     }
 
     bool force{false};

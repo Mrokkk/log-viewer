@@ -1,6 +1,6 @@
 #pragma once
 
-#include <flat_map>
+#include <functional>
 #include <string_view>
 
 namespace core
@@ -12,18 +12,22 @@ struct Alias
     std::string_view command;
 };
 
-using AliasesMap = std::flat_map<std::string_view, Alias>;
-
 struct Aliases final
 {
     Aliases() = delete;
-    static AliasesMap& map();
+    static void $register(Alias alias);
+    static Alias* find(const std::string_view& name);
+    static void forEach(std::function<void(const Alias&)> callback);
 };
 
 #define DEFINE_ALIAS(NAME, COMMAND) \
     static void __attribute__((constructor)) alias_##NAME##_init() \
     { \
-        ::core::Aliases::map()[#NAME] = ::core::Alias{.name = #NAME, .command = #COMMAND}; \
+        ::core::Aliases::$register( \
+            ::core::Alias{ \
+                .name = #NAME, \
+                .command = #COMMAND \
+            }); \
     }
 
 }  // namespace core

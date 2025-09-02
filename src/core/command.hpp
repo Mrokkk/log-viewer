@@ -1,6 +1,5 @@
 #pragma once
 
-#include <flat_map>
 #include <flat_set>
 #include <string>
 #include <string_view>
@@ -65,14 +64,12 @@ struct Command final : utils::NonCopyable
     const char*      help;
 };
 
-using CommandsMap = std::flat_map<std::string_view, Command>;
-
 struct Commands final
 {
     Commands() = delete;
-    static CommandsMap& map();
     static Command* find(const std::string& name);
     static void $register(Command command);
+    static void forEach(std::function<void(const Command&)> callback);
 };
 
 #define EXECUTOR() \

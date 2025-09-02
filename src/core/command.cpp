@@ -2,10 +2,15 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <flat_map>
 #include <string_view>
 
 namespace core
 {
+
+using CommandsMap = std::flat_map<std::string_view, Command>;
+
+static CommandsMap map;
 
 CommandArguments::CommandArguments() = default;
 
@@ -31,15 +36,9 @@ const std::flat_set<std::string>& CommandFlags::get() const
     return flags_;
 }
 
-CommandsMap& Commands::map()
-{
-    static CommandsMap map;
-    return map;
-}
-
 Command* Commands::find(const std::string& name)
 {
-    auto& commands = Commands::map();
+    auto& commands = map;
     const auto commandIt = commands.find(name);
 
     return commandIt != commands.end()
@@ -49,7 +48,7 @@ Command* Commands::find(const std::string& name)
 
 void Commands::$register(Command command)
 {
-    auto& commands = Commands::map();
+    auto& commands = map;
 
     const auto& commandArgs = command.arguments.get();
 
@@ -69,6 +68,14 @@ void Commands::$register(Command command)
     {
         std::fprintf(stderr, "%s: %s: already defined\n", __func__, command.name.data());
         std::abort();
+    }
+}
+
+void Commands::forEach(std::function<void(const Command&)> callback)
+{
+    for (const auto& [_, command] : map)
+    {
+        callback(command);
     }
 }
 
