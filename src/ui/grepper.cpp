@@ -11,6 +11,7 @@
 #include "core/input.hpp"
 #include "core/mode.hpp"
 #include "core/readline.hpp"
+#include "ui/event_converter.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/text_box.hpp"

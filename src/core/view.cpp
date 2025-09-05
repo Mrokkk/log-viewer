@@ -18,7 +18,7 @@
 namespace core
 {
 
-enum struct Type : char
+enum struct ViewType : char
 {
     uninitialized,
     base,
@@ -44,7 +44,7 @@ constexpr static inline char cast(T value)
 View::View()
     : stopFlag_(false)
     , state_(cast(State::uninitialized))
-    , type_(cast(Type::uninitialized))
+    , type_(cast(ViewType::uninitialized))
     , lineCount_(0)
     , fileLines_(nullptr)
 {
@@ -65,10 +65,10 @@ View::~View()
     }
     switch (type_)
     {
-        case cast(Type::base):
+        case cast(ViewType::base):
             utils::destroyAt(&ownLines_);
             break;
-        case cast(Type::filtered):
+        case cast(ViewType::filtered):
             utils::destroyAt(&greppedLines_);
             break;
         default:
@@ -92,11 +92,11 @@ constexpr static inline const char* stringify(char value)
         }
         return "unknown";
     }
-    else if constexpr (std::is_same_v<T, Type>)
+    else if constexpr (std::is_same_v<T, ViewType>)
     {
 #define PRINT_TYPE(TYPE) \
-    case Type::TYPE: return #TYPE
-        switch (static_cast<Type>(value))
+    case ViewType::TYPE: return #TYPE
+        switch (static_cast<ViewType>(value))
         {
             PRINT_TYPE(uninitialized);
             PRINT_TYPE(base);
@@ -122,7 +122,7 @@ void View::load(std::string path, Context&, ViewLoadedCallback callback)
     }
 
     utils::constructAt(&ownLines_);
-    type_ = cast(Type::base);
+    type_ = cast(ViewType::base);
 
     async(
         [callback = std::move(callback), this]
@@ -149,7 +149,7 @@ void View::grep(std::string pattern, GrepOptions options, ViewId parentViewId, C
     loading();
 
     utils::constructAt(&greppedLines_);
-    type_ = cast(Type::filtered);
+    type_ = cast(ViewType::filtered);
 
     async(
         [pattern = std::move(pattern), callback = std::move(callback), options, parentViewId, &context, this]
@@ -187,7 +187,7 @@ void View::filter(size_t start, size_t end, ViewId parentViewId, Context& contex
     loading();
 
     utils::constructAt(&greppedLines_);
-    type_ = cast(Type::filtered);
+    type_ = cast(ViewType::filtered);
 
     async(
         [start, end, callback = std::move(callback), parentViewId, &context, this]
@@ -216,7 +216,7 @@ StringOrError View::readLine(size_t i)
 {
     auto lineIndex = i;
 
-    if (type_ == cast(Type::filtered))
+    if (type_ == cast(ViewType::filtered))
     {
         lineIndex = greppedLines_[lineIndex];
     }
@@ -242,7 +242,7 @@ size_t View::absoluteLineNumber(size_t lineIndex) const
 {
     switch (type_)
     {
-        case cast(Type::filtered):
+        case cast(ViewType::filtered):
             return greppedLines_[lineIndex];
         default:
             return lineIndex;
@@ -256,14 +256,14 @@ size_t View::fileLineCount() const
 
 const std::string& View::filePath() const
 {
-    assert(type_ != cast(Type::uninitialized), utils::format("View {} type is uninitialized", this));
+    assert(type_ != cast(ViewType::uninitialized), utils::format("View {} type is uninitialized", this));
     return file_.path();
 }
 
 void View::loading()
 {
     assert(state_ == cast(State::uninitialized), utils::format("View {} state is {}", this, stringify<State>(state_)));
-    assert(type_ == cast(Type::uninitialized), utils::format("View {} type is {}", this, stringify<Type>(type_)));
+    assert(type_ == cast(ViewType::uninitialized), utils::format("View {} type is {}", this, stringify<ViewType>(type_)));
 
     state_ = cast(State::loading);
 }
@@ -397,7 +397,7 @@ std::expected<bool, std::string> View::grep(
 
         if (options.inverted)
         {
-            if (parentView.type_ == cast(Type::filtered))
+            if (parentView.type_ == cast(ViewType::filtered))
             {
                 GREP_LOOP(not lineCheck(result.value(), pattern), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -408,7 +408,7 @@ std::expected<bool, std::string> View::grep(
         }
         else
         {
-            if (parentView.type_ == cast(Type::filtered))
+            if (parentView.type_ == cast(ViewType::filtered))
             {
                 GREP_LOOP(lineCheck(result.value(), pattern), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -424,7 +424,7 @@ std::expected<bool, std::string> View::grep(
 
         if (options.inverted)
         {
-            if (parentView.type_ == cast(Type::filtered))
+            if (parentView.type_ == cast(ViewType::filtered))
             {
                 GREP_LOOP(not RE2::PartialMatch(result.value(), re), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -435,7 +435,7 @@ std::expected<bool, std::string> View::grep(
         }
         else
         {
-            if (parentView.type_ == cast(Type::filtered))
+            if (parentView.type_ == cast(ViewType::filtered))
             {
                 GREP_LOOP(RE2::PartialMatch(result.value(), re), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -461,7 +461,7 @@ void View::filter(
     {
         auto lineIndex = i;
 
-        if (parentView.type_ == cast(Type::filtered))
+        if (parentView.type_ == cast(ViewType::filtered))
         {
             lineIndex = parentView.greppedLines_[lineIndex];
         }

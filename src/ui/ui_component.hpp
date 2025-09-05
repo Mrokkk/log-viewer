@@ -1,7 +1,6 @@
 #pragma once
 
-#include <ftxui/component/event.hpp>
-#include <ftxui/dom/elements.hpp>
+#include <ftxui/fwd.hpp>
 
 #include "core/fwd.hpp"
 #include "ui/fwd.hpp"
@@ -25,9 +24,9 @@ struct UIComponent : utils::Immobile
 
     virtual void onExit();
     virtual void takeFocus();
-    virtual bool handleEvent(const ftxui::Event&, Ftxui&, core::Context&);
+    virtual bool handleEvent(const ftxui::Event& event, Ftxui&, core::Context& context);
 
-    virtual ftxui::Element render(core::Context&) = 0;
+    virtual ftxui::Element render(core::Context& context) = 0;
 
     const Type type;
 };

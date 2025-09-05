@@ -1,4 +1,4 @@
-#define LOG_HEADER "App"
+#define LOG_HEADER "core::App"
 #include "app.hpp"
 
 #include <iostream>

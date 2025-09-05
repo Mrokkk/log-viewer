@@ -26,29 +26,6 @@ constexpr inline void format(Buffer& buf, std::string_view& fmt, First&& first, 
     detail::format(buf, fmt, std::forward<Args>(args)...);
 }
 
-template <size_t got>
-void constevalFailure(const char*);
-
-template <typename ...Args>
-struct FormatStringChecker
-{
-    consteval FormatStringChecker(std::string_view str)
-    {
-        size_t count = 0;
-        for (size_t i = 0; i < str.length() - 1; ++i)
-        {
-            if (str[i] == '{' and str[i + 1] == '}')
-            {
-                count++;
-            }
-        }
-        if (count != sizeof...(Args))
-        {
-            constevalFailure<sizeof...(Args)>("Incorrect number of arguments passed");
-        }
-    }
-};
-
 template <typename ...Args>
 struct FormatStringImpl
 {
@@ -57,8 +34,22 @@ struct FormatStringImpl
     consteval FormatStringImpl(const T& str)
         : mStr(str)
     {
-        FormatStringChecker<Args...> check(mStr);
+        size_t count = 0;
+        for (size_t i = 0; i < mStr.length() - 1; ++i)
+        {
+            if (mStr[i] == '{' and mStr[i + 1] == '}')
+            {
+                count++;
+            }
+        }
+        if (count != sizeof...(Args))
+        {
+            failure<sizeof...(Args)>("Incorrect number of arguments passed");
+        }
     }
+
+    template <size_t got>
+    static void failure(const char*);
 
     std::string_view mStr;
 };

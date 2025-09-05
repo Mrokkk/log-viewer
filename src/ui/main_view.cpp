@@ -1,9 +1,12 @@
-#define LOG_HEADER "MainView"
+#define LOG_HEADER "ui::MainView"
 #include "main_view.hpp"
+
+#include <cstdint>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/dom/node.hpp>
 
 #include "core/alias.hpp"
 #include "core/assert.hpp"
@@ -16,7 +19,7 @@
 #include "core/view.hpp"
 #include "core/views.hpp"
 #include "sys/system.hpp"
-#include "ui/event_handler.hpp"
+#include "ui/config.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/ui_component.hpp"
@@ -34,7 +37,7 @@ constexpr size_t MAX_LINES_COPIED = 2000;
 
 struct MainView::Impl final
 {
-    Impl();
+    Impl(const Config& config);
 
     bool isViewLoaded() const;
     bool scrollLeft(core::Context& context);
@@ -65,12 +68,13 @@ struct MainView::Impl final
 
     bool handleEvent(const Event& event, Ftxui& ui, core::Context& context);
 
-    ViewNode          root;
-    ftxui::Component  lines;
-    View*             currentView;
-    int               activeTabline;
-    int               currentHeight;
-    EventHandlers     eventHandlers;
+    ViewNode         root;
+    ftxui::Component placeholder;
+    View*            currentView;
+    const Config&    config;
+    int              activeTabline;
+    int              currentHeight;
+    EventHandlers    eventHandlers;
 
 private:
     bool resize(Ftxui& ui, core::Context& context);
@@ -80,10 +84,11 @@ private:
     void selectionUpdate();
 };
 
-MainView::Impl::Impl()
+MainView::Impl::Impl(const Config& cfg)
     : root(ViewNode::Type::group, "main")
-    , lines(Container::Vertical({}))
+    , placeholder(Container::Vertical({}))
     , currentView(nullptr)
+    , config(cfg)
     , activeTabline(0)
     , eventHandlers{
         {Event::PageUp,         [this](auto&, auto& context){ return scrollPageUp(context); }},
@@ -109,6 +114,99 @@ bool MainView::Impl::isViewLoaded() const
     return currentView and currentView->loaded;
 }
 
+constexpr static uint32_t u(char c)
+{
+    return uint32_t(uint8_t(c));
+}
+
+Glyphs getGlyphs(std::string_view line)
+{
+    Glyphs glyphs;
+    glyphs.reserve(line.size());
+    while (not line.empty())
+    {
+        if ((line[0] & 0b1000'0000) == 0b0000'0000) [[likely]]
+        {
+            glyphs.push_back(u(line[0]));
+            line.remove_prefix(1);
+        }
+        else if ((line[0] & 0b1110'0000) == 0b1100'0000 and line.size() > 1)
+        {
+            glyphs.push_back(u(line[0]) | (u(line[1]) << 8));
+            line.remove_prefix(2);
+        }
+        else if ((line[0] & 0b1111'0000) == 0b1110'0000 and line.size() > 2)
+        {
+            glyphs.push_back(u(line[0]) | (u(line[1]) << 8) | (u(line[2]) << 16));
+            line.remove_prefix(3);
+        }
+        else if ((line[0] & 0b1111'1000) == 0b1111'0000 and line.size() > 3)
+        {
+            glyphs.push_back(u(line[0]) | (u(line[1]) << 8) | (u(line[2]) << 16) | (u(line[3]) << 24));
+            line.remove_prefix(4);
+        }
+        else
+        {
+            glyphs.push_back(u(line[0]));
+            line.remove_prefix(1);
+        }
+    }
+    return glyphs;
+}
+
+static Line getLine(View& view, size_t lineIndex, core::Context& context)
+{
+    auto viewData = core::getView(view.dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return {}; // TODO: do something?
+    }
+
+    auto result = viewData->readLine(lineIndex);
+
+    if (not result) [[unlikely]]
+    {
+        return {};
+    }
+
+    Line line{
+        .lineNumber = lineIndex,
+        .absoluteLineNumber = viewData->absoluteLineNumber(lineIndex),
+        .data = std::move(result.value())
+    };
+
+    auto glyphs = getGlyphs(line.data);
+
+    if (line.data.find("ERR") != std::string::npos)
+    {
+        line.segments.emplace_back(std::move(glyphs), Color::Red);
+    }
+    else if (line.data.find("WRN") != std::string::npos)
+    {
+        line.segments.emplace_back(std::move(glyphs), Color::Yellow);
+    }
+    else if (line.data.find("DBG") != std::string::npos)
+    {
+        line.segments.emplace_back(std::move(glyphs), Color::Palette256(245));
+    }
+    else
+    {
+        line.segments.emplace_back(std::move(glyphs), Color());
+    }
+
+    return line;
+}
+
+static void reloadLines(View& view, core::Context& context)
+{
+    view.ringBuffer.clear();
+    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
+    {
+        view.ringBuffer.pushBack(getLine(view, i, context));
+    }
+}
+
 bool MainView::Impl::scrollLeft(core::Context& context)
 {
     if (not isViewLoaded())
@@ -118,12 +216,12 @@ bool MainView::Impl::scrollLeft(core::Context& context)
 
     auto& view = *currentView;
 
-    if (view.xoffset == 0)
+    if (view.xcurrent == 0)
     {
         return true;
     }
 
-    view.xoffset--;
+    view.xcurrent--;
     reloadLines(view, context);
     return true;
 }
@@ -137,7 +235,7 @@ bool MainView::Impl::scrollRight(core::Context& context)
 
     auto& view = *currentView;
 
-    view.xoffset++;
+    view.xcurrent++;
     reloadLines(view, context);
     return true;
 }
@@ -343,7 +441,7 @@ ViewNodePtr MainView::Impl::createView(std::string name, core::ViewId viewDataId
         : root;
 
     auto groupPtr = ViewNode::createGroup(std::move(name));
-    auto basePtr = View::create("base", viewDataId);
+    auto basePtr = View::create("base", viewDataId, config);
 
     auto& group = parent
         .addChild(groupPtr)
@@ -462,71 +560,6 @@ const char* MainView::Impl::activeFileName(core::Context& context) const
     return viewData->filePath().c_str();
 }
 
-static const MenuEntryOption tabOption{
-    .transform =
-        [](const EntryState& state)
-        {
-            auto string = ' ' + std::to_string(state.index) + ' ' + state.label + ' ';
-
-            if (state.focused)
-            {
-                if (state.index != 0)
-                {
-                    return hbox({
-                        text("")
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg),
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg)
-                            | bold,
-                        text("")
-                            | color(Palette::TabLine::activeBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-                else
-                {
-                    return hbox({
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg)
-                            | bold,
-                        text("")
-                            | color(Palette::TabLine::activeBg)
-                            | bgcolor(Palette::TabLine::activeFg),
-                    });
-                }
-            }
-            else
-            {
-                if (state.index != 0)
-                {
-                    return hbox({
-                        text("")
-                            | bgcolor(Palette::TabLine::inactiveBg)
-                            | color(Palette::TabLine::separatorBg),
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::inactiveBg),
-                        text("")
-                            | color(Palette::TabLine::inactiveBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-                else
-                {
-                    return hbox({
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::inactiveBg),
-                        text("")
-                            | color(Palette::TabLine::inactiveBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-            }
-        }
-};
-
 static Element wrapActiveLineIf(Element line, bool condition)
 {
     if (not condition)
@@ -570,55 +603,6 @@ Elements MainView::Impl::renderTablines()
     }
 
     return vertical;
-}
-
-struct GetLines
-{
-    View& view;
-};
-
-GetLines getLines(View& view)
-{
-    return {.view = view};
-}
-
-static Elements operator|(LinesRingBuffer& buf, const GetLines& obj)
-{
-    Elements vec;
-    size_t i = 0;
-    buf.forEach(
-        [&i, &obj, &vec](const auto& line)
-        {
-            auto& view = obj.view;
-            auto absoluteIndex = i + view.yoffset;
-            if (view.ycurrent == i)
-            {
-                vec.emplace_back(text(&line.line) | bgcolor(Palette::bg3));
-            }
-            else if (view.selectionMode and absoluteIndex >= view.selectionStart and absoluteIndex <= view.selectionEnd)
-            {
-                vec.emplace_back(text(&line.line) | bgcolor(Palette::bg2));
-            }
-            else
-            {
-                vec.emplace_back(text(&line.line));
-            }
-            ++i;
-        });
-    return vec;
-}
-
-static constexpr struct GetLineNumbers{} getLineNumbers;
-
-static Elements operator|(LinesRingBuffer& buf, const GetLineNumbers&)
-{
-    Elements vec;
-    buf.forEach(
-        [&vec](const auto& line)
-        {
-            vec.emplace_back(text(&line.lineNumber) | xflex);
-        });
-    return vec;
 }
 
 ViewNode* MainView::Impl::getActiveLineView()
@@ -700,10 +684,7 @@ Element MainView::Impl::render(core::Context& context)
         }
         else
         {
-            vertical.push_back(
-                hbox(
-                    nonSelectableVbox(currentView->ringBuffer | getLineNumbers),
-                    vbox(currentView->ringBuffer | getLines(*currentView)) | xflex));
+            vertical.push_back(currentView->viewRenderer);
         }
     }
     else
@@ -832,9 +813,9 @@ void MainView::Impl::selectionUpdate()
     }
 }
 
-MainView::MainView()
+MainView::MainView(const Config& config)
     : UIComponent(UIComponent::mainView)
-    , mPimpl(new Impl)
+    , mPimpl(new Impl(config))
 {
 }
 
@@ -845,7 +826,6 @@ MainView::~MainView()
 
 void MainView::takeFocus()
 {
-    mPimpl->lines->TakeFocus();
 }
 
 bool MainView::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
@@ -900,7 +880,7 @@ ViewNode& MainView::root()
 
 MainView::operator ftxui::Component&()
 {
-    return mPimpl->lines;
+    return mPimpl->placeholder;
 }
 
 DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")
@@ -908,13 +888,13 @@ DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the le
     READER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        return ui.showLineNumbers;
+        return ui.config.showLineNumbers;
     }
 
     WRITER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        ui.showLineNumbers = value.boolean;
+        ui.config.showLineNumbers = value.boolean;
         ui.mainView.reload(ui, context);
         return true;
     }
@@ -925,13 +905,13 @@ DEFINE_READWRITE_VARIABLE(absoluteLineNumbers, boolean, "Print file absolute lin
     READER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        return ui.absoluteLineNumbers;
+        return ui.config.absoluteLineNumbers;
     }
 
     WRITER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        ui.absoluteLineNumbers = value.boolean;
+        ui.config.absoluteLineNumbers = value.boolean;
         ui.mainView.reload(ui, context);
         return true;
     }
@@ -1063,7 +1043,7 @@ DEFINE_COMMAND(filter)
                     {
                         context.messageLine.info()
                             << "filtered " << newView->lineCount() << " lines; took "
-                            << result.value() << " s";
+                            << (result.value() | utils::precision(3)) << " s";
 
                         context.ui->onViewDataLoaded(uiView, context);
                     }
@@ -1077,6 +1057,32 @@ DEFINE_COMMAND(filter)
 
         return true;
     }
+}
+
+static size_t getAvailableViewHeight(Ftxui& ui, View& view)
+{
+    return static_cast<size_t>(ui.terminalSize.dimy)
+        - 1 // command line
+        - 1 // status line
+        - (view.depth() + 1);
+}
+
+void reloadView(View& view, Ftxui& ui, core::Context& context)
+{
+    auto viewData = core::getView(view.dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return;
+    }
+
+    view.lineCount = viewData->lineCount();
+    view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
+    view.lineNrDigits = utils::numberOfDigits(viewData->fileLineCount());
+    view.ringBuffer = RingBuffer(view.viewHeight);
+    view.yoffset = view.yoffset | utils::clamp(0ul, viewData->lineCount() - view.viewHeight);
+
+    reloadLines(view, context);
 }
 
 }  // namespace ui

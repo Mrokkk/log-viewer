@@ -36,19 +36,19 @@ const TimerData& getData(const long& data)
 
 Timer::Timer()
 {
-    static_assert(sizeof(Timer::data_) >= sizeof(TimerData));
-    auto& data = getData(data_);
+    static_assert(sizeof(Timer::mData) >= sizeof(TimerData));
+    auto& data = getData(mData);
     constructAt(&data, SystemClock::now());
 }
 
 Timer::~Timer()
 {
-    destroyAt(&getData(data_));
+    destroyAt(&getData(mData));
 }
 
 float Timer::elapsed() const
 {
-    const auto start = getData(data_).start;
+    const auto start = getData(mData).start;
     const auto end = SystemClock::now();
     Duration<float> elapsed = end - start;
     return elapsed.count();

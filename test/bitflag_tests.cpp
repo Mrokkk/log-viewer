@@ -66,6 +66,12 @@ TEST(BitFlagTests, canDoStuff)
     flag &= ~TestBitFlag::b;
     ASSERT_EQ(flag.value, c | d | e);
 
+    auto test = flag & (TestBitFlag::c | TestBitFlag::d);
+    ASSERT_EQ(test.value, c | d);
+
+    auto test2 = flag & ~TestBitFlag::c;
+    ASSERT_EQ(test2.value, d | e);
+
     flag = ~TestBitFlag::a;
     ASSERT_EQ(flag.value, ~a);
 }
