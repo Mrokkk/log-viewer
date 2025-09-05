@@ -1,4 +1,4 @@
-#define LOG_HEADER "Input"
+#define LOG_HEADER "core::Input"
 #include "input.hpp"
 
 #include <cctype>

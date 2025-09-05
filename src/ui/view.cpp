@@ -1,216 +1,22 @@
+#define LOG_HEADER "ui::View"
 #include "view.hpp"
 
-#include <spanstream>
-#include <sstream>
+#include <memory>
 
 #include <ftxui/component/component.hpp>
-#include <ftxui/component/component_options.hpp>
 #include <ftxui/dom/elements.hpp>
-#include <ftxui/screen/colored_string.hpp>
+#include <ftxui/screen/screen.hpp>
+#include <ftxui/screen/string.hpp>
 
-#include "core/view.hpp"
 #include "core/views.hpp"
-#include "ui/ftxui.hpp"
-#include "ui/palette.hpp"
-#include "utils/math.hpp"
+#include "ui/view_renderer.hpp"
 
 using namespace ftxui;
 
 namespace ui
 {
 
-static const MenuEntryOption tabOption{
-    .transform =
-        [](const EntryState& state)
-        {
-            auto string = ' ' + std::to_string(state.index) + ' ' + state.label + ' ';
-
-            if (state.focused)
-            {
-                if (state.index != 0)
-                {
-                    return hbox({
-                        text("")
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg),
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg)
-                            | bold,
-                        text("")
-                            | color(Palette::TabLine::activeBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-                else
-                {
-                    return hbox({
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg)
-                            | bold,
-                        text("")
-                            | color(Palette::TabLine::activeBg)
-                            | bgcolor(Palette::TabLine::activeFg),
-                    });
-                }
-            }
-            else
-            {
-                if (state.index != 0)
-                {
-                    return hbox({
-                        text("")
-                            | bgcolor(Palette::TabLine::inactiveBg)
-                            | color(Palette::TabLine::separatorBg),
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::inactiveBg),
-                        text("")
-                            | color(Palette::TabLine::inactiveBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-                else
-                {
-                    return hbox({
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::inactiveBg),
-                        text("")
-                            | color(Palette::TabLine::inactiveBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-            }
-        }
-};
-
-ViewNode::ViewNode(Type type, std::string name)
-    : type_(type)
-    , depth_(0)
-    , name_(name)
-    , parent_(nullptr)
-    , activeChild_(nullptr)
-    , tab_(MenuEntry(name, tabOption))
-    , childrenTabs_(Container::Horizontal({}))
-{
-}
-
-ViewNode::~ViewNode()
-{
-    tab_->Detach();
-}
-
-ViewNodePtr ViewNode::createGroup(std::string name)
-{
-    return std::make_shared<ViewNode>(Type::group, std::move(name));
-}
-
-ftxui::Element ViewNode::renderTabline() const
-{
-    return childrenTabs_->Render();
-}
-
-ViewNode& ViewNode::addChild(ViewNodePtr child)
-{
-    auto& childRef = *child;
-    child->parent_ = this;
-    child->depth_ = depth_ + 1;
-
-    childrenTabs_->Add(child->tab_);
-    children_.emplace_back(std::move(child));
-    return childRef;
-}
-
-ViewNode* ViewNode::childAt(unsigned index)
-{
-    if (index >= children_.size())
-    {
-        return nullptr;
-    }
-
-    auto it = std::next(children_.begin(), index);
-
-    return it->get();
-}
-
-ViewNode& ViewNode::setActive()
-{
-    parent_->setActiveChild(*this);
-    return *this;
-}
-
-void ViewNode::setActiveChild(ViewNode& node)
-{
-    for (auto& child : children_)
-    {
-        if (child.get() == &node)
-        {
-            childrenTabs_->SetActiveChild(child->tab_);
-            activeChild_ = child.get();
-            return;
-        }
-    }
-    std::abort();
-}
-
-ViewNode* ViewNode::next()
-{
-    if (not parent_)
-    {
-        return nullptr;
-    }
-
-    for (auto it = parent_->children_.begin(); it != parent_->children_.end(); ++it)
-    {
-        if (it->get() == this)
-        {
-            return ++it == parent_->children_.end()
-                ? nullptr
-                : it->get();
-        }
-    }
-
-    return nullptr;
-}
-
-ViewNode* ViewNode::prev()
-{
-    if (not parent_)
-    {
-        return nullptr;
-    }
-
-    for (auto it = parent_->children_.begin(); it != parent_->children_.end(); ++it)
-    {
-        if (it->get() == this)
-        {
-            return it == parent_->children_.begin()
-                ? nullptr
-                : (--it)->get();
-        }
-    }
-
-    return nullptr;
-}
-
-ViewNode* ViewNode::deepestActive()
-{
-    auto child = activeChild_;
-
-    if (not child)
-    {
-        return nullptr;
-    }
-
-    while (child->activeChild())
-    {
-        child = child->activeChild();
-    }
-
-    return child;
-}
-
-View::View(std::string name, core::ViewId viewDataId)
+View::View(std::string name, core::ViewId viewDataId, const Config& cfg)
     : ViewNode(ViewNode::Type::view, std::move(name))
     , loaded(false)
     , dataId(viewDataId)
@@ -219,113 +25,20 @@ View::View(std::string name, core::ViewId viewDataId)
     , yoffset(0)
     , xoffset(0)
     , ycurrent(0)
+    , xcurrent(0)
     , selectionMode(false)
     , selectionPivot(0)
     , selectionStart(0)
     , selectionEnd(0)
+    , config(cfg)
     , ringBuffer(0)
+    , viewRenderer(std::make_shared<ViewRenderer>(*this))
 {
 }
 
-ViewPtr View::create(std::string name, core::ViewId viewDataId)
+ViewPtr View::create(std::string name, core::ViewId viewDataId, const Config& config)
 {
-    return std::make_shared<View>(std::move(name), viewDataId);
-}
-
-LineWithNumber getLine(View& view, size_t lineIndex, core::Context& context)
-{
-    std::ostringstream ss;
-    char buffer[32];
-    std::spanstream lineNumberStream(buffer);
-
-    auto viewData = core::getView(view.dataId, context);
-
-    if (not viewData)
-    {
-        return {}; // TODO: do something?
-    }
-
-    auto& ui = context.ui->get<ui::Ftxui>();
-
-    if (ui.showLineNumbers)
-    {
-        auto index = ui.absoluteLineNumbers
-            ? viewData->absoluteLineNumber(lineIndex)
-            : lineIndex;
-
-        lineNumberStream
-           << std::setw(view.lineNrDigits + 1)
-           << std::right
-           << ColorWrapped(index, Palette::View::lineNumberFg)
-           << ColorWrapped("│ ", Palette::View::lineNumberFg);
-    }
-
-    const auto result = viewData->readLine(lineIndex);
-
-    if (not result) [[unlikely]]
-    {
-        return {};
-    }
-
-    const auto& line = result.value();
-
-    auto xoffset = view.xoffset | utils::clamp(0ul, line.length());
-
-    if (line.find("ERR") != std::string::npos)
-    {
-        ss << ColorWrapped(line.c_str() + xoffset, Color::Red);
-    }
-    else if (line.find("WRN") != std::string::npos)
-    {
-        ss << ColorWrapped(line.c_str() + xoffset, Color::Yellow);
-    }
-    else if (line.find("DBG") != std::string::npos)
-    {
-        ss << ColorWrapped(line.c_str() + xoffset, Color::Palette256(245));
-    }
-    else
-    {
-        ss << line.c_str() + xoffset;
-    }
-
-    return {
-        .line = ss.str(),
-        .lineNumber = std::string(lineNumberStream.span().begin(), lineNumberStream.span().end())
-    };
-}
-
-void reloadLines(View& view, core::Context& context)
-{
-    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
-    {
-        view.ringBuffer.pushBack(getLine(view, i, context));
-    }
-}
-
-static size_t getAvailableViewHeight(Ftxui& ui, View& view)
-{
-    return static_cast<size_t>(ui.terminalSize.dimy)
-        - 1 // command line
-        - 1 // status line
-        - (view.depth() + 1);
-}
-
-void reloadView(View& view, Ftxui& ui, core::Context& context)
-{
-    auto viewData = core::getView(view.dataId, context);
-
-    if (not viewData) [[unlikely]]
-    {
-        return;
-    }
-
-    view.lineCount = viewData->lineCount();
-    view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
-    view.lineNrDigits = utils::numberOfDigits(viewData->fileLineCount());
-    view.ringBuffer = LinesRingBuffer(view.viewHeight);
-    view.yoffset = view.yoffset | utils::clamp(0ul, viewData->lineCount() - view.viewHeight);
-
-    reloadLines(view, context);
+    return std::make_shared<View>(std::move(name), viewDataId, config);
 }
 
 }  // namespace ui

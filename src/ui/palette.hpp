@@ -17,6 +17,7 @@ struct Palette
     static inline Color bg3 = 0x45403d_rgb;
     static inline Color bg4 = 0x353535_rgb;
     static inline Color bg5 = 0x606060_rgb;
+    static inline Color bg6 = 0x808080_rgb;
     static inline Color fg0 = 0xaf8787_rgb;
     static inline Color fg1 = 0x7daea3_rgb;
     static inline Color fg3 = 0xd75f5f_rgb;
@@ -47,7 +48,8 @@ struct Palette
 
     struct View
     {
-        static constexpr Color& lineNumberFg = Palette::bg2;
+        static constexpr Color& inactiveLineNumberFg = Palette::bg2;
+        static constexpr Color& activeLineNumberFg = Palette::bg6;
     };
 
     struct Picker

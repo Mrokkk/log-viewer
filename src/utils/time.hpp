@@ -10,7 +10,7 @@ struct Timer final
     float elapsed() const;
 
 private:
-    long data_;
+    long mData;
 };
 
 Timer startTimeMeasurement();

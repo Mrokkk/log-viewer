@@ -1,9 +1,12 @@
-#define LOG_HEADER "MainView"
+#define LOG_HEADER "ui::MainView"
 #include "main_view.hpp"
+
+#include <cstdint>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/dom/node.hpp>
 
 #include "core/alias.hpp"
 #include "core/assert.hpp"
@@ -16,7 +19,7 @@
 #include "core/view.hpp"
 #include "core/views.hpp"
 #include "sys/system.hpp"
-#include "ui/event_handler.hpp"
+#include "ui/config.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/ui_component.hpp"
@@ -34,16 +37,16 @@ constexpr size_t MAX_LINES_COPIED = 2000;
 
 struct MainView::Impl final
 {
-    Impl();
+    Impl(const Config& config);
 
     bool isViewLoaded() const;
-    bool scrollLeft(core::Context& context);
-    bool scrollRight(core::Context& context);
-    bool scrollLineDown(core::Context& context);
-    bool scrollLineUp(core::Context& context);
-    bool scrollPageDown(core::Context& context);
-    bool scrollPageUp(core::Context& context);
-    bool scrollToEnd(core::Context& context);
+    void scrollLeft(core::Context& context);
+    void scrollRight(core::Context& context);
+    void scrollLineDown(core::Context& context);
+    void scrollLineUp(core::Context& context);
+    void scrollPageDown(core::Context& context);
+    void scrollPageUp(core::Context& context);
+    void scrollToEnd(core::Context& context);
     void scrollTo(long lineNumber, core::Context& context);
 
     void reload(Ftxui& ui, core::Context& context);
@@ -55,51 +58,56 @@ struct MainView::Impl final
     const char* activeFileName(core::Context& context) const;
 
     ViewNode* getActiveLineView();
-    bool activeTablineLeft();
-    bool activeTablineRight();
-    bool activeTablineUp();
-    bool activeTablineDown();
+    void activeTablineLeft();
+    void activeTablineRight();
+    void activeTablineUp();
+    void activeTablineDown();
 
     Element render(core::Context& context);
     Elements renderTablines();
 
     bool handleEvent(const Event& event, Ftxui& ui, core::Context& context);
 
-    ViewNode          root;
-    ftxui::Component  lines;
-    View*             currentView;
-    int               activeTabline;
-    int               currentHeight;
-    EventHandlers     eventHandlers;
+    ViewNode         root;
+    ftxui::Component placeholder;
+    View*            currentView;
+    const Config&    config;
+    int              activeTabline;
+    int              currentHeight;
+    EventHandlers    eventHandlers;
 
 private:
-    bool resize(Ftxui& ui, core::Context& context);
-    bool escape();
-    bool yank(Ftxui& ui, core::Context& context);
-    bool selectionModeToggle(core::Context& context);
+    void resize(Ftxui& ui, core::Context& context);
+    void escape();
+    void yank(Ftxui& ui, core::Context& context);
+    void selectionModeToggle(core::Context& context);
+    void cursorAlign();
     void selectionUpdate();
 };
 
-MainView::Impl::Impl()
+#define RETURN_TRUE(...) ({ __VA_ARGS__; return true; })
+
+MainView::Impl::Impl(const Config& cfg)
     : root(ViewNode::Type::group, "main")
-    , lines(Container::Vertical({}))
+    , placeholder(Container::Vertical({}))
     , currentView(nullptr)
+    , config(cfg)
     , activeTabline(0)
     , eventHandlers{
-        {Event::PageUp,         [this](auto&, auto& context){ return scrollPageUp(context); }},
-        {Event::PageDown,       [this](auto&, auto& context){ return scrollPageDown(context); }},
-        {Event::ArrowDown,      [this](auto&, auto& context){ return scrollLineDown(context); }},
-        {Event::ArrowUp,        [this](auto&, auto& context){ return scrollLineUp(context); }},
-        {Event::ArrowLeft,      [this](auto&, auto& context){ return scrollLeft(context); }},
-        {Event::ArrowRight,     [this](auto&, auto& context){ return scrollRight(context); }},
-        {Event::ArrowLeftCtrl,  [this](auto&, auto&){ return activeTablineLeft(); }},
-        {Event::ArrowRightCtrl, [this](auto&, auto&){ return activeTablineRight(); }},
-        {Event::ArrowUpCtrl,    [this](auto&, auto&){ return activeTablineUp(); }},
-        {Event::ArrowDownCtrl,  [this](auto&, auto&){ return activeTablineDown(); }},
-        {Event::Resize,         [this](auto& ui, auto& context){ return resize(ui, context); }},
-        {Event::Escape,         [this](auto&, auto&){ return escape(); }},
-        {Event::y,              [this](auto& ui, auto& context){ return yank(ui, context); }},
-        {Event::v,              [this](auto&, auto& context){ return selectionModeToggle(context); }},
+        {Event::PageUp,         [this](auto&, auto& context){ RETURN_TRUE(scrollPageUp(context)); }},
+        {Event::PageDown,       [this](auto&, auto& context){ RETURN_TRUE(scrollPageDown(context)); }},
+        {Event::ArrowDown,      [this](auto&, auto& context){ RETURN_TRUE(scrollLineDown(context)); }},
+        {Event::ArrowUp,        [this](auto&, auto& context){ RETURN_TRUE(scrollLineUp(context)); }},
+        {Event::ArrowLeft,      [this](auto&, auto& context){ RETURN_TRUE(scrollLeft(context)); }},
+        {Event::ArrowRight,     [this](auto&, auto& context){ RETURN_TRUE(scrollRight(context)); }},
+        {Event::ArrowLeftCtrl,  [this](auto&, auto&){ RETURN_TRUE(activeTablineLeft()); }},
+        {Event::ArrowRightCtrl, [this](auto&, auto&){ RETURN_TRUE(activeTablineRight()); }},
+        {Event::ArrowUpCtrl,    [this](auto&, auto&){ RETURN_TRUE(activeTablineUp()); }},
+        {Event::ArrowDownCtrl,  [this](auto&, auto&){ RETURN_TRUE(activeTablineDown()); }},
+        {Event::Resize,         [this](auto& ui, auto& context){ RETURN_TRUE(resize(ui, context)); }},
+        {Event::Escape,         [this](auto&, auto&){ RETURN_TRUE(escape()); }},
+        {Event::y,              [this](auto& ui, auto& context){ RETURN_TRUE(yank(ui, context)); }},
+        {Event::v,              [this](auto&, auto& context){ RETURN_TRUE(selectionModeToggle(context)); }},
     }
 {
 }
@@ -109,51 +117,257 @@ bool MainView::Impl::isViewLoaded() const
     return currentView and currentView->loaded;
 }
 
-bool MainView::Impl::scrollLeft(core::Context& context)
+constexpr static uint32_t u(char c)
+{
+    return uint32_t(uint8_t(c));
+}
+
+constexpr static uint32_t u(const std::string_view& c)
+{
+    if ((c[0] & 0b1000'0000) == 0b0000'0000) [[likely]]
+    {
+        return u(c[0]);
+    }
+    else if ((c[0] & 0b1110'0000) == 0b1100'0000 and c.size() > 1)
+    {
+        return u(c[0]) | (u(c[1]) << 8);
+    }
+    else if ((c[0] & 0b1111'0000) == 0b1110'0000 and c.size() > 2)
+    {
+        return u(c[0]) | (u(c[1]) << 8) | (u(c[2]) << 16);
+    }
+    else if ((c[0] & 0b1111'1000) == 0b1111'0000 and c.size() > 3)
+    {
+        return u(c[0]) | (u(c[1]) << 8) | (u(c[2]) << 16) | (u(c[3]) << 24);
+    }
+    else
+    {
+        return u(c[0]);
+    }
+}
+
+static Glyphs getGlyphs(std::string_view line, const Config& config)
+{
+    Glyphs glyphs;
+    glyphs.reserve(line.size());
+
+    const auto lineStart = line.data();
+
+    while (not line.empty())
+    {
+        if ((line[0] & 0b1000'0000) == 0b0000'0000) [[likely]]
+        {
+            switch (line[0])
+            {
+                case '\t':
+                {
+                    Glyph glyph{
+                        .width = uint8_t(config.tabWidth),
+                        .special = 1,
+                        .offset = uint32_t(line.data() - lineStart),
+                        .characters = {u(config.tabChar)},
+                    };
+                    if (config.tabWidth > 1)
+                    {
+                        for (uint8_t i = 1; i < config.tabWidth - 1; ++i)
+                        {
+                            glyph.characters[i] = ' ';
+                        }
+                    }
+                    glyphs.emplace_back(std::move(glyph));
+                    break;
+                }
+                case 0 ... '\b':
+                case '\n' ... 0x1f:
+                    glyphs.emplace_back(
+                        Glyph{
+                            .width = 2,
+                            .special = 1,
+                            .offset = uint32_t(line.data() - lineStart),
+                            .characters = {'^', uint32_t(line[0] + 0x40)}
+                        });
+                    break;
+                default:
+                    glyphs.emplace_back(
+                        Glyph{
+                            .width = 1,
+                            .special = 0,
+                            .offset = uint32_t(line.data() - lineStart),
+                            .characters = {u(line[0])}
+                        });
+                    break;
+            }
+            line.remove_prefix(1);
+        }
+        else if ((line[0] & 0b1110'0000) == 0b1100'0000 and line.size() > 1)
+        {
+            glyphs.emplace_back(
+                Glyph{
+                    .width = 1,
+                    .special = 0,
+                    .offset = uint32_t(line.data() - lineStart),
+                    .characters = {u(line[0]) | (u(line[1]) << 8)}
+                });
+            line.remove_prefix(2);
+        }
+        else if ((line[0] & 0b1111'0000) == 0b1110'0000 and line.size() > 2)
+        {
+            glyphs.emplace_back(
+                Glyph{
+                    .width = 1,
+                    .special = 0,
+                    .offset = uint32_t(line.data() - lineStart),
+                    .characters = {u(line[0]) | (u(line[1]) << 8) | (u(line[2]) << 16)}
+                });
+            line.remove_prefix(3);
+        }
+        else if ((line[0] & 0b1111'1000) == 0b1111'0000 and line.size() > 3)
+        {
+            glyphs.emplace_back(
+                Glyph{
+                    .width = 1,
+                    .special = 0,
+                    .offset = uint32_t(line.data() - lineStart),
+                    .characters = {u(line[0]) | (u(line[1]) << 8) | (u(line[2]) << 16) | (u(line[3]) << 24)}
+                });
+            line.remove_prefix(4);
+        }
+        else
+        {
+            constexpr static const char hex[] = "0123456789abcdef";
+            glyphs.emplace_back(
+                Glyph{
+                    .width = 4,
+                    .special = 1,
+                    .offset = uint32_t(line.data() - lineStart),
+                    .characters = {
+                        '<',
+                        uint32_t(hex[u(line[0]) >> 4]),
+                        uint32_t(hex[u(line[0]) & 0xf]),
+                        '>'
+                    }
+                });
+            line.remove_prefix(1);
+        }
+    }
+    return glyphs;
+}
+
+static Line getLine(View& view, size_t lineIndex, core::Context& context)
+{
+    auto viewData = core::getView(view.dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return {};
+    }
+
+    auto result = viewData->readLine(lineIndex);
+
+    if (not result) [[unlikely]]
+    {
+        return {};
+    }
+
+    const auto& config = context.ui->get<Ftxui>().config;
+
+    const auto& data = result.value();
+
+    auto glyphs = getGlyphs(data, config);
+
+    Line line{
+        .lineNumber = lineIndex,
+        .absoluteLineNumber = viewData->absoluteLineNumber(lineIndex),
+        .glyphs = std::move(glyphs),
+    };
+
+    if (data.find("ERR") != std::string::npos)
+    {
+        line.segments.emplace_back(line.glyphs, Color::Red);
+    }
+    else if (data.find("WRN") != std::string::npos)
+    {
+        line.segments.emplace_back(line.glyphs, Color::Yellow);
+    }
+    else if (data.find("DBG") != std::string::npos)
+    {
+        line.segments.emplace_back(line.glyphs, Color::Palette256(245));
+    }
+    else
+    {
+        line.segments.emplace_back(line.glyphs, Color());
+    }
+
+    return line;
+}
+
+static void reloadLines(View& view, core::Context& context)
+{
+    view.ringBuffer.clear();
+    for (size_t i = view.yoffset; i < view.yoffset + view.viewHeight; ++i)
+    {
+        view.ringBuffer.pushBack(getLine(view, i, context));
+    }
+}
+
+void MainView::Impl::scrollLeft(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
 
-    if (view.xoffset == 0)
+    if (view.xcurrent == 0)
     {
-        return true;
+        if (view.ycurrent > 0)
+        {
+            scrollLineUp(context);
+            view.xcurrent = view.ringBuffer[view.ycurrent].glyphs.size();
+        }
+        return;
     }
 
-    view.xoffset--;
-    reloadLines(view, context);
-    return true;
+    view.xcurrent--;
 }
 
-bool MainView::Impl::scrollRight(core::Context& context)
+void MainView::Impl::scrollRight(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
 
-    view.xoffset++;
-    reloadLines(view, context);
-    return true;
+    const auto& line = view.ringBuffer[view.ycurrent];
+
+    if (view.xcurrent == line.glyphs.size())
+    {
+        if (view.ycurrent < view.viewHeight - 1)
+        {
+            view.xcurrent = 0;
+            scrollLineDown(context);
+        }
+        return;
+    }
+
+    view.xcurrent++;
 }
 
-bool MainView::Impl::scrollLineDown(core::Context& context)
+void MainView::Impl::scrollLineDown(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
 
     if (view.ringBuffer.size() == 0)
     {
-        return true;
+        return;
     }
 
     if (view.ycurrent < view.viewHeight - 1)
@@ -165,8 +379,9 @@ bool MainView::Impl::scrollLineDown(core::Context& context)
     {
         if (view.yoffset + view.viewHeight >= view.lineCount)
         {
+            cursorAlign();
             selectionUpdate();
-            return true;
+            return;
         }
 
         view.ycurrent = view.viewHeight - 4;
@@ -176,16 +391,17 @@ bool MainView::Impl::scrollLineDown(core::Context& context)
         view.ringBuffer.pushBack(std::move(line));
     }
 
+    cursorAlign();
     selectionUpdate();
 
-    return true;
+    return;
 }
 
-bool MainView::Impl::scrollLineUp(core::Context& context)
+void MainView::Impl::scrollLineUp(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
@@ -199,8 +415,9 @@ bool MainView::Impl::scrollLineUp(core::Context& context)
     {
         if (view.yoffset == 0)
         {
+            cursorAlign();
             selectionUpdate();
-            return true;
+            return;
         }
 
         view.ycurrent = 3;
@@ -209,52 +426,50 @@ bool MainView::Impl::scrollLineUp(core::Context& context)
         view.ringBuffer.pushFront(getLine(view, view.yoffset, context));
     }
 
+    cursorAlign();
     selectionUpdate();
-
-    return true;
 }
 
-bool MainView::Impl::scrollPageDown(core::Context& context)
+void MainView::Impl::scrollPageDown(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
 
     if (view.ringBuffer.size() == 0)
     {
-        return true;
+        return;
     }
 
     if (view.yoffset + view.viewHeight >= view.lineCount)
     {
-        return true;
+        return;
     }
 
     view.yoffset = (view.yoffset + view.viewHeight)
         | utils::clamp(0ul, view.lineCount - view.viewHeight);
 
+    cursorAlign();
     selectionUpdate();
 
     reloadLines(view, context);
-
-    return true;
 }
 
-bool MainView::Impl::scrollPageUp(core::Context& context)
+void MainView::Impl::scrollPageUp(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
 
     if (view.yoffset == 0)
     {
-        return true;
+        return;
     }
 
     view.yoffset -= view.viewHeight;
@@ -264,18 +479,17 @@ bool MainView::Impl::scrollPageUp(core::Context& context)
         view.yoffset = 0;
     }
 
+    cursorAlign();
     selectionUpdate();
 
     reloadLines(view, context);
-
-    return true;
 }
 
-bool MainView::Impl::scrollToEnd(core::Context& context)
+void MainView::Impl::scrollToEnd(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     auto& view = *currentView;
@@ -284,17 +498,16 @@ bool MainView::Impl::scrollToEnd(core::Context& context)
 
     if (view.yoffset >= lastViewLine)
     {
-        return true;
+        return;
     }
 
     view.yoffset = lastViewLine;
     view.ycurrent = view.viewHeight - 1;
 
+    cursorAlign();
     selectionUpdate();
 
     reloadLines(view, context);
-
-    return true;
 }
 
 void MainView::Impl::scrollTo(long lineNumber, core::Context& context)
@@ -315,6 +528,8 @@ void MainView::Impl::scrollTo(long lineNumber, core::Context& context)
     lineNumber = (size_t)lineNumber | utils::clamp(0ul, view.lineCount - view.viewHeight);
     view.yoffset = lineNumber;
     view.ycurrent = 0;
+
+    cursorAlign();
     selectionUpdate();
     reloadLines(view, context);
 }
@@ -343,7 +558,7 @@ ViewNodePtr MainView::Impl::createView(std::string name, core::ViewId viewDataId
         : root;
 
     auto groupPtr = ViewNode::createGroup(std::move(name));
-    auto basePtr = View::create("base", viewDataId);
+    auto basePtr = View::create("base", viewDataId, config);
 
     auto& group = parent
         .addChild(groupPtr)
@@ -462,71 +677,6 @@ const char* MainView::Impl::activeFileName(core::Context& context) const
     return viewData->filePath().c_str();
 }
 
-static const MenuEntryOption tabOption{
-    .transform =
-        [](const EntryState& state)
-        {
-            auto string = ' ' + std::to_string(state.index) + ' ' + state.label + ' ';
-
-            if (state.focused)
-            {
-                if (state.index != 0)
-                {
-                    return hbox({
-                        text("")
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg),
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg)
-                            | bold,
-                        text("")
-                            | color(Palette::TabLine::activeBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-                else
-                {
-                    return hbox({
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::activeBg)
-                            | color(Palette::TabLine::activeFg)
-                            | bold,
-                        text("")
-                            | color(Palette::TabLine::activeBg)
-                            | bgcolor(Palette::TabLine::activeFg),
-                    });
-                }
-            }
-            else
-            {
-                if (state.index != 0)
-                {
-                    return hbox({
-                        text("")
-                            | bgcolor(Palette::TabLine::inactiveBg)
-                            | color(Palette::TabLine::separatorBg),
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::inactiveBg),
-                        text("")
-                            | color(Palette::TabLine::inactiveBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-                else
-                {
-                    return hbox({
-                        text(std::move(string))
-                            | bgcolor(Palette::TabLine::inactiveBg),
-                        text("")
-                            | color(Palette::TabLine::inactiveBg)
-                            | bgcolor(Palette::TabLine::separatorBg),
-                    });
-                }
-            }
-        }
-};
-
 static Element wrapActiveLineIf(Element line, bool condition)
 {
     if (not condition)
@@ -572,55 +722,6 @@ Elements MainView::Impl::renderTablines()
     return vertical;
 }
 
-struct GetLines
-{
-    View& view;
-};
-
-GetLines getLines(View& view)
-{
-    return {.view = view};
-}
-
-static Elements operator|(LinesRingBuffer& buf, const GetLines& obj)
-{
-    Elements vec;
-    size_t i = 0;
-    buf.forEach(
-        [&i, &obj, &vec](const auto& line)
-        {
-            auto& view = obj.view;
-            auto absoluteIndex = i + view.yoffset;
-            if (view.ycurrent == i)
-            {
-                vec.emplace_back(text(&line.line) | bgcolor(Palette::bg3));
-            }
-            else if (view.selectionMode and absoluteIndex >= view.selectionStart and absoluteIndex <= view.selectionEnd)
-            {
-                vec.emplace_back(text(&line.line) | bgcolor(Palette::bg2));
-            }
-            else
-            {
-                vec.emplace_back(text(&line.line));
-            }
-            ++i;
-        });
-    return vec;
-}
-
-static constexpr struct GetLineNumbers{} getLineNumbers;
-
-static Elements operator|(LinesRingBuffer& buf, const GetLineNumbers&)
-{
-    Elements vec;
-    buf.forEach(
-        [&vec](const auto& line)
-        {
-            vec.emplace_back(text(&line.lineNumber) | xflex);
-        });
-    return vec;
-}
-
 ViewNode* MainView::Impl::getActiveLineView()
 {
     auto view = root.activeChild();
@@ -637,7 +738,7 @@ ViewNode* MainView::Impl::getActiveLineView()
     return view;
 }
 
-bool MainView::Impl::activeTablineLeft()
+void MainView::Impl::activeTablineLeft()
 {
     auto prev = getActiveLineView()->prev();
 
@@ -646,11 +747,9 @@ bool MainView::Impl::activeTablineLeft()
         prev->setActive();
         currentView = prev->parent()->deepestActive()->ptrCast<View>();
     }
-
-    return true;
 }
 
-bool MainView::Impl::activeTablineRight()
+void MainView::Impl::activeTablineRight()
 {
     auto next = getActiveLineView()->next();
 
@@ -659,22 +758,16 @@ bool MainView::Impl::activeTablineRight()
         next->setActive();
         currentView = next->parent()->deepestActive()->ptrCast<View>();
     }
-
-    return true;
 }
 
-bool MainView::Impl::activeTablineUp()
+void MainView::Impl::activeTablineUp()
 {
-    activeTabline = (activeTabline - 1)
-        | utils::clamp(0, currentView->depth());
-    return true;
+    activeTabline = (activeTabline - 1) | utils::clamp(0, currentView->depth());
 }
 
-bool MainView::Impl::activeTablineDown()
+void MainView::Impl::activeTablineDown()
 {
-    activeTabline = (activeTabline + 1)
-        | utils::clamp(0, currentView->depth());
-    return true;
+    activeTabline = (activeTabline + 1) | utils::clamp(0, currentView->depth());
 }
 
 Element MainView::Impl::render(core::Context& context)
@@ -700,10 +793,7 @@ Element MainView::Impl::render(core::Context& context)
         }
         else
         {
-            vertical.push_back(
-                hbox(
-                    nonSelectableVbox(currentView->ringBuffer | getLineNumbers),
-                    vbox(currentView->ringBuffer | getLines(*currentView)) | xflex));
+            vertical.push_back(currentView->viewRenderer);
         }
     }
     else
@@ -726,26 +816,24 @@ bool MainView::Impl::handleEvent(const Event& event, Ftxui& ui, core::Context& c
     return result.value();
 }
 
-bool MainView::Impl::resize(Ftxui& ui, core::Context& context)
+void MainView::Impl::resize(Ftxui& ui, core::Context& context)
 {
     reload(ui, context);
-    return true;
 }
 
-bool MainView::Impl::escape()
+void MainView::Impl::escape()
 {
     if (currentView)
     {
         currentView->selectionMode = false;
     }
-    return true;
 }
 
-bool MainView::Impl::yank(Ftxui&, core::Context& context)
+void MainView::Impl::yank(Ftxui&, core::Context& context)
 {
     if (not isViewLoaded() or not currentView->selectionMode)
     {
-        return true;
+        return;
     }
 
     auto lineCount = currentView->selectionEnd - currentView->selectionStart + 1;
@@ -753,7 +841,7 @@ bool MainView::Impl::yank(Ftxui&, core::Context& context)
     if (lineCount > MAX_LINES_COPIED)
     {
         context.messageLine.error() << "cannot yank more than " << MAX_LINES_COPIED << " lines";
-        return true;
+        return;
     }
 
     utils::Buffer buf;
@@ -762,7 +850,7 @@ bool MainView::Impl::yank(Ftxui&, core::Context& context)
 
     if (not viewData) [[unlikely]]
     {
-        return true;
+        return;
     }
 
     for (auto i = currentView->selectionStart; i <= currentView->selectionEnd; ++i)
@@ -779,15 +867,13 @@ bool MainView::Impl::yank(Ftxui&, core::Context& context)
     core::switchMode(core::Mode::normal, context);
 
     context.messageLine.info() << lineCount << " lines copied to clipboard";
-
-    return true;
 }
 
-bool MainView::Impl::selectionModeToggle(core::Context& context)
+void MainView::Impl::selectionModeToggle(core::Context& context)
 {
     if (not isViewLoaded())
     {
-        return true;
+        return;
     }
 
     if ((currentView->selectionMode ^= true))
@@ -804,7 +890,13 @@ bool MainView::Impl::selectionModeToggle(core::Context& context)
         core::switchMode(core::Mode::normal, context);
     }
 
-    return true;
+    return;
+}
+
+void MainView::Impl::cursorAlign()
+{
+    const auto& currentLine = currentView->ringBuffer[currentView->ycurrent];
+    currentView->xcurrent = currentView->xcurrent | utils::clamp(0ul, currentLine.glyphs.size());
 }
 
 void MainView::Impl::selectionUpdate()
@@ -832,9 +924,9 @@ void MainView::Impl::selectionUpdate()
     }
 }
 
-MainView::MainView()
+MainView::MainView(const Config& config)
     : UIComponent(UIComponent::mainView)
-    , mPimpl(new Impl)
+    , mPimpl(new Impl(config))
 {
 }
 
@@ -845,7 +937,6 @@ MainView::~MainView()
 
 void MainView::takeFocus()
 {
-    mPimpl->lines->TakeFocus();
 }
 
 bool MainView::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
@@ -900,7 +991,34 @@ ViewNode& MainView::root()
 
 MainView::operator ftxui::Component&()
 {
-    return mPimpl->lines;
+    return mPimpl->placeholder;
+}
+
+static size_t getAvailableViewHeight(Ftxui& ui, View& view)
+{
+    return static_cast<size_t>(ui.terminalSize.dimy)
+        - 1 // command line
+        - 1 // status line
+        - (view.depth() + 1);
+}
+
+void reloadView(View& view, Ftxui& ui, core::Context& context)
+{
+    auto viewData = core::getView(view.dataId, context);
+
+    if (not viewData) [[unlikely]]
+    {
+        return;
+    }
+
+    view.lineCount = viewData->lineCount();
+    view.viewHeight = std::min(getAvailableViewHeight(ui, view), view.lineCount);
+    view.lineNrDigits = utils::numberOfDigits(viewData->fileLineCount());
+    view.ringBuffer = RingBuffer(view.viewHeight);
+    view.yoffset = view.yoffset | utils::clamp(0ul, viewData->lineCount() - view.viewHeight);
+    view.ycurrent = view.ycurrent | utils::clamp(0ul, view.viewHeight - 1);
+
+    reloadLines(view, context);
 }
 
 DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")
@@ -908,13 +1026,13 @@ DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the le
     READER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        return ui.showLineNumbers;
+        return ui.config.showLineNumbers;
     }
 
     WRITER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        ui.showLineNumbers = value.boolean;
+        ui.config.showLineNumbers = value.boolean;
         ui.mainView.reload(ui, context);
         return true;
     }
@@ -925,13 +1043,52 @@ DEFINE_READWRITE_VARIABLE(absoluteLineNumbers, boolean, "Print file absolute lin
     READER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        return ui.absoluteLineNumbers;
+        return ui.config.absoluteLineNumbers;
     }
 
     WRITER()
     {
         auto& ui = context.ui->get<Ftxui>();
-        ui.absoluteLineNumbers = value.boolean;
+        ui.config.absoluteLineNumbers = value.boolean;
+        ui.mainView.reload(ui, context);
+        return true;
+    }
+}
+
+DEFINE_READWRITE_VARIABLE(tabChar, string, "Tab character")
+{
+    READER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        return &ui.config.tabChar;
+    }
+
+    WRITER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        ui.config.tabChar = *value.string;
+        ui.mainView.reload(ui, context);
+        return true;
+    }
+}
+
+DEFINE_READWRITE_VARIABLE(tabWidth, integer, "Tab width")
+{
+    READER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        return long(ui.config.tabWidth);
+    }
+
+    WRITER()
+    {
+        auto& ui = context.ui->get<Ftxui>();
+        if (value.integer > 0xff)
+        {
+            context.messageLine.error() << "Invalid tab width: " << value.integer;
+            return false;
+        }
+        ui.config.tabWidth = value.integer & 0xff;
         ui.mainView.reload(ui, context);
         return true;
     }
@@ -1063,7 +1220,7 @@ DEFINE_COMMAND(filter)
                     {
                         context.messageLine.info()
                             << "filtered " << newView->lineCount() << " lines; took "
-                            << result.value() << " s";
+                            << (result.value() | utils::precision(3)) << " s";
 
                         context.ui->onViewDataLoaded(uiView, context);
                     }

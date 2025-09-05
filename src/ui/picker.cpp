@@ -23,7 +23,7 @@
 #include "ui/palette.hpp"
 #include "ui/picker_entry.hpp"
 #include "ui/ui_component.hpp"
-#include "ui/view.hpp"
+#include "ui/view_node.hpp"
 #include "utils/buffer.hpp"
 #include "utils/string.hpp"
 

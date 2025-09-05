@@ -1,6 +1,7 @@
 #include <cfloat>
 #include <climits>
 
+#include <filesystem>
 #include <gtest/gtest.h>
 
 #include "utils/buffer.hpp"
@@ -19,6 +20,7 @@ TEST(BufferTests, newBufferIsEmpty)
     Buffer buf;
 
     ASSERT_EQ(buf.length(), 0);
+    ASSERT_EQ(buf.size(), 0);
     ASSERT_EQ(buf.capacity(), Buffer::initialCapacity);
     ASSERT_EQ(buf.view(), "");
     ASSERT_TRUE(buf.buffer());
@@ -31,12 +33,14 @@ TEST(BufferTests, canPrintChar)
         buf << 'a';
 
         ASSERT_EQ(buf.view(), "a");
+        ASSERT_EQ(buf.size(), 1);
     }
     {
         Buffer buf;
-        buf << '$';
+        buf << '$' << 'b';
 
-        ASSERT_EQ(buf.view(), "$");
+        ASSERT_EQ(buf.view(), "$b");
+        ASSERT_EQ(buf.size(), 2);
     }
 }
 
@@ -162,12 +166,30 @@ TEST(BufferTests, canPrintEnum)
 
 TEST(BufferTests, canPrintPointer)
 {
+    {
+        Buffer buf;
+
+        auto ptr = reinterpret_cast<std::string*>(0xfffffffffffffffful);
+        buf << ptr;
+
+        ASSERT_EQ(buf.view(), "0xffffffffffffffff");
+    }
+    {
+        Buffer buf;
+
+        auto ptr = reinterpret_cast<const std::string*>(0x1234ul);
+        buf << ptr;
+
+        ASSERT_EQ(buf.view(), "0x1234");
+    }
+}
+
+TEST(BufferTests, canPrintCStr)
+{
     Buffer buf;
+    buf << "test cstr";
 
-    auto ptr = reinterpret_cast<std::string*>(0xfffffffffffffffful);
-    buf << ptr;
-
-    ASSERT_EQ(buf.view(), "0xffffffffffffffff");
+    ASSERT_EQ(buf.view(), "test cstr");
 }
 
 TEST(BufferTests, canPrintStringView)
@@ -181,19 +203,18 @@ TEST(BufferTests, canPrintStringView)
 TEST(BufferTests, canPrintString)
 {
     Buffer buf;
-    buf << std::string_view("test string");
+    buf << std::string("test string");
 
     ASSERT_EQ(buf.view(), "test string");
 }
 
-TEST(BufferTests, canPrintf)
+TEST(BufferTests, canPrintPath)
 {
     Buffer buf;
-    buf.printf("Hello %u %p", 9382, (void*)0xffff)
-       .printf(" %.1f", 33.3)
-       .printf(" %#x", 0x324);
+    std::filesystem::path path("/usr/bin/bash");
+    buf << path;
 
-    ASSERT_EQ(buf.view(), "Hello 9382 0xffff 33.3 0x324");
+    ASSERT_EQ(buf.view(), "/usr/bin/bash");
 }
 
 TEST(BufferTests, canExtendCapacity)
@@ -301,8 +322,174 @@ TEST(BufferTests, canBeMoved)
     }
 }
 
+TEST(BufferTests, canBeConvertedToStringView)
+{
+    Buffer buf;
+    buf << 123;
+    std::string_view result = buf;
+    ASSERT_EQ(result, "123");
+}
+
+TEST(BufferTests, canCreateString)
+{
+    Buffer buf;
+    buf << 9876;
+    auto result = buf.str();
+    ASSERT_EQ(result, "9876");
+}
+
+TEST(BufferTests, canIterate)
+{
+    std::string_view testString("test string");
+    Buffer buf;
+    buf << testString;
+    int i = 0;
+    for (auto c : buf)
+    {
+        ASSERT_EQ(c, testString[i++]);
+    }
+}
+
+TEST(BufferTests, canPrintHexInt)
+{
+    Buffer buf;
+    buf << (INT_MAX | hex(showbase));
+    ASSERT_EQ(buf.view(), "0x7fffffff");
+
+    buf.clear();
+    buf << (INT_MIN | hex(noshowbase));
+    ASSERT_EQ(buf.view(), "80000000");
+
+    buf.clear();
+    buf << (int(0) | hex(showbase));
+    ASSERT_EQ(buf.view(), "0");
+}
+
+TEST(BufferTests, canPrintOctInt)
+{
+    Buffer buf;
+    buf << (INT_MAX | oct(showbase));
+    ASSERT_EQ(buf.view(), "017777777777");
+
+    buf.clear();
+    buf << (INT_MIN | oct(noshowbase));
+    ASSERT_EQ(buf.view(), "20000000000");
+
+    buf.clear();
+    buf << (int(0) | oct(showbase));
+    ASSERT_EQ(buf.view(), "0");
+}
+
+TEST(BufferTests, canPrintFloatWithGivenPrecision)
+{
+    Buffer buf;
+    buf << (0.33f | precision(2));
+    ASSERT_EQ(buf.view(), "0.33");
+
+    buf.clear();
+    buf << (0.12345f | precision(2));
+    ASSERT_EQ(buf.view(), "0.12");
+
+    buf.clear();
+    buf << (0.88f | precision(4));
+    ASSERT_EQ(buf.view(), "0.8800");
+
+    buf.clear();
+    buf << (0.12f | precision(0));
+    ASSERT_EQ(buf.view(), "0");
+
+    buf.clear();
+    buf << (0.55f | precision(0));
+    ASSERT_EQ(buf.view(), "1");
+
+    buf.clear();
+    buf << (0.55f | precision(21));
+    ASSERT_EQ(buf.length(), 23);
+}
+
+TEST(BufferTests, hexAndOctOveridesEachOther)
+{
+    Buffer buf;
+    buf << (INT_MAX | oct(showbase) | hex(noshowbase));
+    ASSERT_EQ(buf.view(), "7fffffff");
+
+    buf.clear();
+    buf << (INT_MIN | hex(noshowbase) | oct(showbase));
+    ASSERT_EQ(buf.view(), "020000000000");
+}
+
+TEST(BufferTests, canDoPadding)
+{
+    Buffer buf;
+    buf << (0xfff | hex(showbase) | leftPadding(10));
+    ASSERT_EQ(buf.view(), "     0xfff");
+
+    buf.clear();
+    buf << (0x974 | rightPadding(6) | hex(showbase));
+    ASSERT_EQ(buf.view(), "0x974 ");
+
+    buf.clear();
+    buf << ('c' | rightPadding(6));
+    ASSERT_EQ(buf.view(), "c     ");
+
+    buf.clear();
+    buf << (std::string_view("test") | leftPadding(6)) << ("test2" | rightPadding(7));
+    ASSERT_EQ(buf.view(), "  testtest2  ");
+
+    buf.clear();
+    buf << (std::string("test") | leftPadding(6));
+    ASSERT_EQ(buf.view(), "  test");
+
+    buf.clear();
+    buf << ((void*)0xfff | leftPadding(10));
+    ASSERT_EQ(buf.view(), "     0xfff");
+
+    buf.clear();
+    buf << (0.32f | precision(1) | leftPadding(10));
+    ASSERT_EQ(buf.view(), "       0.3");
+
+    buf.clear();
+    buf << (0.3272f | rightPadding(5) | precision(2));
+    ASSERT_EQ(buf.view(), "0.33 ");
+
+    buf.clear();
+    buf << (std::filesystem::path("/usr/bin") | leftPadding(10));
+    ASSERT_EQ(buf.view(), "  /usr/bin");
+
+    buf.clear();
+    buf << (SomeEnum::value1 | leftPadding(10));
+    ASSERT_EQ(buf.view(), "         0");
+}
+
+TEST(BufferTests, canWrite)
+{
+    Buffer buf;
+    std::string_view testString("test string");
+
+    buf.write(testString.data(), testString.size());
+    ASSERT_EQ(buf.view(), "test string");
+}
+
 TEST(BufferTests, canFormat)
 {
     auto buf = utils::format("Hello {} test {} test2 {}", 33, 44, std::string_view("test string view"));
     ASSERT_EQ(buf.view(), "Hello 33 test 44 test2 test string view");
+}
+
+struct TestStruct
+{
+    int a;
+};
+
+Buffer& operator<<(Buffer& buf, const TestStruct& s)
+{
+    return buf << "{a: " << s.a << '}';
+}
+
+TEST(BufferTests, canPrintCustomType)
+{
+    Buffer buf;
+    TestStruct s{29485};
+    buf << (s | leftPadding(12));
+    ASSERT_EQ(buf.view(), "  {a: 29485}");
 }

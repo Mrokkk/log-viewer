@@ -23,9 +23,9 @@ struct SourceLocation
         };
     }
 
-    const char*  file;
-    const char*  func;
-    size_t       line;
+    const char* file;
+    const char* func;
+    size_t      line;
 };
 
 }  // namespace utils

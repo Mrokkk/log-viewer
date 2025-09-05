@@ -12,56 +12,56 @@ template <typename T>
 struct RingBuffer final : NonCopyable
 {
     RingBuffer(size_t size)
-        : start_(0)
-        , size_(0)
-        , current_(0)
-        , buffer_(size)
+        : mStart(0)
+        , mSize(0)
+        , mCurrent(0)
+        , mBuffer(size)
     {
     }
 
     RingBuffer& pushFront(T value)
     {
-        size_t maxSize = buffer_.size();
-        if (static_cast<int>(--start_) < 0)
+        size_t maxSize = mBuffer.size();
+        if (static_cast<int>(--mStart) < 0)
         {
-            start_ = maxSize - 1;
+            mStart = maxSize - 1;
         }
 
-        if (size_ < maxSize)
+        if (mSize < maxSize)
         {
-            size_++;
+            mSize++;
         }
-        else if (static_cast<int>(--current_) < 0)
+        else if (static_cast<int>(--mCurrent) < 0)
         {
-            current_ = maxSize - 1;
+            mCurrent = maxSize - 1;
         }
 
-        buffer_[start_] = std::move(value);
+        mBuffer[mStart] = std::move(value);
 
         return *this;
     }
 
     RingBuffer& pushBack(T value)
     {
-        size_t maxSize = buffer_.size();
+        size_t maxSize = mBuffer.size();
 
-        if (current_ >= maxSize)
+        if (mCurrent >= maxSize)
         {
-            current_ = 0;
+            mCurrent = 0;
         }
 
-        buffer_[current_++] = std::move(value);
+        mBuffer[mCurrent++] = std::move(value);
 
-        if (size_ == maxSize)
+        if (mSize == maxSize)
         {
-            if (++start_ >= maxSize)
+            if (++mStart >= maxSize)
             {
-                start_ = 0;
+                mStart = 0;
             }
         }
         else
         {
-            ++size_;
+            ++mSize;
         }
 
         return *this;
@@ -70,41 +70,60 @@ struct RingBuffer final : NonCopyable
     template <typename U>
     void forEach(const U& callback) const
     {
-        if (current_ <= start_)
+        if (mSize == 0) [[unlikely]]
         {
-            for (size_t i = start_; i < buffer_.size(); ++i)
+            return;
+        }
+        if (mCurrent <= mStart)
+        {
+            for (size_t i = mStart; i < mBuffer.size(); ++i)
             {
-                callback(buffer_[i]);
+                callback(mBuffer[i]);
             }
-            for (size_t i = 0; i < current_; ++i)
+            for (size_t i = 0; i < mCurrent; ++i)
             {
-                callback(buffer_[i]);
+                callback(mBuffer[i]);
             }
         }
         else
         {
-            for (size_t i = 0; i < current_; ++i)
+            for (size_t i = 0; i < mCurrent; ++i)
             {
-                callback(buffer_[i]);
+                callback(mBuffer[i]);
             }
         }
     }
 
+    const T& operator[](size_t i) const
+    {
+        i += mStart;
+        if (i >= mBuffer.size())
+        {
+            i -= mBuffer.size();
+        }
+        return mBuffer[i];
+    }
+
+    void clear()
+    {
+        mCurrent = mSize = mStart = 0;
+    }
+
     size_t capacity() const
     {
-        return buffer_.size();
+        return mBuffer.size();
     }
 
     size_t size() const
     {
-        return size_;
+        return mSize;
     }
 
 private:
-    size_t         start_;
-    size_t         size_;
-    size_t         current_;
-    std::vector<T> buffer_;
+    size_t         mStart;
+    size_t         mSize;
+    size_t         mCurrent;
+    std::vector<T> mBuffer;
 };
 
 }  // namespace utils

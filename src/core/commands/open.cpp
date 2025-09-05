@@ -59,7 +59,7 @@ DEFINE_COMMAND(open)
 
                     context.messageLine.info()
                         << newView->filePath() << ": lines: " << newView->lineCount() << "; took "
-                        << result.value() << " s";
+                        << (result.value() | utils::precision(3)) << " s";
 
                     context.ui->onViewDataLoaded(uiView, context);
                 }

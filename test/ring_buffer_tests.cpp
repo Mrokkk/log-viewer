@@ -39,6 +39,59 @@ TEST(RingBufferTests, canPushFront)
     ASSERT_THAT(buf | toVector, testing::ElementsAre(3, 2, 1));
 }
 
+TEST(RingBufferTests, canPushBack)
+{
+    RingBuffer<int> buf(3);
+
+    ASSERT_EQ(buf.size(), 0);
+    ASSERT_EQ(buf.capacity(), 3);
+
+    buf.pushBack(0);
+    ASSERT_EQ(buf.size(), 1);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(0));
+
+    buf.pushBack(1);
+    ASSERT_EQ(buf.size(), 2);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(0, 1));
+
+    buf.pushBack(2);
+    ASSERT_EQ(buf.size(), 3);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(0, 1, 2));
+
+    buf.pushBack(3);
+    ASSERT_EQ(buf.size(), 3);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(1, 2, 3));
+}
+
+TEST(RingBufferTests, canBeCleared)
+{
+    RingBuffer<int> buf(3);
+
+    ASSERT_EQ(buf.size(), 0);
+    ASSERT_EQ(buf.capacity(), 3);
+
+    buf.pushBack(0);
+    ASSERT_EQ(buf.size(), 1);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(0));
+
+    buf.pushBack(1);
+    ASSERT_EQ(buf.size(), 2);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(0, 1));
+
+    buf.pushFront(2);
+    ASSERT_EQ(buf.size(), 3);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(2, 0, 1));
+
+    buf.pushBack(3);
+    ASSERT_EQ(buf.size(), 3);
+    ASSERT_THAT(buf | toVector, testing::ElementsAre(0, 1, 3));
+
+    buf.clear();
+    ASSERT_EQ(buf.size(), 0);
+    ASSERT_EQ(buf.capacity(), 3);
+    ASSERT_THAT(buf | toVector, testing::IsEmpty());
+}
+
 TEST(RingBufferTests, canPushBackAndFront)
 {
     RingBuffer<int> buf(3);

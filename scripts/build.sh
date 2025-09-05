@@ -16,7 +16,7 @@ INFO="[  INFO   ]"
 DEBUG="[  DEBUG  ]"
 RESET="\e[m"
 
-function info()
+info()
 {
     echo -e "${BLUE}${INFO}${RESET} ${@}"
 }
@@ -66,11 +66,11 @@ read_cache()
 read_flags()
 {
     local temp
-    while [[ $# -gt 0 ]]; do
+    while [ $# -gt 0 ]; do
         case "${1}" in
             --optimize=*)
                 temp="${1#*=}"
-                if [[ "${temp}" != "${OPTIMIZE}" ]]
+                if [ "${temp}" != "${OPTIMIZE}" ]
                 then
                     REGENERATE="true"
                 fi
@@ -78,7 +78,7 @@ read_flags()
                 ;;
             --coverage=*)
                 temp="${1#*=}"
-                if [[ "${temp}" != "${COVERAGE}" ]]
+                if [ "${temp}" != "${COVERAGE}" ]
                 then
                     REGENERATE="true"
                 fi
@@ -86,7 +86,7 @@ read_flags()
                 ;;
             --sanitize=*)
                 temp="${1#*=}"
-                if [[ "${temp}" != "${SANITIZE}" ]]
+                if [ "${temp}" != "${SANITIZE}" ]
                 then
                     REGENERATE="true"
                 fi
@@ -94,7 +94,7 @@ read_flags()
                 ;;
             --build-tests=*)
                 temp="${1#*=}"
-                if [[ "${temp}" != "${BUILD_TESTS}" ]]
+                if [ "${temp}" != "${BUILD_TESTS}" ]
                 then
                     REGENERATE="true"
                 fi

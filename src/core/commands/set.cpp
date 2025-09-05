@@ -45,8 +45,7 @@ DEFINE_COMMAND(set)
                     break;
 
                 default:
-                    context.messageLine.error() << "Unknown type of value: " << args[1].type;
-                    return false;
+                    goto unknown;
             }
             return true;
         }
@@ -57,9 +56,29 @@ DEFINE_COMMAND(set)
             return false;
         }
 
-        context.messageLine.error() << "Changing not yet implemented: " << args[0].string;
+        switch (args[1].type)
+        {
+            case Type::boolean:
+                variable->writer(Variable::Value(args[1].boolean), context);
+                return true;
 
-        return true;
+            case Type::string:
+                variable->writer(Variable::Value(&args[1].string), context);
+                return true;
+
+            case Type::integer:
+                variable->writer(Variable::Value(args[1].integer), context);
+                return true;
+
+            default:
+                break;
+        }
+
+        unknown:
+        {
+            context.messageLine.error() << "Unknown type of value: " << args[1].type;
+            return false;
+        }
     }
 }
 

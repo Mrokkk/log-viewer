@@ -1,3 +1,6 @@
+set tabChar "›"
+set tabWidth 4
+
 nmap "<c-p>" ":files<cr>"
 nmap "<leader>." ":files<cr>"
 nmap "<c-g>" ":grepper<cr>"

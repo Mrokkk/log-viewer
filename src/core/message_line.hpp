@@ -32,17 +32,18 @@ struct MessageLine
 
     constexpr Flusher info()
     {
+        clear();
         mSeverity = Severity::info;
         return Flusher(mBuffer, mLock);
     }
 
     constexpr Flusher error()
     {
+        clear();
         mSeverity = Severity::error;
         return Flusher(mBuffer, mLock);
     }
 
-    //Flusher operator<<(Severity severity);
     void clear();
     Severity severity() const;
     std::string str() const;

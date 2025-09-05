@@ -47,7 +47,7 @@ message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pipe -std=c++23 -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fno-exceptions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pipe -std=c++2c -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fno-exceptions")
 
 if(OPTIMIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
@@ -96,6 +96,7 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/sys/posix.cpp
     src/ui/command_line.cpp
+    src/ui/event_converter.cpp
     src/ui/event_handler.cpp
     src/ui/ftxui.cpp
     src/ui/grepper.cpp
@@ -106,6 +107,8 @@ add_executable(${PROJECT_NAME}
     src/ui/text_box.cpp
     src/ui/ui_component.cpp
     src/ui/view.cpp
+    src/ui/view_node.cpp
+    src/ui/view_renderer.cpp
     src/utils/math.cpp
     src/utils/string.cpp
     src/utils/time.cpp
