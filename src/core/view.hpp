@@ -36,7 +36,7 @@ struct View : utils::Immobile
 
     size_t lineCount() const
     {
-        return lineCount_;
+        return mLineCount;
     }
 
 private:
@@ -59,16 +59,16 @@ private:
 
     std::expected<std::string_view, std::string> readInternal(Line line);
 
-    std::atomic_bool stopFlag_;
-    std::atomic_char state_;
-    std::atomic_char type_;
-    File             file_;
-    size_t           lineCount_;
-    Lines*           fileLines_;
+    std::atomic_bool mStopFlag;
+    std::atomic_char mState;
+    std::atomic_char mType;
+    File             mFile;
+    size_t           mLineCount;
+    Lines*           mFileLines;
     union
     {
-        Lines        ownLines_;
-        LineRefs     greppedLines_;
+        Lines        mOwnLines;
+        LineRefs     mFilteredLines;
     };
 };
 

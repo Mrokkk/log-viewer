@@ -80,19 +80,19 @@ static const MenuEntryOption tabOption{
 };
 
 ViewNode::ViewNode(Type type, std::string name)
-    : type_(type)
-    , depth_(0)
-    , name_(name)
-    , parent_(nullptr)
-    , activeChild_(nullptr)
-    , tab_(MenuEntry(name, tabOption))
-    , childrenTabs_(Container::Horizontal({}))
+    : mType(type)
+    , mDepth(0)
+    , mName(name)
+    , mParent(nullptr)
+    , mActiveChild(nullptr)
+    , mTab(MenuEntry(name, tabOption))
+    , mChildrenTabs(Container::Horizontal({}))
 {
 }
 
 ViewNode::~ViewNode()
 {
-    tab_->Detach();
+    mTab->Detach();
 }
 
 ViewNodePtr ViewNode::createGroup(std::string name)
@@ -102,46 +102,46 @@ ViewNodePtr ViewNode::createGroup(std::string name)
 
 ftxui::Element ViewNode::renderTabline() const
 {
-    return childrenTabs_->Render();
+    return mChildrenTabs->Render();
 }
 
 ViewNode& ViewNode::addChild(ViewNodePtr child)
 {
     auto& childRef = *child;
-    child->parent_ = this;
-    child->depth_ = depth_ + 1;
+    child->mParent = this;
+    child->mDepth = mDepth + 1;
 
-    childrenTabs_->Add(child->tab_);
-    children_.emplace_back(std::move(child));
+    mChildrenTabs->Add(child->mTab);
+    mChildren.emplace_back(std::move(child));
     return childRef;
 }
 
 ViewNode* ViewNode::childAt(unsigned index)
 {
-    if (index >= children_.size())
+    if (index >= mChildren.size())
     {
         return nullptr;
     }
 
-    auto it = std::next(children_.begin(), index);
+    auto it = std::next(mChildren.begin(), index);
 
     return it->get();
 }
 
 ViewNode& ViewNode::setActive()
 {
-    parent_->setActiveChild(*this);
+    mParent->setActiveChild(*this);
     return *this;
 }
 
 void ViewNode::setActiveChild(ViewNode& node)
 {
-    for (auto& child : children_)
+    for (auto& child : mChildren)
     {
         if (child.get() == &node)
         {
-            childrenTabs_->SetActiveChild(child->tab_);
-            activeChild_ = child.get();
+            mChildrenTabs->SetActiveChild(child->mTab);
+            mActiveChild = child.get();
             return;
         }
     }
@@ -150,16 +150,16 @@ void ViewNode::setActiveChild(ViewNode& node)
 
 ViewNode* ViewNode::next()
 {
-    if (not parent_)
+    if (not mParent)
     {
         return nullptr;
     }
 
-    for (auto it = parent_->children_.begin(); it != parent_->children_.end(); ++it)
+    for (auto it = mParent->mChildren.begin(); it != mParent->mChildren.end(); ++it)
     {
         if (it->get() == this)
         {
-            return ++it == parent_->children_.end()
+            return ++it == mParent->mChildren.end()
                 ? nullptr
                 : it->get();
         }
@@ -170,16 +170,16 @@ ViewNode* ViewNode::next()
 
 ViewNode* ViewNode::prev()
 {
-    if (not parent_)
+    if (not mParent)
     {
         return nullptr;
     }
 
-    for (auto it = parent_->children_.begin(); it != parent_->children_.end(); ++it)
+    for (auto it = mParent->mChildren.begin(); it != mParent->mChildren.end(); ++it)
     {
         if (it->get() == this)
         {
-            return it == parent_->children_.begin()
+            return it == mParent->mChildren.begin()
                 ? nullptr
                 : (--it)->get();
         }
@@ -190,7 +190,7 @@ ViewNode* ViewNode::prev()
 
 ViewNode* ViewNode::deepestActive()
 {
-    auto child = activeChild_;
+    auto child = mActiveChild;
 
     if (not child)
     {

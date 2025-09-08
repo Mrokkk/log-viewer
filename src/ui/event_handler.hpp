@@ -28,7 +28,7 @@ struct EventHandlers
 
 private:
     struct Impl;
-    Impl* pimpl_;
+    Impl* mPimpl;
 };
 
 }  // namespace ui

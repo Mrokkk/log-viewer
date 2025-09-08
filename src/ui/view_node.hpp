@@ -34,17 +34,17 @@ struct ViewNode : utils::NonCopyable
 
     Type type() const
     {
-        return type_;
+        return mType;
     }
 
     std::string& name()
     {
-        return name_;
+        return mName;
     }
 
     const std::string& name() const
     {
-        return name_;
+        return mName;
     }
 
     ftxui::Element renderTabline() const;
@@ -53,24 +53,24 @@ struct ViewNode : utils::NonCopyable
 
     ViewNode* activeChild()
     {
-        return activeChild_;
+        return mActiveChild;
     }
 
     ViewNode* parent()
     {
-        return parent_;
+        return mParent;
     }
 
     ViewNode* childAt(unsigned index);
 
     ViewNodes& children()
     {
-        return children_;
+        return mChildren;
     }
 
     const ViewNodes& children() const
     {
-        return children_;
+        return mChildren;
     }
 
     ViewNode& setActive();
@@ -91,23 +91,23 @@ struct ViewNode : utils::NonCopyable
 
     ViewNode& base()
     {
-        return *children_.front().get();
+        return *mChildren.front().get();
     }
 
     bool isBase() const
     {
-        return parent_ and this == &parent_->base();
+        return mParent and this == &mParent->base();
     }
 
     ViewNode& depth(int i)
     {
-        depth_ = i;
+        mDepth = i;
         return *this;
     }
 
     int depth() const
     {
-        return depth_;
+        return mDepth;
     }
 
     ViewNode* next();
@@ -117,7 +117,7 @@ struct ViewNode : utils::NonCopyable
     template <typename T>
     void forEachRecursive(T functor)
     {
-        for (auto& child : children_)
+        for (auto& child : mChildren)
         {
             functor(*child);
             child->forEachRecursive(functor);
@@ -125,14 +125,14 @@ struct ViewNode : utils::NonCopyable
     }
 
 private:
-    Type             type_;
-    int              depth_;
-    std::string      name_;
-    ViewNodes        children_;
-    ViewNode*        parent_;
-    ViewNode*        activeChild_;
-    ftxui::Component tab_;
-    ftxui::Component childrenTabs_;
+    Type             mType;
+    int              mDepth;
+    std::string      mName;
+    ViewNodes        mChildren;
+    ViewNode*        mParent;
+    ViewNode*        mActiveChild;
+    ftxui::Component mTab;
+    ftxui::Component mChildrenTabs;
 };
 
 }  // namespace ui

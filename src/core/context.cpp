@@ -16,12 +16,12 @@ struct Context::Data final
 };
 
 Context::Context()
-    : data_(new Data)
+    : mData(new Data)
     , running(true)
     , mode(Mode::normal)
-    , inputState(data_->inputState)
-    , commandLine(data_->commandLine)
-    , messageLine(data_->messageLine)
+    , inputState(mData->inputState)
+    , commandLine(mData->commandLine)
+    , messageLine(mData->messageLine)
 {
 }
 
@@ -29,7 +29,7 @@ Context::~Context()
 {
     running = false;
     delete ui;
-    delete data_;
+    delete mData;
 }
 
 Context Context::create()

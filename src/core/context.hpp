@@ -17,7 +17,7 @@ private:
     Context();
 
     struct Data;
-    Data* data_;
+    Data* mData;
 
 public:
     bool           running;

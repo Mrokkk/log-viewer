@@ -15,25 +15,25 @@ static CommandsMap map;
 CommandArguments::CommandArguments() = default;
 
 CommandArguments::CommandArguments(std::initializer_list<ArgumentSignature> n)
-    : types_(std::move(n))
+    : mTypes(std::move(n))
 {
 }
 
 const std::vector<CommandArguments::ArgumentSignature>& CommandArguments::get() const
 {
-    return types_;
+    return mTypes;
 }
 
 CommandFlags::CommandFlags() = default;
 
 CommandFlags::CommandFlags(std::initializer_list<std::string> n)
-    : flags_(std::move(n))
+    : mFlags(std::move(n))
 {
 }
 
 const std::flat_set<std::string>& CommandFlags::get() const
 {
-    return flags_;
+    return mFlags;
 }
 
 Command* Commands::find(const std::string& name)

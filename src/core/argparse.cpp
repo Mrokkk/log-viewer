@@ -292,23 +292,23 @@ CommandLineOptionsList& CommandLineOptions::list()
 }
 
 CommandLineOption::CommandLineOption(Option option)
-    : option_(CommandLineOptions::list().emplace_back(option))
+    : mOption(CommandLineOptions::list().emplace_back(option))
 {
 }
 
 CommandLineOption::operator bool() const
 {
-    return option_.value != nullptr;
+    return mOption.value != nullptr;
 }
 
 const Option::Value* CommandLineOption::operator->() const
 {
-    return option_.value;
+    return mOption.value;
 }
 
 const Option::Value& CommandLineOption::operator*() const
 {
-    return *option_.value;
+    return *mOption.value;
 }
 
 }  // namespace core

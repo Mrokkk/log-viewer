@@ -41,7 +41,7 @@ struct CommandArguments final
     const std::vector<ArgumentSignature>& get() const;
 
 private:
-    std::vector<ArgumentSignature> types_;
+    std::vector<ArgumentSignature> mTypes;
 };
 
 struct CommandFlags final
@@ -52,7 +52,7 @@ struct CommandFlags final
     const std::flat_set<std::string>& get() const;
 
 private:
-    std::flat_set<std::string> flags_;
+    std::flat_set<std::string> mFlags;
 };
 
 struct Command final : utils::NonCopyable

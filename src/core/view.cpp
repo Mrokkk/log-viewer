@@ -42,34 +42,34 @@ constexpr static inline char cast(T value)
 }
 
 View::View()
-    : stopFlag_(false)
-    , state_(cast(State::uninitialized))
-    , type_(cast(ViewType::uninitialized))
-    , lineCount_(0)
-    , fileLines_(nullptr)
+    : mStopFlag(false)
+    , mState(cast(State::uninitialized))
+    , mType(cast(ViewType::uninitialized))
+    , mLineCount(0)
+    , mFileLines(nullptr)
 {
 }
 
 View::~View()
 {
     assert(isMainThread(), "~View called not on main thread");
-    switch (state_)
+    switch (mState)
     {
         case cast(State::loading):
-            assert(stopFlag_ == false, "Stop flag was already set to true");
-            stopFlag_ = true;
-            while (state_ == cast(State::loading));
+            assert(mStopFlag == false, "Stop flag was already set to true");
+            mStopFlag = true;
+            while (mState == cast(State::loading));
             break;
         default:
             break;
     }
-    switch (type_)
+    switch (mType)
     {
         case cast(ViewType::base):
-            utils::destroyAt(&ownLines_);
+            utils::destroyAt(&mOwnLines);
             break;
         case cast(ViewType::filtered):
-            utils::destroyAt(&greppedLines_);
+            utils::destroyAt(&mFilteredLines);
             break;
         default:
             break;
@@ -114,15 +114,15 @@ void View::load(std::string path, Context&, ViewLoadedCallback callback)
 {
     loading();
 
-    if (auto result = file_.open(std::move(path)); not result) [[unlikely]]
+    if (auto result = mFile.open(std::move(path)); not result) [[unlikely]]
     {
-        state_ = cast(State::aborted);
+        mState = cast(State::aborted);
         callback(std::unexpected(std::move(result.error())));
         return;
     }
 
-    utils::constructAt(&ownLines_);
-    type_ = cast(ViewType::base);
+    utils::constructAt(&mOwnLines);
+    mType = cast(ViewType::base);
 
     async(
         [callback = std::move(callback), this]
@@ -133,12 +133,12 @@ void View::load(std::string path, Context&, ViewLoadedCallback callback)
 
             if (result) [[likely]]
             {
-                state_ = cast(State::loaded);
+                mState = cast(State::loaded);
                 callback(timer.elapsed());
             }
             else
             {
-                state_ = cast(State::aborted);
+                mState = cast(State::aborted);
                 callback(std::unexpected(std::move(result.error())));
             }
         });
@@ -148,8 +148,8 @@ void View::grep(std::string pattern, GrepOptions options, ViewId parentViewId, C
 {
     loading();
 
-    utils::constructAt(&greppedLines_);
-    type_ = cast(ViewType::filtered);
+    utils::constructAt(&mFilteredLines);
+    mType = cast(ViewType::filtered);
 
     async(
         [pattern = std::move(pattern), callback = std::move(callback), options, parentViewId, &context, this]
@@ -158,7 +158,7 @@ void View::grep(std::string pattern, GrepOptions options, ViewId parentViewId, C
 
             if (not parentView) [[unlikely]]
             {
-                state_ = cast(State::aborted);
+                mState = cast(State::aborted);
                 callback(std::unexpected("Parent view has been closed"));
                 return;
             }
@@ -171,12 +171,12 @@ void View::grep(std::string pattern, GrepOptions options, ViewId parentViewId, C
 
             if (result) [[likely]]
             {
-                state_ = cast(State::loaded);
+                mState = cast(State::loaded);
                 callback(timer.elapsed());
             }
             else
             {
-                state_ = cast(State::aborted);
+                mState = cast(State::aborted);
                 callback(std::unexpected(std::move(result.error())));
             }
         });
@@ -186,8 +186,8 @@ void View::filter(size_t start, size_t end, ViewId parentViewId, Context& contex
 {
     loading();
 
-    utils::constructAt(&greppedLines_);
-    type_ = cast(ViewType::filtered);
+    utils::constructAt(&mFilteredLines);
+    mType = cast(ViewType::filtered);
 
     async(
         [start, end, callback = std::move(callback), parentViewId, &context, this]
@@ -196,7 +196,7 @@ void View::filter(size_t start, size_t end, ViewId parentViewId, Context& contex
 
             if (not parentView) [[unlikely]]
             {
-                state_ = cast(State::aborted);
+                mState = cast(State::aborted);
                 callback(std::unexpected("Parent view has been closed"));
                 return;
             }
@@ -207,7 +207,7 @@ void View::filter(size_t start, size_t end, ViewId parentViewId, Context& contex
 
             filter(start, end, *parentView);
 
-            state_ = cast(State::loaded);
+            mState = cast(State::loaded);
             callback(timer.elapsed());
         });
 }
@@ -216,12 +216,12 @@ StringOrError View::readLine(size_t i)
 {
     auto lineIndex = i;
 
-    if (type_ == cast(ViewType::filtered))
+    if (mType == cast(ViewType::filtered))
     {
-        lineIndex = greppedLines_[lineIndex];
+        lineIndex = mFilteredLines[lineIndex];
     }
 
-    auto& line = (*fileLines_)[lineIndex];
+    auto& line = (*mFileLines)[lineIndex];
 
     if (line.len == 0)
     {
@@ -240,10 +240,10 @@ StringOrError View::readLine(size_t i)
 
 size_t View::absoluteLineNumber(size_t lineIndex) const
 {
-    switch (type_)
+    switch (mType)
     {
         case cast(ViewType::filtered):
-            return greppedLines_[lineIndex];
+            return mFilteredLines[lineIndex];
         default:
             return lineIndex;
     }
@@ -251,46 +251,46 @@ size_t View::absoluteLineNumber(size_t lineIndex) const
 
 size_t View::fileLineCount() const
 {
-    return fileLines_->size();
+    return mFileLines->size();
 }
 
 const std::string& View::filePath() const
 {
-    assert(type_ != cast(ViewType::uninitialized), utils::format("View {} type is uninitialized", this));
-    return file_.path();
+    assert(mType != cast(ViewType::uninitialized), utils::format("View {} type is uninitialized", this));
+    return mFile.path();
 }
 
 void View::loading()
 {
-    assert(state_ == cast(State::uninitialized), utils::format("View {} state is {}", this, stringify<State>(state_)));
-    assert(type_ == cast(ViewType::uninitialized), utils::format("View {} type is {}", this, stringify<ViewType>(type_)));
+    assert(mState == cast(State::uninitialized), utils::format("View {} state is {}", this, stringify<State>(mState)));
+    assert(mType == cast(ViewType::uninitialized), utils::format("View {} type is {}", this, stringify<ViewType>(mType)));
 
-    state_ = cast(State::loading);
+    mState = cast(State::loading);
 }
 
 void View::copyFromParent(View& parentView)
 {
-    file_ = parentView.file_;
-    fileLines_ = parentView.fileLines_;
+    mFile = parentView.mFile;
+    mFileLines = parentView.mFileLines;
 }
 
 void View::initialize(Lines&& lines)
 {
-    lineCount_ = lines.size();
-    ownLines_ = std::move(lines);
-    fileLines_ = &ownLines_;
+    mLineCount = lines.size();
+    mOwnLines = std::move(lines);
+    mFileLines = &mOwnLines;
 }
 
 void View::initialize(LineRefs&& lines)
 {
-    lineCount_ = lines.size();
-    greppedLines_ = std::move(lines);
+    mLineCount = lines.size();
+    mFilteredLines = std::move(lines);
 }
 
 std::expected<bool, std::string> View::loadFile()
 {
     Lines lines;
-    auto sizeLeft{file_.size()};
+    auto sizeLeft{mFile.size()};
     size_t offset{0};
     size_t lineStart{0};
 
@@ -298,18 +298,18 @@ std::expected<bool, std::string> View::loadFile()
     {
         auto toRead = std::min(sizeLeft, BLOCK_SIZE);
 
-        if (auto result = file_.remap(offset, toRead); not result) [[unlikely]]
+        if (auto result = mFile.remap(offset, toRead); not result) [[unlikely]]
         {
             return std::unexpected(std::move(result.error()));
         }
 
-        const auto text = file_.at(offset);
+        const auto text = mFile.at(offset);
 
         for (size_t i = 0; i < toRead; ++i)
         {
             if (text[i] == '\n')
             {
-                if (stopFlag_) [[unlikely]]
+                if (mStopFlag) [[unlikely]]
                 {
                     return std::unexpected("Loading was aborted");
                 }
@@ -361,15 +361,15 @@ std::expected<bool, std::string> View::grep(
     LineRefs lines;
 
     #define FILE_LINE_INDEX_TRANSFORM(I) I
-    #define FILTERED_LINE_INDEX_TRANSFORM(I) parentView.greppedLines_[I]
+    #define FILTERED_LINE_INDEX_TRANSFORM(I) parentView.mFilteredLines[I]
 
     #define GREP_LOOP(CONDITION, LINE_INDEX_TRANSFORM) \
         do \
         { \
-            auto& fileLines = *fileLines_; \
+            auto& fileLines = *mFileLines; \
             for (size_t i = 0; i < lineCount; ++i) \
             { \
-                if (stopFlag_) [[unlikely]] \
+                if (mStopFlag) [[unlikely]] \
                 { \
                     return std::unexpected("Loading was aborted"); \
                 } \
@@ -387,7 +387,7 @@ std::expected<bool, std::string> View::grep(
         } \
         while (0)
 
-    size_t lineCount = parentView.lineCount_;
+    size_t lineCount = parentView.mLineCount;
 
     if (not options.regex)
     {
@@ -397,7 +397,7 @@ std::expected<bool, std::string> View::grep(
 
         if (options.inverted)
         {
-            if (parentView.type_ == cast(ViewType::filtered))
+            if (parentView.mType == cast(ViewType::filtered))
             {
                 GREP_LOOP(not lineCheck(result.value(), pattern), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -408,7 +408,7 @@ std::expected<bool, std::string> View::grep(
         }
         else
         {
-            if (parentView.type_ == cast(ViewType::filtered))
+            if (parentView.mType == cast(ViewType::filtered))
             {
                 GREP_LOOP(lineCheck(result.value(), pattern), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -424,7 +424,7 @@ std::expected<bool, std::string> View::grep(
 
         if (options.inverted)
         {
-            if (parentView.type_ == cast(ViewType::filtered))
+            if (parentView.mType == cast(ViewType::filtered))
             {
                 GREP_LOOP(not RE2::PartialMatch(result.value(), re), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -435,7 +435,7 @@ std::expected<bool, std::string> View::grep(
         }
         else
         {
-            if (parentView.type_ == cast(ViewType::filtered))
+            if (parentView.mType == cast(ViewType::filtered))
             {
                 GREP_LOOP(RE2::PartialMatch(result.value(), re), FILTERED_LINE_INDEX_TRANSFORM);
             }
@@ -461,9 +461,9 @@ void View::filter(
     {
         auto lineIndex = i;
 
-        if (parentView.type_ == cast(ViewType::filtered))
+        if (parentView.mType == cast(ViewType::filtered))
         {
-            lineIndex = parentView.greppedLines_[lineIndex];
+            lineIndex = parentView.mFilteredLines[lineIndex];
         }
 
         lines.push_back(lineIndex);
@@ -479,17 +479,17 @@ std::expected<std::string_view, std::string> View::readInternal(Line line)
         return "";
     }
 
-    if (not file_.isAreaMapped(line.start, line.len)) [[unlikely]]
+    if (not mFile.isAreaMapped(line.start, line.len)) [[unlikely]]
     {
-        auto mappingLen = std::min(BLOCK_SIZE, file_.size() - line.start);
+        auto mappingLen = std::min(BLOCK_SIZE, mFile.size() - line.start);
 
-        if (auto result = file_.remap(line.start, mappingLen); not result) [[unlikely]]
+        if (auto result = mFile.remap(line.start, mappingLen); not result) [[unlikely]]
         {
             return std::unexpected(std::move(result.error()));
         }
     }
 
-    return std::string_view(file_.at(line.start), line.len);
+    return std::string_view(mFile.at(line.start), line.len);
 }
 
 }  // namespace core

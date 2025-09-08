@@ -59,21 +59,21 @@ struct Entities<T>::Impl final
 {
     EntityWithId allocate()
     {
-        std::scoped_lock lock(lock_);
+        std::scoped_lock lock(mLock);
 
-        if (freeEntities_.empty()) [[unlikely]]
+        if (mFreeEntities.empty()) [[unlikely]]
         {
-            auto newSlabId = slabs_.size();
-            auto& slab = slabs_.emplace_back(newSlabId * EntitySlab<T>::count);
-            slabsArray_.emplace_back(&slab);
+            auto newSlabId = mSlabs.size();
+            auto& slab = mSlabs.emplace_back(newSlabId * EntitySlab<T>::count);
+            mSlabsArray.emplace_back(&slab);
             for (auto& node : slab.array)
             {
-                freeEntities_.push_back(node.id);
+                mFreeEntities.push_back(node.id);
             }
         }
 
-        auto id = freeEntities_.front();
-        freeEntities_.pop_front();
+        auto id = mFreeEntities.front();
+        mFreeEntities.pop_front();
 
         auto& node = getNode(id);
         node.initialized = true;
@@ -89,7 +89,7 @@ struct Entities<T>::Impl final
 
     void free(EntityId<T> id)
     {
-        std::scoped_lock lock(lock_);
+        std::scoped_lock lock(mLock);
 
         auto nodeAndSlab = getNodeAndSlab(id);
 
@@ -103,12 +103,12 @@ struct Entities<T>::Impl final
         utils::destroyAt(&node.object);
         utils::constructAt(&node.object);
         node.initialized = false;
-        freeEntities_.push_back(node.id);
+        mFreeEntities.push_back(node.id);
     }
 
     T* at(EntityId<T> id)
     {
-        std::scoped_lock lock(lock_);
+        std::scoped_lock lock(mLock);
 
         auto nodeAndSlab = getNodeAndSlab(id);
 
@@ -126,7 +126,7 @@ private:
         auto slabId = id.index / EntitySlab<T>::count;
         auto entityId = id.index % EntitySlab<T>::count;
 
-        auto& slab = *slabsArray_.at(slabId);
+        auto& slab = *mSlabsArray.at(slabId);
         auto& node = slab.array[entityId];
 
         return node;
@@ -142,51 +142,51 @@ private:
         auto slabId = id.index / EntitySlab<T>::count;
         auto entityId = id.index % EntitySlab<T>::count;
 
-        if (slabId >= slabsArray_.size()) [[unlikely]]
+        if (slabId >= mSlabsArray.size()) [[unlikely]]
         {
             return {nullptr, nullptr};
         }
 
-        auto& slab = *slabsArray_.at(slabId);
+        auto& slab = *mSlabsArray.at(slabId);
         auto& node = slab.array[entityId];
 
         return {maybeInitialized(node, node.initialized), &slab};
     }
 
-    std::mutex                  lock_;
-    std::list<EntitySlab<T>>    slabs_;
-    std::vector<EntitySlab<T>*> slabsArray_;
-    std::list<EntityId<T>>      freeEntities_;
+    std::mutex                  mLock;
+    std::list<EntitySlab<T>>    mSlabs;
+    std::vector<EntitySlab<T>*> mSlabsArray;
+    std::list<EntityId<T>>      mFreeEntities;
 };
 
 template <typename T>
 Entities<T>::Entities()
-    : pimpl_(new Impl)
+    : mPimpl(new Impl)
 {
 }
 
 template <typename T>
 Entities<T>::~Entities()
 {
-    delete pimpl_;
+    delete mPimpl;
 }
 
 template <typename T>
 Entities<T>::EntityWithId Entities<T>::allocate()
 {
-    return pimpl_->allocate();
+    return mPimpl->allocate();
 }
 
 template <typename T>
 void Entities<T>::free(EntityId<T> id)
 {
-    pimpl_->free(id);
+    mPimpl->free(id);
 }
 
 template <typename T>
 T* Entities<T>::operator[](EntityId<T> id)
 {
-    return pimpl_->at(id);
+    return mPimpl->at(id);
 }
 
 template struct Entities<View>;

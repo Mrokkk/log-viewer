@@ -65,7 +65,7 @@ struct CommandLineOption final : utils::Immobile
     const Option::Value& operator*() const;
 
 private:
-    Option& option_;
+    Option& mOption;
 };
 
 std::expected<int, std::string> parseArgs(int argc, char* const* argv);

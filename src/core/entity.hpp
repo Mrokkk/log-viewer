@@ -21,7 +21,7 @@ struct Entities final : utils::Immobile
 
 private:
     struct Impl;
-    Impl* pimpl_;
+    Impl* mPimpl;
 };
 
 }  // namespace core

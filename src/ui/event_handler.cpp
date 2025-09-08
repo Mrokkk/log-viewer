@@ -32,18 +32,18 @@ struct EventHandlers::Impl
 };
 
 EventHandlers::EventHandlers(std::initializer_list<EventHandlerPair>&& list)
-    : pimpl_(new Impl(std::move(list)))
+    : mPimpl(new Impl(std::move(list)))
 {
 }
 
 EventHandlers::~EventHandlers()
 {
-    delete pimpl_;
+    delete mPimpl;
 }
 
 std::expected<bool, int> EventHandlers::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const
 {
-    return pimpl_->handleEvent(event, ui, context);
+    return mPimpl->handleEvent(event, ui, context);
 }
 
 }  // namespace ui
