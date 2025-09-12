@@ -44,15 +44,22 @@ DEFINE_COMMAND(set)
                     Variables::addUserDefined(name, Type::integer, args[1].integer);
                     break;
 
-                default:
+                [[unlikely]] default:
                     goto unknown;
             }
             return true;
         }
 
-        if (variable->access != Variable::Access::readWrite)
+        if (variable->access != Variable::Access::readWrite) [[unlikely]]
         {
             context.messageLine.error() << "Not writable: " << args[0].string;
+            return false;
+        }
+
+        if (variable->type != args[1].type) [[unlikely]]
+        {
+            context.messageLine.error() << "Wrong type of argument; expected " << variable->type
+                << ", got " << args[1].type;
             return false;
         }
 

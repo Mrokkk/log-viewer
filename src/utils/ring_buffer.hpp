@@ -11,7 +11,14 @@ namespace utils
 template <typename T>
 struct RingBuffer final : NonCopyable
 {
-    RingBuffer(size_t size)
+    constexpr RingBuffer()
+        : mStart(0)
+        , mSize(0)
+        , mCurrent(0)
+    {
+    }
+
+    constexpr RingBuffer(size_t size)
         : mStart(0)
         , mSize(0)
         , mCurrent(0)
@@ -19,7 +26,7 @@ struct RingBuffer final : NonCopyable
     {
     }
 
-    RingBuffer& pushFront(T value)
+    constexpr RingBuffer& pushFront(T value)
     {
         size_t maxSize = mBuffer.size();
         if (static_cast<int>(--mStart) < 0)
@@ -41,7 +48,7 @@ struct RingBuffer final : NonCopyable
         return *this;
     }
 
-    RingBuffer& pushBack(T value)
+    constexpr RingBuffer& pushBack(T value)
     {
         size_t maxSize = mBuffer.size();
 
@@ -68,7 +75,7 @@ struct RingBuffer final : NonCopyable
     }
 
     template <typename U>
-    void forEach(const U& callback) const
+    constexpr void forEach(const U& callback) const
     {
         if (mSize == 0) [[unlikely]]
         {
@@ -94,7 +101,7 @@ struct RingBuffer final : NonCopyable
         }
     }
 
-    const T& operator[](size_t i) const
+    constexpr const T& operator[](size_t i) const
     {
         i += mStart;
         if (i >= mBuffer.size())
@@ -104,17 +111,17 @@ struct RingBuffer final : NonCopyable
         return mBuffer[i];
     }
 
-    void clear()
+    constexpr void clear()
     {
         mCurrent = mSize = mStart = 0;
     }
 
-    size_t capacity() const
+    constexpr size_t capacity() const
     {
         return mBuffer.size();
     }
 
-    size_t size() const
+    constexpr size_t size() const
     {
         return mSize;
     }

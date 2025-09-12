@@ -39,7 +39,8 @@ TEST(ParserTests, canParse)
         "command!\"hello\"  +21-32 # some comment\n"
         "otherCommand\"world\"  $path   # some other comment\n"
         "{ anotherCommand arg;;; }\n"
-        "true truev2 false falseb -test";
+        "true truev2 false falseb -test false\n"
+        "false";
 
     auto result = parse(value);
     ASSERT_TRUE(result);
@@ -86,6 +87,10 @@ TEST(ParserTests, canParse)
     ASSERT_NEXT_TOKEN(whitespace, " ");
     ASSERT_NEXT_TOKEN(sub, "-");
     ASSERT_NEXT_TOKEN(identifier, "test");
+    ASSERT_NEXT_TOKEN(whitespace, " ");
+    ASSERT_NEXT_TOKEN(booleanLiteral, "false");
+    ASSERT_NEXT_TOKEN(newline, "\n");
+    ASSERT_NEXT_TOKEN(booleanLiteral, "false");
     ASSERT_NEXT_TOKEN(end, "");
 }
 

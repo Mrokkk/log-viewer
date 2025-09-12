@@ -1,20 +1,15 @@
-#include "open.hpp"
-
-#include "core/alias.hpp"
 #include "core/buffer.hpp"
 #include "core/command.hpp"
-#include "core/interpreter.hpp"
 #include "core/main_loop.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
-#include "utils/buffer.hpp"
 
 namespace core
 {
 
-DEFINE_COMMAND(open)
+DEFINE_COMMAND(filter)
 {
-    HELP() = "open a file";
+    HELP() = "filter current view";
 
     FLAGS()
     {
@@ -23,24 +18,45 @@ DEFINE_COMMAND(open)
 
     ARGUMENTS()
     {
-        return {
-            ARGUMENT(string, "path")
-        };
-    };
+        return {};
+    }
 
     EXECUTOR()
     {
-        constexpr auto errorHeader = "Error loading file: ";
-        auto& path = args[0].string;
+        auto parentWindow = context.mainView.currentWindowNode();
 
-        auto& newWindow = context.mainView.createWindow(path, MainView::Parent::root, context);
+        if (not parentWindow) [[unlikely]]
+        {
+            context.messageLine.error() << "No buffer loaded yet";
+            return false;
+        }
+
+        auto& w = parentWindow->window();
+
+        if (not w.selectionMode)
+        {
+            context.messageLine.error() << "Nothing selected";
+            return false;
+        }
+
+        size_t start = w.selectionStart;
+        size_t end = w.selectionEnd;
+
+        utils::Buffer buf;
+        buf << '<' << start << '-' << end << '>';
+
+        auto& newWindow = context.mainView.createWindow(buf.str(), MainView::Parent::currentWindow, context);
 
         auto newBuffer = newWindow.buffer();
 
-        newBuffer->load(
-            path,
+        parentWindow->window().selectionMode = false;
+
+        newBuffer->filter(
+            start,
+            end,
+            parentWindow->bufferId(),
             context,
-            [&newWindow, &context, errorHeader](TimeOrError result)
+            [&newWindow, &context](core::TimeOrError result)
             {
                 if (result)
                 {
@@ -52,7 +68,7 @@ DEFINE_COMMAND(open)
                     }
 
                     context.messageLine.info()
-                        << newBuffer->filePath() << ": lines: " << newBuffer->lineCount() << "; took "
+                        << "filtered " << newBuffer->lineCount() << " lines; took "
                         << (result.value() | utils::precision(3)) << " s";
 
                     context.mainLoop->executeTask(
@@ -63,7 +79,7 @@ DEFINE_COMMAND(open)
                 }
                 else if (context.running)
                 {
-                    context.messageLine.error() << errorHeader << result.error();
+                    context.messageLine.error() << "Error filtering buffer: " << result.error();
                     context.mainView.removeWindow(*newWindow.parent(), context);
                 }
             });
@@ -71,19 +87,5 @@ DEFINE_COMMAND(open)
         return true;
     }
 }
-
-DEFINE_ALIAS(e, open);
-
-namespace commands
-{
-
-bool open(const std::string& path, Context& context)
-{
-    utils::Buffer buf;
-    buf << open::Command::name << " \"" << path << "\"";
-    return executeCode(buf.str(), context);
-}
-
-}  // namespace commands
 
 }  // namespace core

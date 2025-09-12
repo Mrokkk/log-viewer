@@ -54,7 +54,7 @@ void Picker::move(long offset)
 
     if (size > 0)
     {
-        mCursor = (static_cast<long>(mCursor) + offset) | utils::clamp(0l, size - 1);
+        mCursor = utils::clamp(static_cast<long>(mCursor) + offset, 0l, size - 1);
     }
 }
 

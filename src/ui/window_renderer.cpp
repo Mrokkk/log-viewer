@@ -1,14 +1,15 @@
-#define LOG_HEADER "ui::ViewRenderer"
-#include "view_renderer.hpp"
+#define LOG_HEADER "ui::WindowRenderer"
+#include "window_renderer.hpp"
 
 #include <cstdint>
 #include <cstring>
 
 #include <ftxui/screen/color.hpp>
 
+#include "core/config.hpp"
 #include "core/logger.hpp"
+#include "core/window.hpp"
 #include "ui/palette.hpp"
-#include "ui/view.hpp"
 #include "utils/buffer.hpp"
 #include "utils/time.hpp"
 
@@ -17,15 +18,15 @@ using namespace ftxui;
 namespace ui
 {
 
-ViewRenderer::ViewRenderer(const View& view)
-    : mView(view)
+WindowRenderer::WindowRenderer(const core::Window& window)
+    : mWindow(window)
 {
 }
 
-void ViewRenderer::ComputeRequirement()
+void WindowRenderer::ComputeRequirement()
 {
     requirement_.min_x = 0;
-    requirement_.min_y = mView.viewHeight;
+    requirement_.min_y = mWindow.height;
     requirement_.flex_grow_x = 1;
     requirement_.flex_grow_y = 1;
 }
@@ -35,7 +36,7 @@ static std::string convertToString(uint32_t value)
     return std::string((const char*)&value, strnlen((const char*)&value, 4));
 }
 
-void ViewRenderer::Render(ftxui::Screen& screen)
+void WindowRenderer::Render(ftxui::Screen& screen)
 {
     auto t = utils::startTimeMeasurement();
     int y = box_.y_min;
@@ -45,14 +46,22 @@ void ViewRenderer::Render(ftxui::Screen& screen)
         return;
     }
 
-    int xmin = box_.x_min;
-    int ycurrent = mView.ycurrent + y;
-    int selectionStart = mView.selectionStart - mView.yoffset + y;
-    int selectionEnd = mView.selectionEnd - mView.yoffset + y;
-    bool selectionMode = mView.selectionMode;
+    const auto& w = mWindow;
 
-    mView.ringBuffer.forEach(
-        [this, &xmin, &y, &screen, ycurrent, selectionStart, selectionEnd, selectionMode](const Line& line)
+    int xmin = box_.x_min;
+    int ycurrent = w.ycurrent + y;
+    int selectionStart = w.selectionStart - w.yoffset + y;
+    int selectionEnd = w.selectionEnd - w.yoffset + y;
+    bool selectionMode = w.selectionMode;
+    size_t xoffset = w.xoffset;
+
+    if (w.ringBuffer.size() == 0) [[unlikely]]
+    {
+        return;
+    }
+
+    w.ringBuffer.forEach(
+        [this, &xmin, &y, &screen, xoffset, ycurrent, selectionStart, selectionEnd, selectionMode](const core::BufferLine& line)
         {
             if (y > box_.y_max)
             {
@@ -67,18 +76,18 @@ void ViewRenderer::Render(ftxui::Screen& screen)
                     ? Palette::bg2
                     : Color::Default;
 
-            if (mView.config.showLineNumbers)
+            if (mWindow.config->showLineNumbers)
             {
-                const auto lineNumber = mView.config.absoluteLineNumbers
+                const auto lineNumber = mWindow.config->absoluteLineNumbers
                     ? line.absoluteLineNumber
                     : line.lineNumber;
 
                 utils::Buffer buf;
-                buf << (lineNumber | utils::leftPadding(mView.lineNrDigits + 1)) << mView.config.lineNumberSeparator;
+                buf << (lineNumber | utils::leftPadding(mWindow.lineNrDigits + 1)) << mWindow.config->lineNumberSeparator;
 
                 const auto fgColor = y == ycurrent
-                    ? Palette::View::activeLineNumberFg
-                    : Palette::View::inactiveLineNumberFg;
+                    ? Palette::Window::activeLineNumberFg
+                    : Palette::Window::inactiveLineNumberFg;
 
                 for (const auto c : buf)
                 {
@@ -91,12 +100,19 @@ void ViewRenderer::Render(ftxui::Screen& screen)
                 xmin = x;
             }
 
+            size_t position = 0;
+
             // Draw line
             for (const auto& segment : line.segments)
             {
                 for (const auto& glyph : segment.glyphs)
                 {
-                    if (glyph.special)
+                    if (position < xoffset)
+                    {
+                        ++position;
+                        continue;
+                    }
+                    if (glyph.flags & (core::GlyphFlags::control | core::GlyphFlags::invalid))
                     {
                         for (uint32_t i = 0; i < glyph.width; ++i)
                         {
@@ -124,10 +140,11 @@ void ViewRenderer::Render(ftxui::Screen& screen)
                             auto& pixel = screen.PixelAt(x, y);
                             pixel.character = convertToString(glyph.characters[i]);
                             pixel.background_color = bgColor;
-                            pixel.foreground_color = segment.color;
+                            pixel.foreground_color = Color::Default;
                             ++x;
                         }
                     }
+                    ++position;
                 }
 
                 for (; x <= box_.x_max; ++x)
@@ -145,12 +162,12 @@ void ViewRenderer::Render(ftxui::Screen& screen)
 
     const auto [cursorPosition, cursorWidth] = getCursorPositionAndWidth();
 
-    drawCursor(screen, cursorPosition + xmin, cursorWidth, mView.ycurrent + box_.y_min);
+    drawCursor(screen, cursorPosition + xmin, cursorWidth, mWindow.ycurrent + box_.y_min);
 
     logger.debug() << "took: " << 1000 * t.elapsed() << " ms";
 }
 
-void ViewRenderer::drawCursor(ftxui::Screen& screen, int cursorPosition, int cursorWidth, int y) const
+void WindowRenderer::drawCursor(ftxui::Screen& screen, int cursorPosition, int cursorWidth, int y) const
 {
     for (int i = cursorPosition; i < cursorPosition + cursorWidth; ++i)
     {
@@ -160,15 +177,15 @@ void ViewRenderer::drawCursor(ftxui::Screen& screen, int cursorPosition, int cur
     }
 }
 
-std::pair<int, int> ViewRenderer::getCursorPositionAndWidth() const
+std::pair<int, int> WindowRenderer::getCursorPositionAndWidth() const
 {
-    const auto& currentLine = mView.ringBuffer[mView.ycurrent];
+    const auto& currentLine = mWindow.ringBuffer[mWindow.ycurrent];
 
     int cursorPosition = 0;
-    for (size_t i = 0; i < currentLine.glyphs.size(); ++i)
+    for (size_t i = mWindow.xoffset; i < currentLine.glyphs.size(); ++i)
     {
         const auto& glyph = currentLine.glyphs[i];
-        if (i == mView.xcurrent)
+        if (i == mWindow.xcurrent + mWindow.xoffset)
         {
             return {cursorPosition, glyph.width};
         }

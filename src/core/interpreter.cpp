@@ -10,9 +10,10 @@
 #include "core/command.hpp"
 #include "core/context.hpp"
 #include "core/lexer.hpp"
+#include "core/main_loop.hpp"
+#include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "core/type.hpp"
-#include "core/user_interface.hpp"
 #include "core/variable.hpp"
 #include "utils/buffer.hpp"
 #include "utils/string.hpp"
@@ -130,7 +131,7 @@ static bool executeShellCommand(const TokensSpan& tokens, Context& context)
         command << std::string_view(start, end);
     }
 
-    context.ui->executeShell(command.str());
+    context.mainLoop->executeShell(command.str());
 
     return true;
 }
@@ -138,7 +139,7 @@ static bool executeShellCommand(const TokensSpan& tokens, Context& context)
 static bool executeGoToCommand(const TokensSpan& tokens, Context& context)
 {
     const auto lineNumber = tokens[0].value | utils::to<long>;
-    context.ui->scrollTo(static_cast<Scroll>(lineNumber), context);
+    context.mainView.scrollTo(static_cast<size_t>(lineNumber), context);
     return true;
 }
 
@@ -213,7 +214,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
                 args.emplace_back(
                     Argument{
                         .type = Type::boolean,
-                        .integer = tokens[i].value == "true",
+                        .boolean = tokens[i].value == "true",
                         .string{tokens[i].value.begin(), tokens[i].value.end()},
                     });
                 break;

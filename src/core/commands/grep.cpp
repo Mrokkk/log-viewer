@@ -1,9 +1,10 @@
+#include "core/buffer.hpp"
 #include "core/command.hpp"
 #include "core/grep_options.hpp"
 #include "core/interpreter.hpp"
+#include "core/main_loop.hpp"
+#include "core/main_view.hpp"
 #include "core/message_line.hpp"
-#include "core/user_interface.hpp"
-#include "core/view.hpp"
 #include "utils/buffer.hpp"
 
 namespace core
@@ -11,7 +12,7 @@ namespace core
 
 DEFINE_COMMAND(grep)
 {
-    HELP() = "grep current view";
+    HELP() = "grep current buffer";
 
     FLAGS()
     {
@@ -31,44 +32,32 @@ DEFINE_COMMAND(grep)
 
     EXECUTOR()
     {
+        auto parentWindow = context.mainView.currentWindowNode();
+
+        if (not parentWindow) [[unlikely]]
+        {
+            context.messageLine.error() << "No buffer loaded yet";
+            return false;
+        }
+
         auto pattern = args[0].string;
+
         GrepOptions options;
+        std::string optionsString;
 
         if (flags.contains("r"))
         {
             options.regex = true;
+            optionsString += 'r';
         }
         if (flags.contains("c"))
         {
             options.caseInsensitive = true;
+            optionsString += 'c';
         }
         if (flags.contains("i"))
         {
             options.inverted = true;
-        }
-
-        auto parentViewId = context.ui->getCurrentView();
-
-        auto parentView = getView(parentViewId, context);
-
-        if (not parentView) [[unlikely]]
-        {
-            context.messageLine.error() << "no view loaded yet";
-            return false;
-        }
-
-        std::string optionsString;
-
-        if (options.regex)
-        {
-            optionsString += 'r';
-        }
-        if (options.caseInsensitive)
-        {
-            optionsString += 'c';
-        }
-        if (options.inverted)
-        {
             optionsString += 'i';
         }
 
@@ -81,41 +70,40 @@ DEFINE_COMMAND(grep)
             buf << " [" << optionsString << ']';
         }
 
-        auto [newView, newViewId] = context.views.allocate();
+        auto& newWindow = context.mainView.createWindow(buf.str(), MainView::Parent::currentWindow, context);
 
-        auto uiView = context.ui->createView(buf.str(), newViewId, Parent::currentView, context);
+        auto newBuffer = newWindow.buffer();
 
-        if (uiView.expired()) [[unlikely]]
-        {
-            context.messageLine.error() << "failed to create UI view";
-            context.views.free(newViewId);
-            return false;
-        }
-
-        newView.grep(
+        newBuffer->grep(
             std::move(pattern),
             options,
-            parentViewId,
+            parentWindow->bufferId(),
             context,
-            [uiView, newViewId, &context](TimeOrError result)
+            [&newWindow, &context](TimeOrError result)
             {
                 if (result)
                 {
-                    auto newView = getView(newViewId, context);
+                    auto newBuffer = newWindow.buffer();
 
-                    if (newView)
+                    if (not newBuffer)
                     {
-                        context.messageLine.info()
-                            << "found " << newView->lineCount() << " matches; took "
-                            << (result.value() | utils::precision(3)) << " s";
-
-                        context.ui->onViewDataLoaded(uiView, context);
+                        return;
                     }
+
+                    context.messageLine.info()
+                        << "found " << newBuffer->lineCount() << " matches; took "
+                        << (result.value() | utils::precision(3)) << " s";
+
+                    context.mainLoop->executeTask(
+                        [&newWindow, &context]
+                        {
+                            context.mainView.bufferLoaded(newWindow, context);
+                        });
                 }
                 else if (context.running)
                 {
-                    context.messageLine.error() << "Error grepping view: " << result.error();
-                    context.ui->removeView(uiView, context);
+                    context.messageLine.error() << "Error grepping buffer: " << result.error();
+                    context.mainView.removeWindow(*newWindow.parent(), context);
                 }
             });
 

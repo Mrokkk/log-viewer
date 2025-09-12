@@ -46,7 +46,7 @@ struct Palette
         static constexpr auto& inactiveLineBg   = Palette::bg0;
     };
 
-    struct View
+    struct Window
     {
         static constexpr Color& inactiveLineNumberFg = Palette::bg2;
         static constexpr Color& activeLineNumberFg = Palette::bg6;

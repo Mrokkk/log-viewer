@@ -28,11 +28,15 @@ static size_t pickerHeight(size_t terminalHeight)
 
 CommandLine::CommandLine(Ftxui& ui, core::Context& context)
     : UIComponent(UIComponent::commandLine)
-    , mTextBox({
-        .content = context.commandLine->line(),
-        .cursorPosition = &context.commandLine->cursor(),
-        .suggestion = &context.commandLine->suggestion(),
+    , mCommandTextBox({
+        .content = context.commandLine.commandReadline.line(),
+        .cursorPosition = &context.commandLine.commandReadline.cursor(),
+        .suggestion = &context.commandLine.commandReadline.suggestion(),
         .suggestionColor = &Palette::bg5
+    })
+    , mSearchTextBox({
+        .content = context.commandLine.searchReadline.line(),
+        .cursorPosition = &context.commandLine.searchReadline.cursor(),
     })
 {
     context.commandLine->setPageSize(pickerHeight(ui.terminalSize.dimy));
@@ -62,7 +66,7 @@ static Element renderPicker(const core::Picker& picker, Ftxui& ui)
 
     const size_t resy = ui.terminalSize.dimy / 3;
 
-    size_t pickerSize = pickerContent.size() | utils::clamp(0ul, resy);
+    size_t pickerSize = utils::clamp(pickerContent.size(), 0uz, resy);
     elements.reserve(pickerSize);
 
     for (size_t i = 0; i < resy - pickerSize; ++i)
@@ -119,11 +123,26 @@ static Element renderCompletions(const utils::StringViews& completions, core::Co
 
 Element CommandLine::render(core::Context& context)
 {
-    auto& ui = context.ui->get<Ftxui>();
+    auto& ui = context.ui->cast<Ftxui>();
 
     if (ui.active->type == UIComponent::commandLine)
     {
         auto& completions = context.commandLine->completions();
+
+        TextBox* textBox = nullptr;
+
+        std::string commandLinePrefix{char(context.commandLine.mode())};;
+
+        switch (context.commandLine.mode())
+        {
+            case core::CommandLine::Mode::command:
+                textBox = &mCommandTextBox;
+                break;
+            case core::CommandLine::Mode::searchForward:
+            case core::CommandLine::Mode::searchBackward:
+                textBox = &mSearchTextBox;
+                break;
+        }
 
         auto picker = context.commandLine->picker();
 
@@ -141,16 +160,22 @@ Element CommandLine::render(core::Context& context)
                         | bgcolor(Palette::StatusLine::bg2),
                     text(" ")
                         | color(Palette::StatusLine::bg2)),
-                hbox(text(":"), renderTextBox(mTextBox)));
+                hbox(
+                    text(std::move(commandLinePrefix)),
+                    renderTextBox(mCommandTextBox)));
         }
         else if (completions.empty())
         {
-            return hbox(text(":"), renderTextBox(mTextBox));
+            return hbox(
+                text(std::move(commandLinePrefix)),
+                renderTextBox(*textBox));
         }
 
         return vbox(
                 renderCompletions(completions, context),
-                hbox(text(":"), renderTextBox(mTextBox)));
+                hbox(
+                    text(std::move(commandLinePrefix)),
+                    renderTextBox(*textBox)));
     }
 
     switch (context.messageLine.severity())

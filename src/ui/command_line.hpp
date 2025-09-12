@@ -17,7 +17,8 @@ struct CommandLine final : UIComponent
     ftxui::Element render(core::Context& context) override;
 
 private:
-    TextBox mTextBox;
+    TextBox mCommandTextBox;
+    TextBox mSearchTextBox;
 };
 
 }  // namespace ui

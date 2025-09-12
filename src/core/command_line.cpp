@@ -9,6 +9,7 @@
 #include "core/dirs.hpp"
 #include "core/input.hpp"
 #include "core/interpreter.hpp"
+#include "core/main_view.hpp"
 #include "core/readline.hpp"
 #include "utils/string.hpp"
 
@@ -22,23 +23,24 @@ static utils::Strings feedFiles(Context&)
 
 static utils::Strings feedHistory(CommandLine& commandLine)
 {
-    auto history = commandLine.readline.history();
+    auto history = commandLine.readline().history();
     std::reverse(history.begin(), history.end());
     return history;
 }
 
 CommandLine::CommandLine()
-    : mFilesPicker(&feedFiles)
+    : mMode(Mode::command)
+    , mFilesPicker(&feedFiles)
     , mHistoryPicker([this](auto&){ return feedHistory(*this); })
 {
-    readline
+    commandReadline
         .enableSuggestions()
         .connectPicker(mFilesPicker, 't', Readline::AcceptBehaviour::append)
         .connectPicker(mHistoryPicker, 'r')
         .onAccept(
             [this](InputSource, Context& context)
             {
-                accept(context);
+                acceptCommand(context);
             })
         .setupCompletion(
             [](std::string_view pattern)
@@ -62,33 +64,56 @@ CommandLine::CommandLine()
                     });
                 return utils::StringViews(result.begin(), result.end());
             });
+
+    searchReadline
+        .connectPicker(mHistoryPicker, 'r')
+        .onAccept(
+            [this](InputSource, Context& context)
+            {
+                acceptSearch(context);
+            });
 }
 
 CommandLine::~CommandLine() = default;
 
-void CommandLine::accept(Context& context)
+void CommandLine::acceptCommand(Context& context)
 {
-    executeCode(readline.line(), context);
-    readline.clear();
+    executeCode(commandReadline.line(), context);
+    commandReadline.clear();
 }
 
-void CommandLine::enter(InputSource source)
+void CommandLine::acceptSearch(Context& context)
 {
-    readline.clear();
+    if (mMode == Mode::searchForward)
+    {
+        context.mainView.searchForward(searchReadline.line(), context);
+    }
+    else
+    {
+        context.mainView.searchBackward(searchReadline.line(), context);
+    }
+    searchReadline.clear();
+}
+
+void CommandLine::enter(InputSource source, Mode mode)
+{
+    mMode = mode;
+    auto& r = readline();
+    r.clear();
     if (source == InputSource::user)
     {
-        readline.refreshCompletion();
+        r.refreshCompletion();
     }
 }
 
 bool CommandLine::handleKeyPress(KeyPress keyPress, InputSource source, Context& context)
 {
-    return context.commandLine.readline.handleKeyPress(keyPress, source, context);
+    return context.commandLine.readline().handleKeyPress(keyPress, source, context);
 }
 
 void CommandLine::clearHistory()
 {
-    readline.clearHistory();
+    commandReadline.clearHistory();
 }
 
 }  // namespace core

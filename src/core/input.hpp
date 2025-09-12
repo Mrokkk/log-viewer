@@ -13,7 +13,7 @@ namespace core
 
 struct KeyPress
 {
-    enum class Type : char
+    enum class Type : unsigned char
     {
         character,
         ctrlCharacter,
@@ -31,6 +31,10 @@ struct KeyPress
         ctrlArrowDown,
         ctrlArrowLeft,
         ctrlArrowRight,
+        shiftArrowUp,
+        shiftArrowDown,
+        shiftArrowLeft,
+        shiftArrowRight,
         pageUp,
         pageDown,
         home,
@@ -78,6 +82,10 @@ struct KeyPress
     static KeyPress ctrlArrowDown;
     static KeyPress ctrlArrowLeft;
     static KeyPress ctrlArrowRight;
+    static KeyPress shiftArrowUp;
+    static KeyPress shiftArrowDown;
+    static KeyPress shiftArrowLeft;
+    static KeyPress shiftArrowRight;
     static KeyPress pageUp;
     static KeyPress pageDown;
     static KeyPress home;

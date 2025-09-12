@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cassert>
+#include <cassert> // IWYU pragma: export
 #include <cstddef>
 #include <string_view>
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 #include "core/fwd.hpp"
 #include "core/input.hpp"
 #include "core/picker.hpp"
@@ -11,25 +13,61 @@ namespace core
 
 struct CommandLine : utils::Immobile
 {
+    enum class Mode : char
+    {
+        command = ':',
+        searchForward = '/',
+        searchBackward = '?',
+    };
+
     CommandLine();
     ~CommandLine();
 
-    inline const Readline* operator->() const
+    constexpr const Readline* operator->() const
     {
-        return &readline;
+        switch (mMode)
+        {
+            case Mode::command:
+                return &commandReadline;
+            case Mode::searchForward:
+            case Mode::searchBackward:
+                return &searchReadline;
+        }
+        std::abort();
     }
 
-    void enter(InputSource source);
+    constexpr Readline& readline()
+    {
+        switch (mMode)
+        {
+            case Mode::command:
+                return commandReadline;
+            case Mode::searchForward:
+            case Mode::searchBackward:
+                return searchReadline;
+        }
+        std::abort();
+    }
+
+    constexpr Mode mode() const
+    {
+        return mMode;
+    }
+
+    void enter(InputSource source, Mode mode);
     bool handleKeyPress(KeyPress keyPress, InputSource source, Context& context);
     void clearHistory();
 
-    Readline readline;
+    Readline commandReadline;
+    Readline searchReadline;
 
 private:
+    Mode   mMode;
     Picker mFilesPicker;
     Picker mHistoryPicker;
 
-    void accept(Context& context);
+    void acceptCommand(Context& context);
+    void acceptSearch(Context& context);
 };
 
 }  // namespace core

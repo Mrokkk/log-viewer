@@ -5,7 +5,7 @@
 #include <list>
 #include <mutex>
 
-#include "core/view.hpp"
+#include "core/buffer.hpp"
 #include "utils/memory.hpp"
 #include "utils/units.hpp"
 
@@ -189,6 +189,6 @@ T* Entities<T>::operator[](EntityId<T> id)
     return mPimpl->at(id);
 }
 
-template struct Entities<View>;
+template struct Entities<Buffer>;
 
 }  // namespace core

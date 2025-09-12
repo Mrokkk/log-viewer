@@ -7,9 +7,9 @@
 namespace core
 {
 
-using ViewId = EntityId<View>;
-using Views = Entities<View>;
+using BufferId = EntityId<Buffer>;
+using Buffers = Entities<Buffer>;
 
-View* getView(ViewId id, Context& context);
+Buffer* getBuffer(BufferId id, Context& context);
 
 }  // namespace core

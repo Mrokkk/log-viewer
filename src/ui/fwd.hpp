@@ -4,8 +4,6 @@ namespace ui
 {
 
 struct Ftxui;
-struct View;
-struct ViewNode;
-struct ViewRenderer;
+struct WindowRenderer;
 
 }  // namespace ui

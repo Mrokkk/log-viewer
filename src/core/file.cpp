@@ -21,6 +21,14 @@ File::~File()
     free();
 }
 
+File::File(const File& other)
+    : mFile(other.mFile)
+    , mMapping{.ptr = nullptr, .offset = 0, .len = 0}
+    , mRefCount(other.mRefCount)
+{
+    ++*mRefCount;
+}
+
 File& File::operator=(const File& other)
 {
     free();

@@ -2,9 +2,11 @@
 
 #include "core/context.hpp"
 #include "core/input.hpp"
+#include "core/main_view.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/ui_component.hpp"
+#include "utils/buffer.hpp"
 
 using namespace ftxui;
 
@@ -13,7 +15,7 @@ namespace ui
 
 Element renderStatusLine(Ftxui& ui, core::Context& context)
 {
-    const auto fileName{ui.mainView.activeFileName(context)};
+    const auto fileName{context.mainView.activeFileName()};
     Color statusFg, statusBg;
     const char* status;
 
@@ -53,6 +55,14 @@ Element renderStatusLine(Ftxui& ui, core::Context& context)
         statusBg = Palette::StatusLine::normalBg;
     }
 
+    utils::Buffer buf;
+
+    if (const auto node = context.mainView.currentWindowNode()) [[likely]]
+    {
+        auto& w = node->window();
+        buf << " " << w.ycurrent + w.yoffset << '/' << w.lineCount << " ℅:" << w.xcurrent + w.xoffset << ' ';
+    }
+
     return hbox({
         text(status)
             | color(statusFg)
@@ -71,6 +81,8 @@ Element renderStatusLine(Ftxui& ui, core::Context& context)
             | color(Palette::StatusLine::bg3)
             | bgcolor(Palette::StatusLine::bg1),
         text(" ")
+            | bgcolor(Palette::StatusLine::bg3),
+        text(buf.str())
             | bgcolor(Palette::StatusLine::bg3),
         text(core::inputStateString(context))
             | bgcolor(Palette::StatusLine::bg3),

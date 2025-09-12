@@ -14,6 +14,7 @@ struct File final
     File();
     ~File();
 
+    File(const File& other);
     File& operator=(const File& other);
 
     std::expected<bool, std::string> open(std::string path);

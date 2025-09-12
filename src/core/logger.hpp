@@ -51,7 +51,7 @@ struct Logger final
         const LogEntryFlags         mFlags;
         const char* const           mHeader;
         const utils::SourceLocation mLocation;
-        utils::Buffer&        mBuffer;
+        utils::Buffer&              mBuffer;
     };
 
     constexpr static Flusher debug(

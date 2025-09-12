@@ -11,7 +11,11 @@ namespace core
 struct Context final : utils::Immobile
 {
     ~Context();
-    static Context create();
+
+    constexpr static Context& instance()
+    {
+        return context;
+    }
 
 private:
     Context();
@@ -19,14 +23,19 @@ private:
     struct Data;
     Data* mData;
 
+    static Context context;
+
 public:
-    bool           running;
-    Mode           mode;
-    Entities<View> views;
-    InputState&    inputState;
-    CommandLine&   commandLine;
-    MessageLine&   messageLine;
-    UserInterface* ui;
+    bool             running;
+    Mode             mode;
+    Entities<Buffer> buffers;
+    InputState&      inputState;
+    CommandLine&     commandLine;
+    MessageLine&     messageLine;
+    MainView&        mainView;
+    Config&          config;
+    UserInterface*   ui;
+    MainLoop*        mainLoop;
 };
 
 }  // namespace core

@@ -10,7 +10,7 @@
 #include "core/fwd.hpp"
 #include "core/input.hpp"
 #include "core/logger.hpp"
-#include "core/user_interface.hpp"
+#include "core/main_loop.hpp"
 #include "sys/system.hpp"
 
 namespace core
@@ -65,7 +65,7 @@ int run(int argc, char* const* argv, Context& context)
         commands::open(std::string(file->string), context);
     }
 
-    context.ui->run(context);
+    context.mainLoop->run(context);
 
     sys::finalize();
     logger.flushToStderr();

@@ -9,6 +9,7 @@
 #include "core/context.hpp"
 #include "core/grep_options.hpp"
 #include "core/input.hpp"
+#include "core/main_view.hpp"
 #include "core/mode.hpp"
 #include "core/readline.hpp"
 #include "ui/event_converter.hpp"
@@ -38,9 +39,9 @@ DEFINE_COMMAND(grepper)
 
     EXECUTOR()
     {
-        auto& ui = context.ui->get<Ftxui>();
+        auto& ui = context.ui->cast<Ftxui>();
 
-        if (not ui.mainView.isViewLoaded())
+        if (not context.mainView.isCurrentWindowLoaded())
         {
             return false;
         }

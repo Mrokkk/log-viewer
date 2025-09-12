@@ -4,6 +4,8 @@
 
 #include <ftxui/component/event.hpp>
 
+#include "core/input.hpp"
+
 using namespace ftxui;
 
 namespace ui
@@ -67,6 +69,12 @@ void initEventConverter()
         {Event::Character('}'), core::KeyPress::character('}')},
         {Event::Character('~'), core::KeyPress::character('~')},
         {Event::Character(' '), core::KeyPress::space},
+        {Event::Special({'\e', '[', '1', '~'}), core::KeyPress::home},
+        {Event::Special({'\e', '[', '4', '~'}), core::KeyPress::end},
+        {Event::Special({'\e', '[', '1', ';', '2', 'A'}), core::KeyPress::shiftArrowUp},
+        {Event::Special({'\e', '[', '1', ';', '2', 'B'}), core::KeyPress::shiftArrowDown},
+        {Event::Special({'\e', '[', '1', ';', '2', 'D'}), core::KeyPress::shiftArrowLeft},
+        {Event::Special({'\e', '[', '1', ';', '2', 'C'}), core::KeyPress::shiftArrowRight},
     };
 
     for (char c = '@'; c <= 'Z'; ++c)

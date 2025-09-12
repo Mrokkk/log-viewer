@@ -5,14 +5,14 @@
 #include <ftxui/dom/node.hpp>
 #include <ftxui/screen/screen.hpp>
 
-#include "ui/fwd.hpp"
+#include "core/fwd.hpp"
 
 namespace ui
 {
 
-struct ViewRenderer : ftxui::Node
+struct WindowRenderer : ftxui::Node
 {
-    ViewRenderer(const View& view);
+    WindowRenderer(const core::Window& window);
 
 private:
     void ComputeRequirement() override;
@@ -20,7 +20,7 @@ private:
     void drawCursor(ftxui::Screen& screen, int cursorPosition, int cursorWidth, int y) const;
     std::pair<int, int> getCursorPositionAndWidth() const;
 
-    const View& mView;
+    const core::Window& mWindow;
 };
 
 }  // namespace ui

@@ -12,8 +12,8 @@
 
 #include "core/context.hpp"
 #include "core/input.hpp"
+#include "core/main_view.hpp"
 #include "core/mode.hpp"
-#include "core/user_interface.hpp"
 #include "sys/system.hpp"
 #include "ui/command_line.hpp"
 #include "ui/event_converter.hpp"
@@ -22,7 +22,6 @@
 #include "ui/picker.hpp"
 #include "ui/status_line.hpp"
 #include "ui/ui_component.hpp"
-#include "ui/view.hpp"
 
 using namespace ftxui;
 
@@ -35,9 +34,10 @@ static bool abort(Ftxui&, core::Context&)
     return true;
 }
 
-static bool resize(Ftxui& ui, core::Context&)
+static bool resize(Ftxui& ui, core::Context& context)
 {
     ui.terminalSize = Terminal::Size();
+    context.mainView.resize(ui.terminalSize.dimx, ui.terminalSize.dimy, context);
     return false; // Allow UIComponent to handle it as well
 }
 
@@ -120,9 +120,7 @@ static inline ScreenInteractive createScreen(Ftxui& ui, core::Context& context)
 
 Ftxui::Ftxui(core::Context& context)
     : screen(createScreen(*this, context))
-    , config{}
     , active(&mainView)
-    , mainView(config)
     , commandLine(*this, context)
     , eventHandlers{
         {Event::Resize, resize},
@@ -132,6 +130,21 @@ Ftxui::Ftxui(core::Context& context)
     }
 {
     initEventConverter();
+}
+
+void Ftxui::onModeSwitch(core::Mode newMode, core::Context& context)
+{
+    switch (newMode)
+    {
+        case core::Mode::command:
+            switchFocus(UIComponent::commandLine, *this, context);
+            break;
+        case core::Mode::normal:
+            switchFocus(UIComponent::mainView, *this, context);
+            break;
+        default:
+            break;
+    }
 }
 
 void Ftxui::run(core::Context& context)
@@ -177,112 +190,21 @@ void Ftxui::executeShell(const std::string& cmd)
         }));
 }
 
-void Ftxui::scrollTo(core::Scroll lineNumber, core::Context& context)
-{
-    switch (lineNumber)
-    {
-        case core::Scroll::end:
-            mainView.scrollTo(*this, -1, context);
-            break;
-        default:
-            mainView.scrollTo(*this, static_cast<long>(lineNumber), context);
-    }
-}
-
-core::OpaqueWeakPtr Ftxui::createView(std::string name, core::ViewId viewDataId, core::Parent parent, core::Context&)
-{
-    if (parent == core::Parent::root)
-    {
-        return mainView.createView(std::move(name), viewDataId, nullptr);
-    }
-
-    auto currentView = mainView.currentView();
-
-    if (not currentView) [[unlikely]]
-    {
-        return {};
-    }
-
-    auto parentView = currentView->isBase()
-        ? currentView->parent()
-        : currentView;
-
-    return mainView.createView(std::move(name), viewDataId, parentView);
-}
-
-void Ftxui::removeView(core::OpaqueWeakPtr handle, core::Context& context)
+void Ftxui::executeTask(std::function<void()> closure)
 {
     screen.Post(
-        [this, handle, &context]
+        [closure = std::move(closure)]
         {
-            if (handle.expired())
-            {
-                return;
-            }
-
-            auto viewNodePtr = std::static_pointer_cast<ViewNode>(handle.lock());
-            auto& viewNode = *viewNodePtr;
-
-            mainView.removeView(viewNode, context);
+            closure();
         });
     screen.RequestAnimationFrame();
 }
 
-void Ftxui::onViewDataLoaded(core::OpaqueWeakPtr handle, core::Context& context)
+void createFtxuiUserInterface(core::Context& context)
 {
-    screen.Post(
-        [this, handle, &context]
-        {
-            if (handle.expired())
-            {
-                return;
-            }
-
-            auto viewNodePtr = std::static_pointer_cast<ViewNode>(handle.lock());
-            auto& viewNode = *viewNodePtr;
-
-            auto& base = viewNode.base().cast<View>();
-            base.loaded = true;
-
-            reloadView(base, *this, context);
-        });
-    screen.RequestAnimationFrame();
-}
-
-core::ViewId Ftxui::getCurrentView()
-{
-    auto currentView = mainView.currentView();
-
-    if (not currentView) [[unlikely]]
-    {
-        return {};
-    }
-
-    return currentView->dataId;
-}
-
-void Ftxui::onModeSwitch(core::Mode newMode, core::Context& context)
-{
-    switch (newMode)
-    {
-        case core::Mode::command:
-            switchFocus(UIComponent::commandLine, *this, context);
-            break;
-        case core::Mode::normal:
-            if (auto view = mainView.currentView())
-            {
-                view->selectionMode = false;
-            }
-            switchFocus(UIComponent::mainView, *this, context);
-            break;
-        default:
-            break;
-    }
-}
-
-core::UserInterface& createFtxuiUserInterface(core::Context& context)
-{
-    return *(context.ui = new Ftxui(context));
+    auto ui = new Ftxui(context);
+    context.ui = ui;
+    context.mainLoop = ui;
 }
 
 void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context)

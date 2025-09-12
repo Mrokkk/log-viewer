@@ -95,7 +95,7 @@ static std::string_view peekWord(LexerState& state)
     auto it = current(state);
     while (*it)
     {
-        if (isSpace(*it))
+        if (isSpace(*it) or *it == '\n')
         {
             break;
         }

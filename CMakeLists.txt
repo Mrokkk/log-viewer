@@ -63,9 +63,12 @@ add_executable(${PROJECT_NAME}
     src/core/app.cpp
     src/core/argparse.cpp
     src/core/assert.cpp
+    src/core/buffer.cpp
+    src/core/buffers.cpp
     src/core/command.cpp
     src/core/command_line.cpp
     src/core/commands/echo.cpp
+    src/core/commands/filter.cpp
     src/core/commands/get.cpp
     src/core/commands/grep.cpp
     src/core/commands/help.cpp
@@ -75,6 +78,7 @@ add_executable(${PROJECT_NAME}
     src/core/commands/set.cpp
     src/core/commands/source.cpp
     src/core/commands/toggle.cpp
+    src/core/config.cpp
     src/core/context.cpp
     src/core/dirs.cpp
     src/core/entity.cpp
@@ -84,15 +88,17 @@ add_executable(${PROJECT_NAME}
     src/core/interpreter.cpp
     src/core/lexer.cpp
     src/core/logger.cpp
+    src/core/main_view.cpp
     src/core/message_line.cpp
     src/core/mode.cpp
+    src/core/path.cpp
     src/core/picker.cpp
     src/core/readline.cpp
     src/core/thread.cpp
     src/core/type.cpp
     src/core/variable.cpp
-    src/core/view.cpp
-    src/core/views.cpp
+    src/core/window.cpp
+    src/core/window_node.cpp
     src/main.cpp
     src/sys/posix.cpp
     src/ui/command_line.cpp
@@ -106,10 +112,7 @@ add_executable(${PROJECT_NAME}
     src/ui/status_line.cpp
     src/ui/text_box.cpp
     src/ui/ui_component.cpp
-    src/ui/view.cpp
-    src/ui/view_node.cpp
-    src/ui/view_renderer.cpp
-    src/utils/math.cpp
+    src/ui/window_renderer.cpp
     src/utils/string.cpp
     src/utils/time.cpp
 

@@ -15,6 +15,7 @@
 #include "core/fuzzy.hpp"
 #include "core/input.hpp"
 #include "core/logger.hpp"
+#include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "core/variable.hpp"
@@ -23,7 +24,6 @@
 #include "ui/palette.hpp"
 #include "ui/picker_entry.hpp"
 #include "ui/ui_component.hpp"
-#include "ui/view_node.hpp"
 #include "utils/buffer.hpp"
 #include "utils/string.hpp"
 
@@ -124,7 +124,7 @@ Picker::Impl::Impl()
 
 Element Picker::Impl::render(core::Context& context)
 {
-    auto& ui = context.ui->get<Ftxui>();
+    auto& ui = context.ui->cast<Ftxui>();
     const auto resx = ui.terminalSize.dimx / 2;
     const auto resy = ui.terminalSize.dimy / 2;
 
@@ -197,8 +197,8 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::views:
-            strings = ui.mainView.root().children()
-                | views::transform([](const ViewNodePtr& e){ return e->name(); })
+            strings = context.mainView.root().children()
+                | views::transform([](const core::WindowNodePtr& e){ return e->name(); })
                 | to<utils::Strings>();
             break;
 
@@ -271,9 +271,12 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
                     [](const LogEntry& entry)
                     {
                         std::ostringstream ss;
-                        ss << ColorWrapped(std::put_time(std::localtime(&entry.time), "%F %T"), Color::Green)
-                           << ' ' << ColorWrapped(entry.header, Color::Blue)
-                           << ": " << ColorWrapped(entry.message, severityToColor[static_cast<int>(entry.severity)]);
+                        ss << ColorWrapped(std::put_time(std::localtime(&entry.time), "%F %T"), Color::Green);
+                        if (entry.header)
+                        {
+                            ss << ' ' << ColorWrapped(entry.header, Color::Blue) << ":";
+                        }
+                        ss << ' ' << ColorWrapped(entry.message, severityToColor[static_cast<int>(entry.severity)]);
                         return ss.str();
                     })
                 | to<utils::Strings>();
@@ -472,7 +475,7 @@ DEFINE_COMMAND(files)
 
     EXECUTOR()
     {
-        auto& ui = context.ui->get<Ftxui>();
+        auto& ui = context.ui->cast<Ftxui>();
         ui.picker.show(ui, Picker::Type::files, context);
         return true;
     }
@@ -494,7 +497,7 @@ DEFINE_COMMAND(views)
 
     EXECUTOR()
     {
-        auto& ui = context.ui->get<Ftxui>();
+        auto& ui = context.ui->cast<Ftxui>();
         ui.picker.show(ui, Picker::Type::views, context);
         return true;
     }
@@ -516,7 +519,7 @@ DEFINE_COMMAND(commands)
 
     EXECUTOR()
     {
-        auto& ui = context.ui->get<Ftxui>();
+        auto& ui = context.ui->cast<Ftxui>();
         ui.picker.show(ui, Picker::Type::commands, context);
         return true;
     }
@@ -538,7 +541,7 @@ DEFINE_COMMAND(variables)
 
     EXECUTOR()
     {
-        auto& ui = context.ui->get<Ftxui>();
+        auto& ui = context.ui->cast<Ftxui>();
         ui.picker.show(ui, Picker::Type::variables, context);
         return true;
     }
@@ -560,7 +563,7 @@ DEFINE_COMMAND(messages)
 
     EXECUTOR()
     {
-        auto& ui = context.ui->get<Ftxui>();
+        auto& ui = context.ui->cast<Ftxui>();
         ui.picker.show(ui, Picker::Type::messages, context);
         return true;
     }

@@ -8,9 +8,9 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "core/context.hpp"
+#include "core/main_loop.hpp"
 #include "core/user_interface.hpp"
 #include "ui/command_line.hpp"
-#include "ui/config.hpp"
 #include "ui/event_handler.hpp"
 #include "ui/grepper.hpp"
 #include "ui/main_view.hpp"
@@ -20,22 +20,19 @@
 namespace ui
 {
 
-struct Ftxui final : core::UserInterface
+struct Ftxui final : core::UserInterface, core::MainLoop
 {
     Ftxui(core::Context& context);
+
+    void onModeSwitch(core::Mode newMode, core::Context& context) override;
+
     void run(core::Context& context) override;
     void quit(core::Context& context) override;
     void executeShell(const std::string& command) override;
-    void scrollTo(core::Scroll lineNumber, core::Context& context) override;
-    core::OpaqueWeakPtr createView(std::string name, core::ViewId viewDataId, core::Parent parent, core::Context& context) override;
-    void removeView(core::OpaqueWeakPtr view, core::Context& context) override;
-    void onViewDataLoaded(core::OpaqueWeakPtr view, core::Context& context) override;
-    core::ViewId getCurrentView() override;
-    void onModeSwitch(core::Mode newMode, core::Context& context) override;
+    void executeTask(std::function<void()> closure) override;
 
     ftxui::ScreenInteractive screen;
     ftxui::Dimensions        terminalSize;
-    Config                   config;
     UIComponent*             active;
     MainView                 mainView;
     CommandLine              commandLine;
@@ -45,6 +42,6 @@ struct Ftxui final : core::UserInterface
 };
 
 void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context);
-core::UserInterface& createFtxuiUserInterface(core::Context& context);
+void createFtxuiUserInterface(core::Context& context);
 
 }  // namespace ui

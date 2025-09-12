@@ -1,9 +1,13 @@
-set tabChar "›"
-set tabWidth 4
+set showLineNumbers     false
+set scrollJump          5
+set scrollOff           3
+set tabWidth            4
+set lineNumberSeparator " "
+set tabChar             "›"
 
 nmap "<c-p>" ":files<cr>"
 nmap "<leader>." ":files<cr>"
 nmap "<c-g>" ":grepper<cr>"
-nmap "b" ":toggle showLineNumbers<cr>"
-nmap "a" ":toggle absoluteLineNumbers<cr>"
+nmap "B" ":toggle showLineNumbers<cr>"
+nmap "A" ":toggle absoluteLineNumbers<cr>"
 echo "Config loaded"

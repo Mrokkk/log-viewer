@@ -100,7 +100,7 @@ read_flags()
                 fi
                 BUILD_TESTS="${temp}"
                 ;;
-            run|test)
+            build|run|test)
                 COMMAND="${1}"
                 shift
                 ARGS=${@}
@@ -164,6 +164,10 @@ read_flags ${@}
 regenerate_cmake
 
 case "${COMMAND}" in
+    build)
+        shift
+        build_target log-viewer
+        ;;
     run)
         shift
         build_target log-viewer

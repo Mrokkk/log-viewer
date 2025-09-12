@@ -4,7 +4,7 @@
 
 int main(int argc, char* const* argv)
 {
-    auto context = core::Context::create();
+    auto& context = core::Context::instance();
     ui::createFtxuiUserInterface(context);
     return core::run(argc, argv, context);
 }

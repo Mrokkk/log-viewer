@@ -511,14 +511,14 @@ struct Buffer final
         return operator<<(m.convert(std::string_view(static_cast<std::string>(m.value))));
     }
 
-    constexpr Buffer& operator<<(const bool value)
+    constexpr Buffer& operator<<(bool value)
     {
         constexpr static std::string_view map[] = {
             "false",
             "true"
         };
 
-        return operator<<(map[static_cast<int>(value)]);
+        return operator<<(map[static_cast<int>(value) > 0]);
     }
 
     constexpr void clear()
