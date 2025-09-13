@@ -95,7 +95,8 @@ struct MainView::Impl final : MainView
         return mCurrentWindowNode;
     }
 
-    void reloadView(WindowNode& node, Context& context);
+    void removeWindow(WindowNode& node, Context&);
+    void reloadWindow(WindowNode& node, Context& context);
     void reloadLines(Buffer& buffer, Window& w, Context& context);
     void alignCursor(Window& w);
     void updateSelection(Window& w);
@@ -245,7 +246,7 @@ void MainView::reloadAll(Context& context)
         {
             if (n.type() == WindowNode::Type::window)
             {
-                Impl::get(this).reloadView(n, context);
+                Impl::get(this).reloadWindow(n, context);
             }
         });
 }
@@ -284,10 +285,46 @@ WindowNode& MainView::createWindow(std::string name, Parent parent, Context& con
     return *mCurrentWindowNode;
 }
 
-void MainView::bufferLoaded(WindowNode& node, Context& context)
+void MainView::bufferLoaded(const TimeOrError& result, WindowNode& node, Context& context)
 {
-    node.loaded(true);
-    Impl::get(this).reloadView(node, context);
+    if (result) [[likely]]
+    {
+        auto newBuffer = node.buffer();
+
+        if (not newBuffer)
+        {
+            return;
+        }
+
+        context.mainLoop->executeTask(
+            [this, &node, &context]
+            {
+                node.loaded(true);
+                Impl::get(this).reloadWindow(node, context);
+            });
+
+        context.messageLine.info()
+            << node.parent()->name() << ": buffer loaded; lines: " << newBuffer->lineCount() << "; took "
+            << (result.value() | utils::precision(3)) << " s";
+    }
+    else
+    {
+        const auto& error = result.error();
+        if (error == Error::Aborted)
+        {
+            context.messageLine.info() << error;
+        }
+        else
+        {
+            context.messageLine.error() << error;
+
+            context.mainLoop->executeTask(
+                [result, &node, &context, this]
+                {
+                    Impl::get(this).removeWindow(*node.parent(), context);
+                });
+        }
+    }
 }
 
 void MainView::escape()
@@ -300,7 +337,46 @@ void MainView::escape()
     }
 }
 
-void MainView::removeWindow(WindowNode& node, Context&)
+void MainView::quitCurrentWindow(Context& context)
+{
+    if (not mCurrentWindowNode) [[unlikely]]
+    {
+        context.mainLoop->quit(context);
+        return;
+    }
+
+    if (not mCurrentWindowNode->parent()) [[unlikely]]
+    {
+        return;
+    }
+
+    auto windowToClose = mCurrentWindowNode->isBase()
+        ? mCurrentWindowNode->parent()
+        : mCurrentWindowNode;
+
+    Impl::get(this).removeWindow(*windowToClose, context);
+}
+
+void MainView::scrollTo(size_t lineNumber, Context& context)
+{
+    Impl::get(this).goTo(lineNumber, context);
+}
+
+void MainView::searchForward(std::string pattern, Context& context)
+{
+    mSearchPattern = std::move(pattern);
+    mSearchMode = SearchDirection::forward;
+    Impl::get(this).search(mSearchPattern, mSearchMode, context);
+}
+
+void MainView::searchBackward(std::string pattern, Context& context)
+{
+    mSearchPattern = std::move(pattern);
+    mSearchMode = SearchDirection::backward;
+    Impl::get(this).search(mSearchPattern, mSearchMode, context);
+}
+
+void MainView::Impl::removeWindow(WindowNode& node, Context&)
 {
     assert(node.type() == WindowNode::Type::group, utils::format("WindowNode {}:{} type is {}", node.name(), &node, node.type()));
     assert(node.parent(), utils::format("View {}:{} has no parent", node.name(), &node));
@@ -343,46 +419,7 @@ void MainView::removeWindow(WindowNode& node, Context&)
     }
 }
 
-void MainView::quitCurrentWindow(Context& context)
-{
-    if (not mCurrentWindowNode) [[unlikely]]
-    {
-        context.mainLoop->quit(context);
-        return;
-    }
-
-    if (not mCurrentWindowNode->parent()) [[unlikely]]
-    {
-        return;
-    }
-
-    auto windowToClose = mCurrentWindowNode->isBase()
-        ? mCurrentWindowNode->parent()
-        : mCurrentWindowNode;
-
-    removeWindow(*windowToClose, context);
-}
-
-void MainView::scrollTo(size_t lineNumber, Context& context)
-{
-    Impl::get(this).goTo(lineNumber, context);
-}
-
-void MainView::searchForward(std::string pattern, Context& context)
-{
-    mSearchPattern = std::move(pattern);
-    mSearchMode = SearchDirection::forward;
-    Impl::get(this).search(mSearchPattern, mSearchMode, context);
-}
-
-void MainView::searchBackward(std::string pattern, Context& context)
-{
-    mSearchPattern = std::move(pattern);
-    mSearchMode = SearchDirection::backward;
-    Impl::get(this).search(mSearchPattern, mSearchMode, context);
-}
-
-void MainView::Impl::reloadView(WindowNode& node, Context& context)
+void MainView::Impl::reloadWindow(WindowNode& node, Context& context)
 {
     if (not node.loaded()) [[unlikely]]
     {

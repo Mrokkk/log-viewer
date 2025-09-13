@@ -14,6 +14,7 @@
 #include "core/input.hpp"
 #include "core/main_view.hpp"
 #include "core/mode.hpp"
+#include "core/thread.hpp"
 #include "sys/system.hpp"
 #include "ui/command_line.hpp"
 #include "ui/event_converter.hpp"
@@ -192,12 +193,19 @@ void Ftxui::executeShell(const std::string& cmd)
 
 void Ftxui::executeTask(std::function<void()> closure)
 {
-    screen.Post(
-        [closure = std::move(closure)]
-        {
-            closure();
-        });
-    screen.RequestAnimationFrame();
+    if (core::isMainThread())
+    {
+        closure();
+    }
+    else
+    {
+        screen.Post(
+            [closure = std::move(closure)]
+            {
+                closure();
+            });
+        screen.RequestAnimationFrame();
+    }
 }
 
 void createFtxuiUserInterface(core::Context& context)

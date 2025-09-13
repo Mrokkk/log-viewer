@@ -1,10 +1,10 @@
+#define LOG_HEADER "core::Buffer"
 #include "buffer.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <expected>
 #include <string_view>
-#include <thread>
 #include <type_traits>
 
 #include <re2/re2.h>
@@ -22,57 +22,8 @@
 namespace core
 {
 
-using MaybeError = std::expected<bool, std::string>;
-using StringViewOrError = std::expected<std::string_view, std::string>;
-
-struct Buffer::Impl final : Buffer
-{
-    Impl() = delete;
-
-    constexpr static inline Impl& get(Buffer* b)
-    {
-        return *static_cast<Impl*>(b);
-    }
-
-    void busy();
-    void copyFromParent(Buffer& parentBuffer);
-    void initialize(Lines&& lines);
-    void initialize(LineRefs&& lineRefs);
-
-    MaybeError loadFile();
-
-    MaybeError grep(
-        std::string pattern,
-        GrepOptions options,
-        Buffer& parentBuffer);
-
-    MaybeError parallelGrep(
-        std::string pattern,
-        GrepOptions options,
-        Buffer& parentBuffer,
-        Context& context);
-
-    MaybeError grepInternal(
-        std::string pattern,
-        GrepOptions options,
-        Buffer& parentBuffer,
-        File& file,
-        size_t start,
-        size_t end,
-        LineRefs& lineRefs);
-
-    void filter(
-        size_t start,
-        size_t end,
-        Buffer& parentBuffer);
-
-    SearchResult search(
-        const SearchRequest& req,
-        File& file);
-
-    StringViewOrError readInternal(Line line);
-    StringViewOrError readInternal(Line line, File& file);
-};
+using SuccessOrError = std::expected<bool, Error>;
+using StringViewOrError = std::expected<std::string_view, Error>;
 
 enum struct BufferType : char
 {
@@ -95,41 +46,6 @@ template <typename T>
 constexpr static inline char cast(T value)
 {
     return static_cast<char>(value);
-}
-
-Buffer::Buffer()
-    : mStopFlag(false)
-    , mState(cast(State::uninitialized))
-    , mType(cast(BufferType::uninitialized))
-    , mLineCount(0)
-    , mFileLines(nullptr)
-{
-    static_assert(sizeof(Impl) == sizeof(Buffer));
-}
-
-Buffer::~Buffer()
-{
-    assert(isMainThread(), "~Buffer called not on main thread");
-    switch (mState)
-    {
-        case cast(State::busy):
-            mStopFlag = true;
-            while (mState == cast(State::busy));
-            break;
-        default:
-            break;
-    }
-    switch (mType)
-    {
-        case cast(BufferType::base):
-            utils::destroyAt(&mOwnLines);
-            break;
-        case cast(BufferType::filtered):
-            utils::destroyAt(&mFilteredLines);
-            break;
-        default:
-            break;
-    }
 }
 
 template <typename T>
@@ -166,21 +82,126 @@ constexpr static inline const char* stringify(char value)
     }
 }
 
+struct Buffer::Impl final : Buffer
+{
+    Impl() = delete;
+
+    constexpr static inline Impl& get(Buffer* b)
+    {
+        return *static_cast<Impl*>(b);
+    }
+
+    constexpr inline void setBusy()
+    {
+        mState = cast(State::busy);
+    }
+
+    constexpr inline void setIdle()
+    {
+        mState = cast(State::idle);
+    }
+
+    constexpr inline void setAborted()
+    {
+        mState = cast(State::aborted);
+    }
+
+    constexpr inline void setType(BufferType type)
+    {
+        mType = cast(type);
+    }
+
+    constexpr inline void stop()
+    {
+        if (mState == cast(State::busy)) [[unlikely]]
+        {
+            mStopFlag = true;
+            while (mState == cast(State::busy));
+            mStopFlag = false;
+        }
+    }
+
+    void copyFromParent(Buffer& parentBuffer);
+    void initialize(Lines&& lines);
+    void initialize(LineRefs&& lineRefs);
+
+    SuccessOrError loadFile();
+
+    SuccessOrError singleThreadedGrep(
+        std::string pattern,
+        GrepOptions options,
+        Buffer& parentBuffer);
+
+    SuccessOrError multiThreadedGrep(
+        std::string pattern,
+        GrepOptions options,
+        Buffer& parentBuffer,
+        Context& context);
+
+    SuccessOrError grep(
+        std::string pattern,
+        GrepOptions options,
+        Buffer& parentBuffer,
+        File& file,
+        size_t start,
+        size_t end,
+        LineRefs& lineRefs);
+
+    void filter(
+        size_t start,
+        size_t end,
+        Buffer& parentBuffer);
+
+    SearchResult search(
+        const SearchRequest& req,
+        File& file);
+
+    StringViewOrError readInternal(Line line);
+    StringViewOrError readInternal(Line line, File& file);
+};
+
+Buffer::Buffer()
+    : mStopFlag(false)
+    , mState(cast(State::uninitialized))
+    , mType(cast(BufferType::uninitialized))
+    , mLineCount(0)
+    , mFileLines(nullptr)
+{
+    static_assert(sizeof(Impl) == sizeof(Buffer));
+}
+
+Buffer::~Buffer()
+{
+    assert(isMainThread(), "~Buffer called not on main thread");
+    Impl::get(this).stop();
+    switch (mType)
+    {
+        case cast(BufferType::base):
+            utils::destroyAt(&mOwnLines);
+            break;
+        case cast(BufferType::filtered):
+            utils::destroyAt(&mFilteredLines);
+            break;
+        default:
+            break;
+    }
+}
+
 void Buffer::load(std::string path, Context&, FinishedCallback callback)
 {
+    assert(mState == cast(State::uninitialized), utils::format("Buffer {} state is {}", this, stringify<State>(mState)));
+    assert(mType == cast(BufferType::uninitialized), utils::format("Buffer {} type is {}", this, stringify<BufferType>(mType)));
+
     auto& impl = Impl::get(this);
 
-    impl.busy();
+    impl.setBusy();
 
     if (auto result = mFile.open(std::move(path)); not result) [[unlikely]]
     {
-        mState = cast(State::aborted);
-        callback(std::unexpected(std::move(result.error())));
+        impl.setAborted();
+        callback(std::unexpected(Error::systemError(std::move(result.error()))));
         return;
     }
-
-    utils::constructAt(&mOwnLines);
-    mType = cast(BufferType::base);
 
     async(
         [callback = std::move(callback), &impl]
@@ -191,12 +212,12 @@ void Buffer::load(std::string path, Context&, FinishedCallback callback)
 
             if (result) [[likely]]
             {
-                impl.mState = cast(State::idle);
+                impl.setIdle();
                 callback(timer.elapsed());
             }
             else
             {
-                impl.mState = cast(State::aborted);
+                impl.setAborted();
                 callback(std::unexpected(std::move(result.error())));
             }
         });
@@ -206,10 +227,7 @@ void Buffer::grep(std::string pattern, GrepOptions options, BufferId parentBuffe
 {
     auto& impl = Impl::get(this);
 
-    impl.busy();
-
-    utils::constructAt(&mFilteredLines);
-    mType = cast(BufferType::filtered);
+    impl.setBusy();
 
     async(
         [pattern = std::move(pattern), callback = std::move(callback), options, parentBufferId, &context, &impl]
@@ -218,8 +236,8 @@ void Buffer::grep(std::string pattern, GrepOptions options, BufferId parentBuffe
 
             if (not parentBuffer) [[unlikely]]
             {
-                impl.mState = cast(State::aborted);
-                callback(std::unexpected("Parent buffer has been closed"));
+                impl.setAborted();
+                callback(std::unexpected(Error::aborted("Parent buffer has been closed")));
                 return;
             }
 
@@ -231,17 +249,17 @@ void Buffer::grep(std::string pattern, GrepOptions options, BufferId parentBuffe
                 and context.config.maxThreads > 1;
 
             const auto result = runParallel
-                ? impl.parallelGrep(std::move(pattern), options, *parentBuffer, context)
-                : impl.grep(std::move(pattern), options, *parentBuffer);
+                ? impl.multiThreadedGrep(std::move(pattern), options, *parentBuffer, context)
+                : impl.singleThreadedGrep(std::move(pattern), options, *parentBuffer);
 
             if (result) [[likely]]
             {
-                impl.mState = cast(State::idle);
+                impl.setIdle();
                 callback(timer.elapsed());
             }
             else
             {
-                impl.mState = cast(State::aborted);
+                impl.setAborted();
                 callback(std::unexpected(std::move(result.error())));
             }
         });
@@ -251,10 +269,7 @@ void Buffer::filter(size_t start, size_t end, BufferId parentBufferId, Context& 
 {
     auto& impl = Impl::get(this);
 
-    impl.busy();
-
-    utils::constructAt(&mFilteredLines);
-    mType = cast(BufferType::filtered);
+    impl.setBusy();
 
     async(
         [start, end, callback = std::move(callback), parentBufferId, &context, &impl]
@@ -263,8 +278,8 @@ void Buffer::filter(size_t start, size_t end, BufferId parentBufferId, Context& 
 
             if (not parentBuffer) [[unlikely]]
             {
-                impl.mState = cast(State::aborted);
-                callback(std::unexpected("Parent buffer has been closed"));
+                impl.setAborted();
+                callback(std::unexpected(Error::aborted("Parent buffer has been closed")));
                 return;
             }
 
@@ -274,7 +289,7 @@ void Buffer::filter(size_t start, size_t end, BufferId parentBufferId, Context& 
 
             impl.filter(start, end, *parentBuffer);
 
-            impl.mState = cast(State::idle);
+            impl.setIdle();
             callback(timer.elapsed());
         });
 }
@@ -307,22 +322,18 @@ StringOrError Buffer::readLine(size_t i)
 
 void Buffer::search(SearchRequest req, FinishedSearchCallback callback)
 {
-    if (mState == cast(State::busy))
-    {
-        mStopFlag = true;
-        while (mState == cast(State::busy));
-        mStopFlag = false;
-    }
+    auto& impl = Impl::get(this);
 
-    mState = cast(State::busy);
+    impl.stop();
+    impl.setBusy();
 
     async(
-        [callback = std::move(callback), req = std::move(req), this]
+        [callback = std::move(callback), req = std::move(req), &impl]
         {
-            auto file = mFile;
+            auto file = impl.mFile;
             auto timer = utils::startTimeMeasurement();
-            auto result = Impl::get(this).search(req, file);
-            mState = cast(State::idle);
+            auto result = impl.search(req, file);
+            impl.setIdle();
             callback(result, timer.elapsed());
         });
 }
@@ -349,14 +360,6 @@ const std::string& Buffer::filePath() const
     return mFile.path();
 }
 
-void Buffer::Impl::busy()
-{
-    assert(mState == cast(State::uninitialized), utils::format("Buffer {} state is {}", this, stringify<State>(mState)));
-    assert(mType == cast(BufferType::uninitialized), utils::format("Buffer {} type is {}", this, stringify<BufferType>(mType)));
-
-    mState = cast(State::busy);
-}
-
 void Buffer::Impl::copyFromParent(Buffer& parentBuffer)
 {
     mFile = parentBuffer.mFile;
@@ -366,17 +369,19 @@ void Buffer::Impl::copyFromParent(Buffer& parentBuffer)
 void Buffer::Impl::initialize(Lines&& lines)
 {
     mLineCount = lines.size();
-    mOwnLines = std::move(lines);
+    utils::constructAt(&mOwnLines, std::move(lines));
     mFileLines = &mOwnLines;
+    setType(BufferType::base);
 }
 
 void Buffer::Impl::initialize(LineRefs&& lines)
 {
     mLineCount = lines.size();
-    mFilteredLines = std::move(lines);
+    utils::constructAt(&mFilteredLines, std::move(lines));
+    setType(BufferType::filtered);
 }
 
-MaybeError Buffer::Impl::loadFile()
+SuccessOrError Buffer::Impl::loadFile()
 {
     Lines lines;
     auto sizeLeft{mFile.size()};
@@ -389,7 +394,7 @@ MaybeError Buffer::Impl::loadFile()
 
         if (auto result = mFile.remap(offset, toRead); not result) [[unlikely]]
         {
-            return std::unexpected(std::move(result.error()));
+            return std::unexpected(Error::systemError(std::move(result.error())));
         }
 
         const auto text = mFile.at(offset);
@@ -400,7 +405,7 @@ MaybeError Buffer::Impl::loadFile()
             {
                 if (mStopFlag) [[unlikely]]
                 {
-                    return std::unexpected("Loading was aborted");
+                    return std::unexpected(Error::aborted("Loading was aborted"));
                 }
 
                 lines.emplace_back(Line{.start = lineStart, .len = offset + i - lineStart});
@@ -410,6 +415,11 @@ MaybeError Buffer::Impl::loadFile()
 
         sizeLeft -= toRead;
         offset += toRead;
+    }
+
+    if (lineStart < mFile.size()) [[unlikely]]
+    {
+        lines.emplace_back(Line{.start = lineStart, .len = mFile.size() - lineStart});
     }
 
     initialize(std::move(lines));
@@ -442,14 +452,14 @@ static RE2 regexCreate(std::string pattern, bool caseInsensitive)
     return RE2(std::move(pattern), reOptions);
 }
 
-MaybeError Buffer::Impl::grep(
+SuccessOrError Buffer::Impl::singleThreadedGrep(
     std::string pattern,
     GrepOptions options,
     Buffer& parentBuffer)
 {
     LineRefs lines;
 
-    auto result = grepInternal(
+    auto result = grep(
         std::move(pattern),
         options,
         parentBuffer,
@@ -468,7 +478,7 @@ MaybeError Buffer::Impl::grep(
     return result;
 }
 
-MaybeError Buffer::Impl::parallelGrep(
+SuccessOrError Buffer::Impl::multiThreadedGrep(
     std::string pattern,
     GrepOptions options,
     Buffer& parentBuffer,
@@ -482,31 +492,27 @@ MaybeError Buffer::Impl::parallelGrep(
         (lineCount + linesPerThread - 1) / linesPerThread,
         size_t(maxThreads));
 
+    std::vector<std::function<void()>> tasks(threadCount);
     std::vector<LineRefs> lineRefsPerThread(threadCount);
-    std::vector<std::thread> threads(threadCount);
-    std::vector<MaybeError> results(threadCount);
+    std::vector<SuccessOrError> results(threadCount);
 
     for (size_t i = 0; i < threadCount; ++i)
     {
-        auto start = (lineCount / threadCount) * i;
-        auto end = (lineCount / threadCount) * (i + 1);
-
-        if (i == threadCount - 1)
-        {
-            end = lineCount;
-        }
+        const auto start = (lineCount / threadCount) * i;
+        const auto end = i == threadCount - 1
+            ? lineCount
+            : (lineCount / threadCount) * (i + 1);
 
         auto& threadLines = lineRefsPerThread[i];
         auto& threadResult = results[i];
-        auto threadFile = mFile;
 
-        threads[i] = std::thread(
+        tasks[i] =
             [pattern, options, &parentBuffer, start, end,
                 &threadLines, &threadResult,
-                threadFile = std::move(threadFile),
+                threadFile = mFile,
                 this] mutable
             {
-                threadResult = grepInternal(
+                threadResult = grep(
                     std::move(pattern),
                     options,
                     parentBuffer,
@@ -514,15 +520,16 @@ MaybeError Buffer::Impl::parallelGrep(
                     start,
                     end,
                     threadLines);
-            });
+            };
     }
 
-    MaybeError result(true);
+    executeInParallelAndWait(std::move(tasks));
+
+    SuccessOrError result(true);
     size_t greppedLineCount = 0;
 
     for (size_t i = 0; i < threadCount; ++i)
     {
-        threads[i].join();
         if (not results[i]) [[unlikely]]
         {
             result = std::move(results[i]);
@@ -550,7 +557,7 @@ MaybeError Buffer::Impl::parallelGrep(
     return true;
 }
 
-MaybeError Buffer::Impl::grepInternal(
+SuccessOrError Buffer::Impl::grep(
     std::string pattern,
     GrepOptions options,
     Buffer& parentBuffer,
@@ -570,7 +577,7 @@ MaybeError Buffer::Impl::grepInternal(
             { \
                 if (mStopFlag) [[unlikely]] \
                 { \
-                    return std::unexpected("Loading was aborted"); \
+                    return std::unexpected(Error::aborted("Loading was aborted")); \
                 } \
                 auto lineIndex = LINE_INDEX_TRANSFORM(i); \
                 auto result = readInternal(fileLines[lineIndex], file); \
@@ -618,6 +625,11 @@ MaybeError Buffer::Impl::grepInternal(
     else
     {
         auto re = regexCreate(std::move(pattern), options.caseInsensitive);
+
+        if (not re.ok()) [[unlikely]]
+        {
+            return std::unexpected(Error::regexError(re.error()));
+        }
 
         if (options.inverted)
         {
@@ -805,7 +817,7 @@ StringViewOrError Buffer::Impl::readInternal(Line line, File& file)
 
         if (auto result = file.remap(line.start, mappingLen); not result) [[unlikely]]
         {
-            return std::unexpected(std::move(result.error()));
+            return std::unexpected(Error::systemError(std::move(result.error())));
         }
     }
 

@@ -21,6 +21,11 @@ info()
     echo -e "${BLUE}${INFO}${RESET} ${@}"
 }
 
+error()
+{
+    echo -e "${RED}${ERROR}${RESET} ${@}"
+}
+
 die()
 {
     echo -e "${RED}${ERROR} ${@}${RESET}"
@@ -142,7 +147,33 @@ run_command()
     info "Running: ${@}"
     local command="${1}"
     shift
+
+    if [ "${SANITIZE}" == "ON" ]
+    then
+        rm -rf /tmp/asan.log*
+        export ASAN_OPTIONS="color=always:log_path=/tmp/asan.log:abort_on_error=1"
+    fi
+
+    set +e
+
     "${command}" ${@}
+
+    status=$?
+
+    if [ ${status} -ge 128 ]
+    then
+        error "Command killed by signal $((status - 128))"
+    else
+        info "Command exitted with ${status}"
+    fi
+
+    if [ "${SANITIZE}" == "ON" ]
+    then
+        if [ -f /tmp/asan.log* ]
+        then
+            cat /tmp/asan.log*
+        fi
+    fi
 }
 
 [ -z "${1}" ] && die "No command given"

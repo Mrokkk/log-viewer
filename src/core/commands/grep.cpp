@@ -2,7 +2,6 @@
 #include "core/command.hpp"
 #include "core/grep_options.hpp"
 #include "core/interpreter.hpp"
-#include "core/main_loop.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "utils/buffer.hpp"
@@ -79,31 +78,11 @@ DEFINE_COMMAND(grep)
             options,
             parentWindow->bufferId(),
             context,
-            [&newWindow, &context](TimeOrError result)
+            [&newWindow, &context, bufferName = buf.str()](TimeOrError result)
             {
-                if (result)
+                if (context.running)
                 {
-                    auto newBuffer = newWindow.buffer();
-
-                    if (not newBuffer)
-                    {
-                        return;
-                    }
-
-                    context.messageLine.info()
-                        << "found " << newBuffer->lineCount() << " matches; took "
-                        << (result.value() | utils::precision(3)) << " s";
-
-                    context.mainLoop->executeTask(
-                        [&newWindow, &context]
-                        {
-                            context.mainView.bufferLoaded(newWindow, context);
-                        });
-                }
-                else if (context.running)
-                {
-                    context.messageLine.error() << "Error grepping buffer: " << result.error();
-                    context.mainView.removeWindow(*newWindow.parent(), context);
+                    context.mainView.bufferLoaded(result, newWindow, context);
                 }
             });
 

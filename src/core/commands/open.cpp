@@ -4,9 +4,7 @@
 #include "core/buffer.hpp"
 #include "core/command.hpp"
 #include "core/interpreter.hpp"
-#include "core/main_loop.hpp"
 #include "core/main_view.hpp"
-#include "core/message_line.hpp"
 #include "utils/buffer.hpp"
 
 namespace core
@@ -30,7 +28,6 @@ DEFINE_COMMAND(open)
 
     EXECUTOR()
     {
-        constexpr auto errorHeader = "Error loading file: ";
         auto& path = args[0].string;
 
         auto& newWindow = context.mainView.createWindow(path, MainView::Parent::root, context);
@@ -40,31 +37,11 @@ DEFINE_COMMAND(open)
         newBuffer->load(
             path,
             context,
-            [&newWindow, &context, errorHeader](TimeOrError result)
+            [&newWindow, &context](TimeOrError result)
             {
-                if (result)
+                if (context.running)
                 {
-                    auto newBuffer = newWindow.buffer();
-
-                    if (not newBuffer)
-                    {
-                        return;
-                    }
-
-                    context.messageLine.info()
-                        << newBuffer->filePath() << ": lines: " << newBuffer->lineCount() << "; took "
-                        << (result.value() | utils::precision(3)) << " s";
-
-                    context.mainLoop->executeTask(
-                        [&newWindow, &context]
-                        {
-                            context.mainView.bufferLoaded(newWindow, context);
-                        });
-                }
-                else if (context.running)
-                {
-                    context.messageLine.error() << errorHeader << result.error();
-                    context.mainView.removeWindow(*newWindow.parent(), context);
+                    context.mainView.bufferLoaded(result, newWindow, context);
                 }
             });
 

@@ -6,10 +6,12 @@
 #include <functional>
 
 #include "core/buffers.hpp"
+#include "core/error.hpp"
 #include "core/file.hpp"
 #include "core/fwd.hpp"
 #include "core/grep_options.hpp"
 #include "core/line.hpp"
+#include "utils/fwd.hpp"
 #include "utils/immobile.hpp"
 
 namespace core
@@ -37,8 +39,8 @@ struct SearchRequest
     std::string           pattern;
 };
 
-using TimeOrError = std::expected<float, std::string>;
-using StringOrError = std::expected<std::string, std::string>;
+using TimeOrError = std::expected<float, Error>;
+using StringOrError = std::expected<std::string, Error>;
 using FinishedCallback = std::function<void(TimeOrError)>;
 using FinishedSearchCallback = std::function<void(SearchResult, float)>;
 

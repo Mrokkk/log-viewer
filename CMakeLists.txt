@@ -82,6 +82,7 @@ add_executable(${PROJECT_NAME}
     src/core/context.cpp
     src/core/dirs.cpp
     src/core/entity.cpp
+    src/core/error.cpp
     src/core/file.cpp
     src/core/fuzzy.cpp
     src/core/input.cpp

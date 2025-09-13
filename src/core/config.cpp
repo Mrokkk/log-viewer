@@ -5,6 +5,7 @@
 #include "core/context.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
+#include "core/thread.hpp"
 #include "core/variable.hpp"
 
 namespace core
@@ -34,6 +35,21 @@ DEFINE_READWRITE_VARIABLE(maxThreads, integer, "Number of threads used for paral
 
     WRITER()
     {
+        auto hardwareMaxThreads = hardwareThreadCount();
+        if (value.integer > hardwareMaxThreads)
+        {
+            context.messageLine.info() << "Value clamped to max number of hardware threads: " << hardwareMaxThreads;
+            // FIXME: I really need to fix the Variable::Value (probably introduce
+            // a ref-counted Object which will handle both pointers and actual values)
+            return setIntegerVariable(
+                context.config.maxThreads,
+                core::Variable::Value(long(hardwareMaxThreads)),
+                context,
+                [](Context& context)
+                {
+                    context.mainView.reloadAll(context);
+                });
+        }
         return setIntegerVariable(
             context.config.maxThreads,
             value,

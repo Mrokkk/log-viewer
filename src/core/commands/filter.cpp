@@ -1,6 +1,5 @@
 #include "core/buffer.hpp"
 #include "core/command.hpp"
-#include "core/main_loop.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 
@@ -58,29 +57,9 @@ DEFINE_COMMAND(filter)
             context,
             [&newWindow, &context](core::TimeOrError result)
             {
-                if (result)
+                if (context.running)
                 {
-                    auto newBuffer = newWindow.buffer();
-
-                    if (not newBuffer)
-                    {
-                        return;
-                    }
-
-                    context.messageLine.info()
-                        << "filtered " << newBuffer->lineCount() << " lines; took "
-                        << (result.value() | utils::precision(3)) << " s";
-
-                    context.mainLoop->executeTask(
-                        [&newWindow, &context]
-                        {
-                            context.mainView.bufferLoaded(newWindow, context);
-                        });
-                }
-                else if (context.running)
-                {
-                    context.messageLine.error() << "Error filtering buffer: " << result.error();
-                    context.mainView.removeWindow(*newWindow.parent(), context);
+                    context.mainView.bufferLoaded(result, newWindow, context);
                 }
             });
 

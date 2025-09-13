@@ -102,16 +102,16 @@ struct Config
                               using Bool   = ConfigVariable<bool>;
                               using String = ConfigVariable<std::string>;
 
-    Uint8<0, 32>      maxThreads = 4;
-    Size<0, LONG_MAX> linesPerThread = 5000000;
-    Bool              showLineNumbers = false;
-    Bool              absoluteLineNumbers = false;
-    Uint8<0, 16>      scrollJump = 5;
-    Uint8<0, 8>       scrollOff = 3;
-    Uint8<0, 255>     fastMoveLen = 16;
-    Uint8<0, 8>       tabWidth = 4;
-    String            lineNumberSeparator = " ";
-    String            tabChar = "›";
+    Uint8<0, UCHAR_MAX> maxThreads = 8;
+    Size<0, LONG_MAX>   linesPerThread = 5000000;
+    Bool                showLineNumbers = false;
+    Bool                absoluteLineNumbers = false;
+    Uint8<0, 16>        scrollJump = 5;
+    Uint8<0, 8>         scrollOff = 3;
+    Uint8<0, UCHAR_MAX> fastMoveLen = 16;
+    Uint8<0, 8>         tabWidth = 4;
+    String              lineNumberSeparator = " ";
+    String              tabChar = "›";
 };
 
 }  // namespace core
