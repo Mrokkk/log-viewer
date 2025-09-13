@@ -8,6 +8,44 @@
 namespace core
 {
 
+DEFINE_READWRITE_VARIABLE(maxThreads, integer, "Number of threads used for parallel grep")
+{
+    READER()
+    {
+        return long(context.config.maxThreads);
+    }
+
+    WRITER()
+    {
+        if (value.integer < 0 or value.integer > 16)
+        {
+            context.messageLine.error() << "Invalid maxThreads value: " << value.integer;
+            return false;
+        }
+        context.config.maxThreads = value.integer;
+        return true;
+    }
+}
+
+DEFINE_READWRITE_VARIABLE(linesPerThread, integer, "Number of lines processed per thread in parallel grep")
+{
+    READER()
+    {
+        return long(context.config.linesPerThread);
+    }
+
+    WRITER()
+    {
+        if (value.integer < 0)
+        {
+            context.messageLine.error() << "Invalid linesPerThread value: " << value.integer;
+            return false;
+        }
+        context.config.linesPerThread = value.integer;
+        return true;
+    }
+}
+
 DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")
 {
     READER()

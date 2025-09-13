@@ -1,13 +1,16 @@
 #include "buffer.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <expected>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 
 #include <re2/re2.h>
 
 #include "core/assert.hpp"
+#include "core/config.hpp"
 #include "core/context.hpp"
 #include "core/thread.hpp"
 #include "utils/format.hpp"
@@ -42,6 +45,21 @@ struct Buffer::Impl final : Buffer
         std::string pattern,
         GrepOptions options,
         Buffer& parentBuffer);
+
+    MaybeError parallelGrep(
+        std::string pattern,
+        GrepOptions options,
+        Buffer& parentBuffer,
+        Context& context);
+
+    MaybeError grepInternal(
+        std::string pattern,
+        GrepOptions options,
+        Buffer& parentBuffer,
+        File& file,
+        size_t start,
+        size_t end,
+        LineRefs& lineRefs);
 
     void filter(
         size_t start,
@@ -209,7 +227,12 @@ void Buffer::grep(std::string pattern, GrepOptions options, BufferId parentBuffe
 
             auto timer = utils::startTimeMeasurement();
 
-            auto result = impl.grep(std::move(pattern), options, *parentBuffer);
+            bool runParallel = parentBuffer->mLineCount > context.config.linesPerThread
+                and context.config.maxThreads > 1;
+
+            const auto result = runParallel
+                ? impl.parallelGrep(std::move(pattern), options, *parentBuffer, context)
+                : impl.grep(std::move(pattern), options, *parentBuffer);
 
             if (result) [[likely]]
             {
@@ -426,6 +449,116 @@ MaybeError Buffer::Impl::grep(
 {
     LineRefs lines;
 
+    auto result = grepInternal(
+        std::move(pattern),
+        options,
+        parentBuffer,
+        mFile,
+        0,
+        parentBuffer.lineCount(),
+        lines);
+
+    if (not result) [[unlikely]]
+    {
+        return result;
+    }
+
+    initialize(std::move(lines));
+
+    return result;
+}
+
+MaybeError Buffer::Impl::parallelGrep(
+    std::string pattern,
+    GrepOptions options,
+    Buffer& parentBuffer,
+    Context& context)
+{
+    const auto lineCount = parentBuffer.mLineCount;
+    const auto maxThreads = context.config.maxThreads;
+    const auto linesPerThread = context.config.linesPerThread;
+
+    const auto threadCount = utils::min(
+        (lineCount + linesPerThread - 1) / linesPerThread,
+        size_t(maxThreads));
+
+    std::vector<LineRefs> lineRefsPerThread(threadCount);
+    std::vector<std::thread> threads(threadCount);
+    std::vector<MaybeError> results(threadCount);
+
+    for (size_t i = 0; i < threadCount; ++i)
+    {
+        auto start = (lineCount / threadCount) * i;
+        auto end = (lineCount / threadCount) * (i + 1);
+
+        if (i == threadCount - 1)
+        {
+            end = lineCount;
+        }
+
+        auto& threadLines = lineRefsPerThread[i];
+        auto& threadResult = results[i];
+        auto threadFile = mFile;
+
+        threads[i] = std::thread(
+            [pattern, options, &parentBuffer, start, end,
+                &threadLines, &threadResult,
+                threadFile = std::move(threadFile),
+                this] mutable
+            {
+                threadResult = grepInternal(
+                    std::move(pattern),
+                    options,
+                    parentBuffer,
+                    threadFile,
+                    start,
+                    end,
+                    threadLines);
+            });
+    }
+
+    MaybeError result(true);
+    size_t greppedLineCount = 0;
+
+    for (size_t i = 0; i < threadCount; ++i)
+    {
+        threads[i].join();
+        if (not results[i]) [[unlikely]]
+        {
+            result = std::move(results[i]);
+        }
+        greppedLineCount += lineRefsPerThread[i].size();
+    }
+
+    if (not result)
+    {
+        return result;
+    }
+
+    LineRefs lines;
+    lines.reserve(greppedLineCount);
+
+    for (const auto& lineRefs : lineRefsPerThread)
+    {
+        std::copy(
+            lineRefs.begin(), lineRefs.end(),
+            std::back_inserter(lines));
+    }
+
+    initialize(std::move(lines));
+
+    return true;
+}
+
+MaybeError Buffer::Impl::grepInternal(
+    std::string pattern,
+    GrepOptions options,
+    Buffer& parentBuffer,
+    File& file,
+    size_t start,
+    size_t end,
+    LineRefs& lines)
+{
     #define FILE_LINE_INDEX_TRANSFORM(I) I
     #define FILTERED_LINE_INDEX_TRANSFORM(I) parentBuffer.mFilteredLines[I]
 
@@ -433,14 +566,14 @@ MaybeError Buffer::Impl::grep(
         do \
         { \
             auto& fileLines = *mFileLines; \
-            for (size_t i = 0; i < lineCount; ++i) \
+            for (size_t i = start; i < end; ++i) \
             { \
                 if (mStopFlag) [[unlikely]] \
                 { \
                     return std::unexpected("Loading was aborted"); \
                 } \
                 auto lineIndex = LINE_INDEX_TRANSFORM(i); \
-                auto result = readInternal(fileLines[lineIndex]); \
+                auto result = readInternal(fileLines[lineIndex], file); \
                 if (not result) [[unlikely]] \
                 { \
                     return std::unexpected(std::move(result.error())); \
@@ -452,8 +585,6 @@ MaybeError Buffer::Impl::grep(
             } \
         } \
         while (0)
-
-    size_t lineCount = parentBuffer.mLineCount;
 
     if (not options.regex)
     {
@@ -511,8 +642,6 @@ MaybeError Buffer::Impl::grep(
             }
         }
     }
-
-    initialize(std::move(lines));
 
     return true;
 }

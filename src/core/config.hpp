@@ -8,6 +8,8 @@ namespace core
 
 struct Config
 {
+    uint8_t     maxThreads = 4;
+    size_t      linesPerThread = 5000000;
     bool        showLineNumbers = false;
     bool        absoluteLineNumbers = false;
     uint8_t     scrollJump = 5;
