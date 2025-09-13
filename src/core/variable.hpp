@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <flat_map>
 #include <functional>
 
 #include "core/fwd.hpp"
@@ -68,14 +67,12 @@ struct Variable final : utils::NonCopyable
     Writer      writer;
 };
 
-using VariablesMap = std::flat_map<std::string, Variable>;
-
 struct Variables final
 {
     Variables() = delete;
 
-    static VariablesMap& map();
     static Variable* find(const std::string& name);
+    static void $register(Variable variable);
 
     template <typename T>
     static void addUserDefined(const std::string& name, Type type, const T& value);
@@ -101,13 +98,14 @@ struct VariableWithContext final
             static ::core::Variable::Value reader(::core::Context& context); \
             static void init() \
             { \
-                ::core::Variables::map().emplace(std::make_pair(#NAME, ::core::Variable{ \
-                    .name = #NAME, \
-                    .help = HELP, \
-                    .type = ::core::Type::TYPE, \
-                    .access = ::core::Variable::Access::readOnly, \
-                    .reader = &Variable::reader, \
-                })); \
+                ::core::Variables::$register( \
+                    ::core::Variable{ \
+                        .name = #NAME, \
+                        .help = HELP, \
+                        .type = ::core::Type::TYPE, \
+                        .access = ::core::Variable::Access::readOnly, \
+                        .reader = &Variable::reader, \
+                    }); \
             } \
             static inline bool registered = (Variable::init(), true); \
         }; \
@@ -123,14 +121,15 @@ struct VariableWithContext final
             static bool writer(::core::Variable::Value value, ::core::Context& context); \
             static void init() \
             { \
-                ::core::Variables::map().emplace(std::make_pair(#NAME, ::core::Variable{ \
-                    .name = #NAME, \
-                    .help = HELP, \
-                    .type = ::core::Type::TYPE, \
-                    .access = ::core::Variable::Access::readWrite, \
-                    .reader = &Variable::reader, \
-                    .writer = &Variable::writer, \
-                })); \
+                ::core::Variables::$register( \
+                    ::core::Variable{ \
+                        .name = #NAME, \
+                        .help = HELP, \
+                        .type = ::core::Type::TYPE, \
+                        .access = ::core::Variable::Access::readWrite, \
+                        .reader = &Variable::reader, \
+                        .writer = &Variable::writer, \
+                    }); \
             } \
             static inline bool registered = (Variable::init(), true); \
         }; \

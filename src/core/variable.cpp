@@ -6,15 +6,21 @@
 
 #include "core/context.hpp"
 #include "core/type.hpp"
+#include "core/variables_map.hpp"
 #include "utils/buffer.hpp"
 
 namespace core
 {
 
-VariablesMap& Variables::map()
+static VariablesMap& map()
 {
     static VariablesMap map;
     return map;
+}
+
+const VariablesMap& variablesMap()
+{
+    return map();
 }
 
 Variable* Variables::find(const std::string& name)
@@ -25,6 +31,14 @@ Variable* Variables::find(const std::string& name)
     return variableIt != variables.end()
         ? &variableIt->second
         : nullptr;
+}
+
+void Variables::$register(Variable variable)
+{
+    map().emplace(
+        std::make_pair(
+            variable.name,
+            std::move(variable)));
 }
 
 static void valueToStream(utils::Buffer& buf, const Variable::Value& value)
@@ -77,7 +91,7 @@ template <typename T>
 void Variables::addUserDefined(const std::string& name, Type type, const T& value)
 {
     static std::map<std::string, T> userDefinedVariables;
-    auto& variables = core::Variables::map();
+    auto& variables = map();
     const auto emplaceResult = userDefinedVariables.emplace(std::make_pair(name, value));
     const auto& userVariable = *emplaceResult.first;
     const auto nameCstr = userVariable.first.c_str();

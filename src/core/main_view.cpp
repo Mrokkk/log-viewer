@@ -74,7 +74,7 @@ struct MainView::Impl final : MainView
     constexpr size_t getAvailableViewWidth(Window& w) const
     {
         return mWidth
-            - (w.config->showLineNumbers * (w.lineNrDigits + w.config->lineNumberSeparator.length() + 1));
+            - (w.config->showLineNumbers * (w.lineNrDigits + w.config->lineNumberSeparator.get().length() + 1));
     }
 
     constexpr Buffer* currentLoadedBuffer()
@@ -441,7 +441,7 @@ constexpr static Glyph tabGlyph(uint32_t offset, const Config& config)
         .width = config.tabWidth,
         .flags = GlyphFlags::control | GlyphFlags::whitespace,
         .offset = offset,
-        .characters = {Utf8::parse(config.tabChar)},
+        .characters = {Utf8::parse(config.tabChar.get())},
     };
     if (config.tabWidth > 1)
     {

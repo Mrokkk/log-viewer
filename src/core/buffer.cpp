@@ -475,8 +475,8 @@ MaybeError Buffer::Impl::parallelGrep(
     Context& context)
 {
     const auto lineCount = parentBuffer.mLineCount;
-    const auto maxThreads = context.config.maxThreads;
-    const auto linesPerThread = context.config.linesPerThread;
+    const uint8_t maxThreads = context.config.maxThreads;
+    const size_t linesPerThread = context.config.linesPerThread;
 
     const auto threadCount = utils::min(
         (lineCount + linesPerThread - 1) / linesPerThread,

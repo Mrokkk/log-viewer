@@ -1,5 +1,7 @@
 #include "config.hpp"
 
+#include <functional>
+
 #include "core/context.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
@@ -7,6 +9,21 @@
 
 namespace core
 {
+
+template <typename T>
+constexpr static bool setIntegerVariable(T& variable, const Variable::Value& value, Context& context, std::function<void(Context& context)> onSuccess = {})
+{
+    if (not variable.set(value.integer)) [[unlikely]]
+    {
+        context.messageLine.error() << "Value not in range: [" << variable.min() << ", " << variable.max() << ']';
+        return false;
+    }
+    if (onSuccess)
+    {
+        onSuccess(context);
+    }
+    return true;
+}
 
 DEFINE_READWRITE_VARIABLE(maxThreads, integer, "Number of threads used for parallel grep")
 {
@@ -17,13 +34,14 @@ DEFINE_READWRITE_VARIABLE(maxThreads, integer, "Number of threads used for paral
 
     WRITER()
     {
-        if (value.integer < 0 or value.integer > 16)
-        {
-            context.messageLine.error() << "Invalid maxThreads value: " << value.integer;
-            return false;
-        }
-        context.config.maxThreads = value.integer;
-        return true;
+        return setIntegerVariable(
+            context.config.maxThreads,
+            value,
+            context,
+            [](Context& context)
+            {
+                context.mainView.reloadAll(context);
+            });
     }
 }
 
@@ -36,13 +54,10 @@ DEFINE_READWRITE_VARIABLE(linesPerThread, integer, "Number of lines processed pe
 
     WRITER()
     {
-        if (value.integer < 0)
-        {
-            context.messageLine.error() << "Invalid linesPerThread value: " << value.integer;
-            return false;
-        }
-        context.config.linesPerThread = value.integer;
-        return true;
+        return setIntegerVariable(
+            context.config.linesPerThread,
+            value,
+            context);
     }
 }
 
@@ -50,12 +65,12 @@ DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the le
 {
     READER()
     {
-        return context.config.showLineNumbers;
+        return context.config.showLineNumbers.get();
     }
 
     WRITER()
     {
-        context.config.showLineNumbers = value.boolean;
+        context.config.showLineNumbers.set(value.boolean);
         context.mainView.reloadAll(context);
         return true;
     }
@@ -65,12 +80,12 @@ DEFINE_READWRITE_VARIABLE(absoluteLineNumbers, boolean, "Print file absolute lin
 {
     READER()
     {
-        return context.config.absoluteLineNumbers;
+        return context.config.absoluteLineNumbers.get();
     }
 
     WRITER()
     {
-        context.config.absoluteLineNumbers = value.boolean;
+        context.config.absoluteLineNumbers.set(value.boolean);
         return true;
     }
 }
@@ -84,13 +99,10 @@ DEFINE_READWRITE_VARIABLE(scrollJump, integer, "Minimal number of lines to scrol
 
     WRITER()
     {
-        if (value.integer < 1)
-        {
-            context.messageLine.error() << "Invalid scrollJump value: " << value.integer;
-            return false;
-        }
-        context.config.scrollJump = value.integer;
-        return true;
+        return setIntegerVariable(
+            context.config.scrollJump,
+            value,
+            context);
     }
 }
 
@@ -103,8 +115,10 @@ DEFINE_READWRITE_VARIABLE(scrollOff, integer, "Minimal number of screen lines to
 
     WRITER()
     {
-        context.config.scrollOff = value.integer & 0xff;
-        return true;
+        return setIntegerVariable(
+            context.config.scrollOff,
+            value,
+            context);
     }
 }
 
@@ -117,8 +131,10 @@ DEFINE_READWRITE_VARIABLE(fastMoveLen, integer, "Amount of characters to jump in
 
     WRITER()
     {
-        context.config.fastMoveLen = value.integer & 0xff;
-        return true;
+        return setIntegerVariable(
+            context.config.fastMoveLen,
+            value,
+            context);
     }
 }
 
@@ -131,14 +147,14 @@ DEFINE_READWRITE_VARIABLE(tabWidth, integer, "Tab width")
 
     WRITER()
     {
-        if (value.integer > 8 or value.integer < 0)
-        {
-            context.messageLine.error() << "Invalid tab width: " << value.integer;
-            return false;
-        }
-        context.config.tabWidth = value.integer;
-        context.mainView.reloadAll(context);
-        return true;
+        return setIntegerVariable(
+            context.config.tabWidth,
+            value,
+            context,
+            [](Context& context)
+            {
+                context.mainView.reloadAll(context);
+            });
     }
 }
 
@@ -146,12 +162,12 @@ DEFINE_READWRITE_VARIABLE(lineNumberSeparator, string, "Line number and view sep
 {
     READER()
     {
-        return &context.config.lineNumberSeparator;
+        return &context.config.lineNumberSeparator.get();
     }
 
     WRITER()
     {
-        context.config.lineNumberSeparator = *value.string;
+        context.config.lineNumberSeparator.set(*value.string);
         return true;
     }
 }
@@ -160,12 +176,12 @@ DEFINE_READWRITE_VARIABLE(tabChar, string, "Tab character")
 {
     READER()
     {
-        return &context.config.tabChar;
+        return &context.config.tabChar.get();
     }
 
     WRITER()
     {
-        context.config.tabChar = *value.string;
+        context.config.tabChar.set(*value.string);
         context.mainView.reloadAll(context);
         return true;
     }

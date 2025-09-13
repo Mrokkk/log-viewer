@@ -19,6 +19,7 @@
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "core/variable.hpp"
+#include "core/variables_map.hpp"
 #include "ui/event_handler.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
@@ -238,7 +239,7 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::variables:
-            strings = core::Variables::map()
+            strings = core::variablesMap()
                 | views::transform(
                     [&context, leftWidth, width](const auto& e)
                     {
