@@ -8,8 +8,8 @@ namespace core
 
 struct Line final
 {
-    const size_t start;
-    const size_t len;
+    size_t start;
+    size_t len;
 };
 
 using Lines = std::vector<Line>;

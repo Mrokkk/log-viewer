@@ -77,6 +77,22 @@ DEFINE_READWRITE_VARIABLE(linesPerThread, integer, "Number of lines processed pe
     }
 }
 
+DEFINE_READWRITE_VARIABLE(bytesPerThread, integer, "Number of bytes processed per thread in parallel file loading")
+{
+    READER()
+    {
+        return long(context.config.bytesPerThread);
+    }
+
+    WRITER()
+    {
+        return setIntegerVariable(
+            context.config.bytesPerThread,
+            value,
+            context);
+    }
+}
+
 DEFINE_READWRITE_VARIABLE(showLineNumbers, boolean, "Show line numbers on the left")
 {
     READER()

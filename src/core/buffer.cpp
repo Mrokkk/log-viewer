@@ -12,6 +12,8 @@
 #include "core/assert.hpp"
 #include "core/config.hpp"
 #include "core/context.hpp"
+#include "core/line.hpp"
+#include "core/logger.hpp"
 #include "core/thread.hpp"
 #include "utils/format.hpp"
 #include "utils/math.hpp"
@@ -22,7 +24,8 @@
 namespace core
 {
 
-using SuccessOrError = std::expected<bool, Error>;
+using Result = std::expected<bool, Error>;
+using Results = std::vector<Result>;
 using StringViewOrError = std::expected<std::string_view, Error>;
 
 enum struct BufferType : char
@@ -125,20 +128,28 @@ struct Buffer::Impl final : Buffer
     void initialize(Lines&& lines);
     void initialize(LineRefs&& lineRefs);
 
-    SuccessOrError loadFile();
+    Result singleThreadedLoadFile();
 
-    SuccessOrError singleThreadedGrep(
+    Result multiThreadedLoadFile(Context& context);
+
+    Result readLines(
+        File& file,
+        size_t start,
+        size_t end,
+        Lines& lines);
+
+    Result singleThreadedGrep(
         std::string pattern,
         GrepOptions options,
         Buffer& parentBuffer);
 
-    SuccessOrError multiThreadedGrep(
+    Result multiThreadedGrep(
         std::string pattern,
         GrepOptions options,
         Buffer& parentBuffer,
         Context& context);
 
-    SuccessOrError grep(
+    Result grep(
         std::string pattern,
         GrepOptions options,
         Buffer& parentBuffer,
@@ -187,7 +198,7 @@ Buffer::~Buffer()
     }
 }
 
-void Buffer::load(std::string path, Context&, FinishedCallback callback)
+void Buffer::load(std::string path, Context& context, FinishedCallback callback)
 {
     assert(mState == cast(State::uninitialized), utils::format("Buffer {} state is {}", this, stringify<State>(mState)));
     assert(mType == cast(BufferType::uninitialized), utils::format("Buffer {} type is {}", this, stringify<BufferType>(mType)));
@@ -204,11 +215,16 @@ void Buffer::load(std::string path, Context&, FinishedCallback callback)
     }
 
     async(
-        [callback = std::move(callback), &impl]
+        [callback = std::move(callback), &impl, &context]
         {
             auto timer = utils::startTimeMeasurement();
 
-            auto result = impl.loadFile();
+            bool runMultiThreaded = impl.mFile.size() > context.config.bytesPerThread
+                and context.config.maxThreads > 1;
+
+            auto result = runMultiThreaded
+                ? impl.multiThreadedLoadFile(context)
+                : impl.singleThreadedLoadFile();
 
             if (result) [[likely]]
             {
@@ -245,10 +261,10 @@ void Buffer::grep(std::string pattern, GrepOptions options, BufferId parentBuffe
 
             auto timer = utils::startTimeMeasurement();
 
-            bool runParallel = parentBuffer->mLineCount > context.config.linesPerThread
+            bool runMultiThreaded = parentBuffer->mLineCount > context.config.linesPerThread
                 and context.config.maxThreads > 1;
 
-            const auto result = runParallel
+            auto result = runMultiThreaded
                 ? impl.multiThreadedGrep(std::move(pattern), options, *parentBuffer, context)
                 : impl.singleThreadedGrep(std::move(pattern), options, *parentBuffer);
 
@@ -349,11 +365,6 @@ size_t Buffer::absoluteLineNumber(size_t lineIndex) const
     }
 }
 
-size_t Buffer::fileLineCount() const
-{
-    return mFileLines->size();
-}
-
 const std::string& Buffer::filePath() const
 {
     assert(mType != cast(BufferType::uninitialized), utils::format("Buffer {} type is uninitialized", this));
@@ -381,23 +392,146 @@ void Buffer::Impl::initialize(LineRefs&& lines)
     setType(BufferType::filtered);
 }
 
-SuccessOrError Buffer::Impl::loadFile()
+Result Buffer::Impl::singleThreadedLoadFile()
 {
     Lines lines;
-    auto sizeLeft{mFile.size()};
-    size_t offset{0};
-    size_t lineStart{0};
+
+    auto result = readLines(mFile, 0, mFile.size(), lines);
+
+    if (not result)
+    {
+        return result;
+    }
+
+    const auto nextLineStart = lines.empty()
+        ? 0
+        : lines.back().start + lines.back().len + 1;
+
+    if (nextLineStart < mFile.size()) [[unlikely]]
+    {
+        lines.emplace_back(Line{.start = nextLineStart, .len = mFile.size() - nextLineStart});
+    }
+
+    initialize(std::move(lines));
+
+    return true;
+}
+
+Result Buffer::Impl::multiThreadedLoadFile(Context& context)
+{
+    const auto fileSize = mFile.size();
+    const auto maxThreads = context.config.maxThreads.get();
+    const auto bytesPerThread = context.config.bytesPerThread.get();
+
+    const auto threadCount = utils::min(
+        (fileSize + bytesPerThread - 1) / bytesPerThread,
+        size_t(maxThreads));
+
+    logger.info() << "using " << threadCount << " threads";
+
+    Tasks tasks(threadCount);
+    Results results(threadCount);
+    std::vector<Lines> linesPerThread(threadCount);
+
+    for (size_t i = 0; i < threadCount; ++i)
+    {
+        const auto start = (fileSize / threadCount) * i;
+        const auto end = i == threadCount - 1
+            ? fileSize
+            : (fileSize / threadCount) * (i + 1);
+
+        auto& threadLines = linesPerThread[i];
+        auto& threadResult = results[i];
+
+        tasks[i] =
+            [start, end, &threadLines, &threadResult, threadFile = mFile, this] mutable
+            {
+                threadResult = readLines(
+                    threadFile,
+                    start,
+                    end,
+                    threadLines);
+            };
+    }
+
+    executeInParallelAndWait(std::move(tasks));
+
+    Result result(true);
+    size_t lineCount = threadCount;
+
+    for (size_t i = 0; i < threadCount; ++i)
+    {
+        if (not results[i]) [[unlikely]]
+        {
+            result = std::move(results[i]);
+        }
+        lineCount += linesPerThread[i].size();
+    }
+
+    if (not result)
+    {
+        return result;
+    }
+
+    Lines lines(std::move(linesPerThread[0]));
+    lines.reserve(lineCount);
+
+    for (size_t i = 1; i < threadCount; ++i)
+    {
+        if (i < threadCount - 1 and not lines.empty())
+        {
+            auto& prevLine = lines.back();
+            auto& nextLine = linesPerThread[i].front();
+
+            if (prevLine.start + prevLine.len + 1 < nextLine.start)
+            {
+                const auto diff = nextLine.start - (prevLine.start + prevLine.len + 1);
+                nextLine.start -= diff;
+                nextLine.len += diff;
+            }
+        }
+
+        std::copy(
+            linesPerThread[i].begin(), linesPerThread[i].end(),
+            std::back_inserter(lines));
+
+        linesPerThread[i] = Lines{};
+    }
+
+    const auto nextLineStart = lines.empty()
+        ? 0
+        : lines.back().start + lines.back().len + 1;
+
+    if (nextLineStart < mFile.size()) [[unlikely]]
+    {
+        lines.emplace_back(Line{.start = nextLineStart, .len = mFile.size() - nextLineStart});
+    }
+
+    initialize(std::move(lines));
+
+    return true;
+}
+
+Result Buffer::Impl::readLines(
+    File& file,
+    size_t start,
+    size_t end,
+    Lines& lines)
+{
+    auto sizeLeft{end - start};
+    auto offset{start};
+    auto lineStart{start};
 
     while (sizeLeft)
     {
         auto toRead = utils::min(sizeLeft, BLOCK_SIZE);
 
-        if (auto result = mFile.remap(offset, toRead); not result) [[unlikely]]
+        if (auto result = file.remap(offset, toRead); not result) [[unlikely]]
         {
             return std::unexpected(Error::systemError(std::move(result.error())));
         }
 
-        const auto text = mFile.at(offset);
+        const auto text = file.at(offset);
 
         for (size_t i = 0; i < toRead; ++i)
         {
@@ -416,13 +550,6 @@ SuccessOrError Buffer::Impl::loadFile()
         sizeLeft -= toRead;
         offset += toRead;
     }
-
-    if (lineStart < mFile.size()) [[unlikely]]
-    {
-        lines.emplace_back(Line{.start = lineStart, .len = mFile.size() - lineStart});
-    }
-
-    initialize(std::move(lines));
 
     return true;
 }
@@ -452,7 +579,7 @@ static RE2 regexCreate(std::string pattern, bool caseInsensitive)
     return RE2(std::move(pattern), reOptions);
 }
 
-SuccessOrError Buffer::Impl::singleThreadedGrep(
+Result Buffer::Impl::singleThreadedGrep(
     std::string pattern,
     GrepOptions options,
     Buffer& parentBuffer)
@@ -478,7 +605,7 @@ SuccessOrError Buffer::Impl::singleThreadedGrep(
     return result;
 }
 
-SuccessOrError Buffer::Impl::multiThreadedGrep(
+Result Buffer::Impl::multiThreadedGrep(
     std::string pattern,
     GrepOptions options,
     Buffer& parentBuffer,
@@ -492,9 +619,11 @@ SuccessOrError Buffer::Impl::multiThreadedGrep(
         (lineCount + linesPerThread - 1) / linesPerThread,
         size_t(maxThreads));
 
-    std::vector<std::function<void()>> tasks(threadCount);
+    logger.info() << "using " << threadCount << " threads";
+
+    Tasks tasks(threadCount);
+    Results results(threadCount);
     std::vector<LineRefs> lineRefsPerThread(threadCount);
-    std::vector<SuccessOrError> results(threadCount);
 
     for (size_t i = 0; i < threadCount; ++i)
     {
@@ -525,8 +654,8 @@ SuccessOrError Buffer::Impl::multiThreadedGrep(
 
     executeInParallelAndWait(std::move(tasks));
 
-    SuccessOrError result(true);
-    size_t greppedLineCount = 0;
+    Result result(true);
+    size_t summedLineCount = 0;
 
     for (size_t i = 0; i < threadCount; ++i)
     {
@@ -534,7 +663,7 @@ SuccessOrError Buffer::Impl::multiThreadedGrep(
         {
             result = std::move(results[i]);
         }
-        greppedLineCount += lineRefsPerThread[i].size();
+        summedLineCount += lineRefsPerThread[i].size();
     }
 
     if (not result)
@@ -542,14 +671,16 @@ SuccessOrError Buffer::Impl::multiThreadedGrep(
         return result;
     }
 
-    LineRefs lines;
-    lines.reserve(greppedLineCount);
+    LineRefs lines(std::move(lineRefsPerThread[0]));
+    lines.reserve(summedLineCount);
 
-    for (const auto& lineRefs : lineRefsPerThread)
+    for (size_t i = 1; i < threadCount; ++i)
     {
         std::copy(
-            lineRefs.begin(), lineRefs.end(),
+            lineRefsPerThread[i].begin(), lineRefsPerThread[i].end(),
             std::back_inserter(lines));
+
+        lineRefsPerThread[i] = LineRefs{};
     }
 
     initialize(std::move(lines));
@@ -557,7 +688,7 @@ SuccessOrError Buffer::Impl::multiThreadedGrep(
     return true;
 }
 
-SuccessOrError Buffer::Impl::grep(
+Result Buffer::Impl::grep(
     std::string pattern,
     GrepOptions options,
     Buffer& parentBuffer,

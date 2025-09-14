@@ -156,7 +156,12 @@ run_command()
 
     set +e
 
-    "${command}" ${@}
+    if [ -f /usr/bin/time ]
+    then
+        /usr/bin/time -v "${command}" ${@}
+    else
+        "${command}" ${@}
+    fi
 
     status=$?
 

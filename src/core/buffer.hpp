@@ -11,7 +11,6 @@
 #include "core/fwd.hpp"
 #include "core/grep_options.hpp"
 #include "core/line.hpp"
-#include "utils/fwd.hpp"
 #include "utils/immobile.hpp"
 
 namespace core
@@ -58,8 +57,12 @@ struct Buffer : utils::Immobile
 
     size_t absoluteLineNumber(size_t lineIndex) const;
 
-    size_t fileLineCount() const;
     const std::string& filePath() const;
+
+    constexpr size_t fileLineCount() const
+    {
+        return mFileLines->size();
+    }
 
     constexpr size_t lineCount() const
     {

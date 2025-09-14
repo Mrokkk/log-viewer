@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "utils/immobile.hpp"
+#include "utils/units.hpp"
 
 namespace core
 {
@@ -104,6 +105,7 @@ struct Config
 
     Uint8<0, UCHAR_MAX> maxThreads = 8;
     Size<0, LONG_MAX>   linesPerThread = 5000000;
+    Size<0, LONG_MAX>   bytesPerThread = 1_GiB;
     Bool                showLineNumbers = false;
     Bool                absoluteLineNumbers = false;
     Uint8<0, 16>        scrollJump = 5;

@@ -1,20 +1,24 @@
 #include "thread.hpp"
 
 #include <thread>
+#include <vector>
 
 namespace core
 {
 
-const auto mainThreadId = std::this_thread::get_id();
+using Thread = std::thread;
+using Threads = std::vector<Thread>;
 
-void async(std::function<void()> work)
+static const auto mainThreadId = std::this_thread::get_id();
+
+void async(Task task)
 {
-    std::thread(std::move(work)).detach();
+    std::thread(std::move(task)).detach();
 }
 
 void executeInParallelAndWait(Tasks tasks)
 {
-    std::vector<std::thread> threads;
+    Threads threads;
     threads.reserve(tasks.size());
     for (auto& task : tasks)
     {

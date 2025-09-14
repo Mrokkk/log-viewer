@@ -191,18 +191,18 @@ void Ftxui::executeShell(const std::string& cmd)
         }));
 }
 
-void Ftxui::executeTask(std::function<void()> closure)
+void Ftxui::executeTask(core::Task task)
 {
     if (core::isMainThread())
     {
-        closure();
+        task();
     }
     else
     {
         screen.Post(
-            [closure = std::move(closure)]
+            [task = std::move(task)]
             {
-                closure();
+                task();
             });
         screen.RequestAnimationFrame();
     }

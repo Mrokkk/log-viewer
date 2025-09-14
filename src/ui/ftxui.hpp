@@ -29,7 +29,7 @@ struct Ftxui final : core::UserInterface, core::MainLoop
     void run(core::Context& context) override;
     void quit(core::Context& context) override;
     void executeShell(const std::string& command) override;
-    void executeTask(std::function<void()> closure) override;
+    void executeTask(core::Task task) override;
 
     ftxui::ScreenInteractive screen;
     ftxui::Dimensions        terminalSize;
