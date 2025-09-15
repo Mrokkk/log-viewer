@@ -962,7 +962,7 @@ void MainView::Impl::scrollDown(Context& context)
     ++w.yoffset;
     w.ringBuffer.pushBack(getLine(*buffer, w.yoffset + w.height - 1, context));
 
-    if (w.ycurrent >= w.config->scrollOff)
+    if (w.ycurrent > w.config->scrollOff)
     {
         --w.ycurrent;
     }
