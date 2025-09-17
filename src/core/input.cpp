@@ -454,7 +454,7 @@ static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, Inpu
         return false;
     }
 
-    const auto& keySequence = converted.value();
+    const auto& keySequence = *converted;
 
     if (flags & InputMappingFlags::force)
     {
@@ -541,7 +541,7 @@ bool addInputMapping(std::string_view lhs, std::string_view rhs, InputMappingFla
         return false;
     }
 
-    return addInputMappingInternal(lhs, InputMapping(converted.value()), flags, context);
+    return addInputMappingInternal(lhs, InputMapping(*converted), flags, context);
 }
 
 bool addInputMapping(std::string_view lhs, BuiltinCommand rhs, InputMappingFlags flags, Context& context)

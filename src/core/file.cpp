@@ -93,7 +93,7 @@ void File::free()
     sys::unmap(mMapping);
     if (mFile and --*mRefCount == 0)
     {
-        sys::fileClose(mFile.value());
+        sys::fileClose(*mFile);
         delete mRefCount;
     }
 }

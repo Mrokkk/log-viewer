@@ -1,31 +1,21 @@
 #pragma once
 
-#include <flat_set>
+#include <functional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "core/context.hpp"
+#include "core/interpreter/value.hpp"
 #include "core/type.hpp"
+#include "utils/bitflag.hpp"
+#include "utils/enum_traits.hpp"
 #include "utils/noncopyable.hpp"
 
-namespace core
+namespace core::interpreter
 {
 
-struct Argument
-{
-    Type        type;
-    union
-    {
-        long    integer;
-        bool    boolean;
-    };
-    std::string string;
-};
-
-using Arguments = std::vector<Argument>;
-using Flags = std::flat_set<std::string>;
-
-using CommandHandler = bool(*)(const Arguments& args, const Flags& flags, bool force, Context& context);
+using CommandHandler = bool(*)(const Values& args, const int flagsMask, bool force, Context& context);
 
 struct CommandArguments final
 {
@@ -37,6 +27,7 @@ struct CommandArguments final
 
     CommandArguments();
     CommandArguments(std::initializer_list<ArgumentSignature> n);
+    ~CommandArguments();
 
     const std::vector<ArgumentSignature>& get() const;
 
@@ -46,13 +37,34 @@ private:
 
 struct CommandFlags final
 {
-    CommandFlags();
-    CommandFlags(std::initializer_list<std::string> n);
+    struct FlagSignature
+    {
+        FlagSignature()
+            : mask(0)
+        {
+        }
 
-    const std::flat_set<std::string>& get() const;
+        template <typename T>
+        requires utils::Enum<T>
+        constexpr FlagSignature(std::string_view s, T flag)
+            : name(s)
+            , mask(utils::bitMask<int>(flag))
+        {
+        }
+
+        std::string_view name;
+        long             mask;
+    };
+
+    CommandFlags();
+    ~CommandFlags();
+
+    CommandFlags(std::initializer_list<FlagSignature>&& n);
+
+    const std::vector<FlagSignature>& get() const;
 
 private:
-    std::flat_set<std::string> mFlags;
+    std::vector<FlagSignature> mFlags;
 };
 
 struct Command final : utils::NonCopyable
@@ -74,8 +86,8 @@ struct Commands final
 
 #define EXECUTOR() \
     bool Command::execute( \
-        [[maybe_unused]] const ::core::Arguments& args, \
-        [[maybe_unused]] const ::core::Flags& flags, \
+        [[maybe_unused]] const ::core::interpreter::Values& args, \
+        [[maybe_unused]] const int flagsMask, \
         [[maybe_unused]] bool force, \
         [[maybe_unused]] ::core::Context& context)
 
@@ -83,33 +95,21 @@ struct Commands final
     const char* Command::help
 
 #define ARGUMENTS() \
-    ::core::CommandArguments Command::arguments()
+    ::core::interpreter::CommandArguments Command::arguments()
 
 #define FLAGS() \
-    ::core::CommandFlags Command::flags()
-
-#define ARGUMENT(TYPE, NAME) \
-    ::core::CommandArguments::ArgumentSignature{ \
-        .type = ::core::Type::TYPE, \
-        .name = NAME \
-    }
-
-#define VARIADIC_ARGUMENT(NAME) \
-    ::core::CommandArguments::ArgumentSignature{ \
-        .type = ::core::Type::variadic, \
-        .name = NAME \
-    }
+    ::core::interpreter::CommandFlags Command::flags()
 
 #define DEFINE_COMMAND(NAME) \
     namespace NAME \
     { \
     struct Command \
     { \
-        static bool execute(const ::core::Arguments& args, const ::core::Flags& flags, bool force, ::core::Context& context); \
+        static bool execute(const ::core::interpreter::Values& args, const int flags, bool force, ::core::Context& context); \
         static void init() \
         { \
-            ::core::Commands::$register( \
-                ::core::Command{ \
+            ::core::interpreter::Commands::$register( \
+                ::core::interpreter::Command{ \
                     .name = #NAME, \
                     .arguments = Command::arguments(), \
                     .flags = Command::flags(), \
@@ -118,12 +118,12 @@ struct Commands final
                 }); \
         } \
         static const char* help; \
-        static ::core::CommandArguments arguments(); \
-        static ::core::CommandFlags flags(); \
+        static ::core::interpreter::CommandArguments arguments(); \
+        static ::core::interpreter::CommandFlags flags(); \
         static inline const char* name = #NAME; \
         static inline bool registered = (Command::init(), true); \
     }; \
     } \
     namespace NAME
 
-}  // namespace core
+}  // namespace core::interpreter

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "core/log_entry.hpp"
+#include <cstdio>
 
-#include <iosfwd>
+#include "core/log_entry.hpp"
 
 namespace sys
 {
 
-void printLogEntry(const LogEntry& entry, std::ostream& os);
+void printLogEntry(const LogEntry& entry, FILE* file);
 
 }  // namespace sys

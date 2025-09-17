@@ -1,13 +1,13 @@
-#include "core/command.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/symbol.hpp"
 #include "core/message_line.hpp"
-#include "core/variable.hpp"
 
 namespace core
 {
 
 DEFINE_COMMAND(help)
 {
-    HELP() = "print help about command/variable";
+    HELP() = "print help about command/symbol";
 
     FLAGS()
     {
@@ -17,29 +17,31 @@ DEFINE_COMMAND(help)
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "name")
+            {Type::string, "name"}
         };
     };
 
     EXECUTOR()
     {
-        const auto command = Commands::find(args[0].string);
+        auto name = *args[0].string();
+
+        const auto command = interpreter::Commands::find(name);
 
         if (command)
         {
-            context.messageLine.info() << command->name << ": " << command->help;
+            context.messageLine.info() << name << ": " << command->help;
             return true;
         }
 
-        const auto variable = Variables::find(args[0].string);
+        const auto symbol = interpreter::Symbols::find(name);
 
-        if (not variable)
+        if (not symbol)
         {
-            context.messageLine.error() << "No help entry for: " << args[0].string;
+            context.messageLine.error() << "No help entry for: " << name;
             return false;
         }
 
-        context.messageLine.info() << variable->name << ": " << variable->help;
+        context.messageLine.info() << name << ": " << symbol->help();
         return true;
     }
 }

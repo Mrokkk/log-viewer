@@ -1,6 +1,6 @@
 #include "core/app.hpp"
 #include "core/context.hpp"
-#include "ui/ftxui.hpp"
+#include "ui/ftxui_creator.hpp"
 
 int main(int argc, char* const* argv)
 {

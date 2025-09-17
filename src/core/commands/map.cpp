@@ -1,4 +1,4 @@
-#include "core/command.hpp"
+#include "core/interpreter/command.hpp"
 #include "core/input.hpp"
 
 namespace core
@@ -12,14 +12,14 @@ namespace core
         ARGUMENTS() \
         { \
             return { \
-                ARGUMENT(string, "lhs"), \
-                ARGUMENT(string, "rhs") \
+                {Type::string, "lhs"}, \
+                {Type::string, "rhs"} \
             }; \
         } \
         EXECUTOR() \
         { \
-            const auto& lhs = args[0].string; \
-            const auto& rhs = args[1].string; \
+            const auto lhs = *args[0].stringView(); \
+            const auto rhs = *args[1].stringView(); \
             InputMappingFlags inputFlags; \
             if (force) \
             { \

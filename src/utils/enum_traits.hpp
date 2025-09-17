@@ -6,6 +6,6 @@ namespace utils
 {
 
 template <typename T>
-concept IsEnum = std::is_enum_v<T>;
+concept Enum = std::is_enum_v<T>;
 
 }  // namespace utils

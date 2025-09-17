@@ -3,22 +3,22 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "core/lexer.hpp"
+#include "core/interpreter/lexer.hpp"
 #include "utils/buffer.hpp"
 
-using namespace core;
+using namespace core::interpreter;
 
-namespace core
+namespace core::interpreter
 {
 
-std::ostream& operator<<(std::ostream& os, Token::Type type)
+std::ostream& operator<<(std::ostream& os, const Token::Type type)
 {
     utils::Buffer buf;
     buf << type;
     return os << buf.view();
 }
 
-}  // namespace core
+}  // namespace core::interpreter
 
 #define ASSERT_NEXT_TOKEN(TYPE, VALUE) \
     do \

@@ -7,18 +7,22 @@ namespace core
 
 using AliasesMap = std::flat_map<std::string_view, Alias>;
 
-static AliasesMap map;
+static AliasesMap& map()
+{
+    static AliasesMap map;
+    return map;
+}
 
 void Aliases::$register(Alias alias)
 {
-    map[alias.name] = std::move(alias);
+    map()[alias.name] = std::move(alias);
 }
 
 Alias* Aliases::find(const std::string_view& name)
 {
-    auto aliasIt = map.find(name);
+    auto aliasIt = map().find(name);
 
-    if (aliasIt == map.end()) [[unlikely]]
+    if (aliasIt == map().end()) [[unlikely]]
     {
         return nullptr;
     }
@@ -28,7 +32,7 @@ Alias* Aliases::find(const std::string_view& name)
 
 void Aliases::forEach(std::function<void(const Alias&)> callback)
 {
-    for (const auto& [_, alias] : map)
+    for (const auto& [_, alias] : map())
     {
         callback(alias);
     }

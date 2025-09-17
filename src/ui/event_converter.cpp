@@ -5,6 +5,7 @@
 #include <ftxui/component/event.hpp>
 
 #include "core/input.hpp"
+#include "utils/maybe.hpp"
 
 using namespace ftxui;
 
@@ -13,13 +14,13 @@ namespace ui
 
 static std::flat_map<Event, core::KeyPress> eventToKeyPress;
 
-std::expected<core::KeyPress, bool> convertEvent(const ftxui::Event& event)
+utils::Maybe<core::KeyPress> convertEvent(const ftxui::Event& event)
 {
     auto it = eventToKeyPress.find(event);
 
     if (it == eventToKeyPress.end()) [[unlikely]]
     {
-        return std::unexpected(false);
+        return {};
     }
 
     return it->second;

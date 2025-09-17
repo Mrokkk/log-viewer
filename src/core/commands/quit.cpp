@@ -1,6 +1,6 @@
 #include "core/alias.hpp"
-#include "core/command.hpp"
 #include "core/context.hpp"
+#include "core/interpreter/command.hpp"
 #include "core/main_loop.hpp"
 #include "core/main_view.hpp"
 

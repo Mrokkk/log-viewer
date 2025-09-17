@@ -8,7 +8,7 @@
 
 #include "utils/buffer.hpp"
 
-namespace core
+namespace core::interpreter
 {
 
 utils::Buffer& operator<<(utils::Buffer& buf, const Token::Type type)
@@ -350,4 +350,4 @@ std::expected<Tokens, std::string> parse(const std::string& code)
     return std::move(state.tokens);
 }
 
-}  // namespace core
+}  // namespace core::interpreter

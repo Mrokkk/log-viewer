@@ -35,7 +35,7 @@ struct MainView : utils::Immobile
     void reloadAll(Context& context);
     void resize(int width, int height, Context& context);
     WindowNode& createWindow(std::string name, Parent parent, Context& context);
-    void bufferLoaded(const TimeOrError& result, WindowNode& node, Context& context);
+    void bufferLoaded(TimeOrError result, WindowNode& node, Context& context);
     void escape();
     void quitCurrentWindow(Context& context);
     void scrollTo(size_t lineNumber, Context& context);

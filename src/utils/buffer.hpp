@@ -5,12 +5,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <string>
 #include <string_view>
 #include <type_traits>
 
 #include "utils/bitflag.hpp"
 #include "utils/enum_traits.hpp"
+#include "utils/inline.hpp"
 
 namespace utils
 {
@@ -30,12 +30,12 @@ struct Pointer final
 {
     template <typename T>
     requires PrintablePointer<T>
-    constexpr Pointer(T ptr)
+    ALWAYS_INLINE constexpr Pointer(T ptr)
         : mPtr(ptr)
     {
     }
 
-    constexpr operator const void*() const
+    ALWAYS_INLINE constexpr operator const void*() const
     {
         return mPtr;
     }
@@ -190,17 +190,17 @@ struct NoShowBase final {};
 
 struct IntegralBase final
 {
-    constexpr explicit IntegralBase(detail::Flags f)
+    ALWAYS_INLINE constexpr explicit IntegralBase(detail::Flags f)
         : flags(f)
     {
     }
 
-    constexpr IntegralBase operator()(detail::ShowBase) const
+    ALWAYS_INLINE constexpr IntegralBase operator()(detail::ShowBase) const
     {
         return IntegralBase(flags | detail::Flags::showbase);
     }
 
-    constexpr IntegralBase operator()(detail::NoShowBase) const
+    ALWAYS_INLINE constexpr IntegralBase operator()(detail::NoShowBase) const
     {
         return IntegralBase(flags & ~detail::Flags::showbase);
     }
@@ -224,17 +224,17 @@ constexpr static detail::NoShowBase noshowbase;
 constexpr static IntegralBase hex(detail::Flags::hex);
 constexpr static IntegralBase oct(detail::Flags::oct);
 
-constexpr static Precision precision(uint8_t val)
+ALWAYS_INLINE constexpr static Precision precision(uint8_t val)
 {
     return {val};
 }
 
-constexpr inline Padding leftPadding(int val)
+ALWAYS_INLINE constexpr static Padding leftPadding(int val)
 {
     return {val};
 }
 
-constexpr inline Padding rightPadding(int val)
+ALWAYS_INLINE constexpr static Padding rightPadding(int val)
 {
     return {-val};
 }
@@ -257,7 +257,7 @@ constexpr inline detail::Manipulator<T> operator|(T, IntegralBase)
 
 template <typename T>
 requires std::integral<T>
-constexpr inline detail::Manipulator<T> operator|(detail::Manipulator<T>&& m, IntegralBase base)
+ALWAYS_INLINE constexpr detail::Manipulator<T> operator|(detail::Manipulator<T>&& m, IntegralBase base)
 {
     m.flags &= ~(detail::Flags::hex | detail::Flags::oct | detail::Flags::showbase);
     m.flags |= base.flags;
@@ -271,7 +271,7 @@ constexpr inline detail::Manipulator<T> operator|(detail::Manipulator<T>&&, Inte
 
 template <typename T>
 requires std::floating_point<T>
-constexpr inline detail::Manipulator<T> operator|(T value, Precision p)
+ALWAYS_INLINE constexpr detail::Manipulator<T> operator|(T value, Precision p)
 {
     return detail::Manipulator<T>{
         .flags{},
@@ -287,7 +287,7 @@ constexpr inline detail::Manipulator<T> operator|(T, Precision)
 
 template <typename T>
 requires std::floating_point<T>
-constexpr inline detail::Manipulator<T> operator|(detail::Manipulator<T>&& m, Precision p)
+ALWAYS_INLINE constexpr detail::Manipulator<T> operator|(detail::Manipulator<T>&& m, Precision p)
 {
     m.precision = p.value;
     return m;
@@ -300,7 +300,7 @@ constexpr inline detail::Manipulator<T> operator|(detail::Manipulator<T>&&, Prec
 
 template <typename T>
 requires (not detail::IsManipulator<T>)
-constexpr inline detail::Manipulator<T> operator|(T value, Padding pad)
+ALWAYS_INLINE constexpr detail::Manipulator<T> operator|(T value, Padding pad)
 {
     return detail::Manipulator<T>{
         .flags{},
@@ -310,7 +310,7 @@ constexpr inline detail::Manipulator<T> operator|(T value, Padding pad)
 }
 
 template <typename T>
-constexpr inline detail::Manipulator<T> operator|(detail::Manipulator<T>&& m, Padding pad)
+ALWAYS_INLINE constexpr detail::Manipulator<T> operator|(detail::Manipulator<T>&& m, Padding pad)
 {
     m.padding = pad.value;
     return m;
@@ -329,6 +329,7 @@ struct Buffer final
         , mSize(0)
         , mCapacity(sizeof(mOwnBuffer))
     {
+        mBuffer[0] = '\0';
     }
 
     constexpr Buffer(Buffer&& other)
@@ -363,8 +364,9 @@ struct Buffer final
 
     constexpr Buffer& operator<<(const char value)
     {
-        ensureCapacity(1);
+        ensureCapacity(2);
         mBuffer[mSize++] = value;
+        mBuffer[mSize] = '\0';
         return *this;
     }
 
@@ -442,9 +444,10 @@ struct Buffer final
     constexpr Buffer& operator<<(T&& string)
     {
         std::string_view sv(std::forward<T>(string));
-        ensureCapacity(sv.size());
+        ensureCapacity(sv.size() + 1);
         std::memcpy(mBuffer + mSize, sv.data(), sv.size());
         mSize += sv.size();
+        mBuffer[mSize] = '\0';
         return *this;
     }
 
@@ -455,7 +458,7 @@ struct Buffer final
         std::string_view sv(std::forward<T>(m.value));
 
         const size_type absPadding = std::abs(m.padding);
-        size_type requiredSize = sv.size() + absPadding;
+        size_type requiredSize = sv.size() + absPadding + 1;
         size_type leftPadding = m.padding > 0 and absPadding > sv.size() ? absPadding - sv.size() : 0;
         size_type rightPadding = m.padding < 0 and absPadding > sv.size() ? absPadding - sv.size() : 0;
 
@@ -467,19 +470,20 @@ struct Buffer final
         mSize += sv.size();
 
         for (size_type i = 0; i < rightPadding; mBuffer[mSize++] = ' ', ++i);
+        mBuffer[mSize] = '\0';
 
         return *this;
     }
 
     template <typename T>
-    requires IsEnum<T>
+    requires Enum<T>
     constexpr Buffer& operator<<(const T value)
     {
         return operator<<(std::underlying_type_t<T>(value));
     }
 
     template <typename T>
-    requires IsEnum<T>
+    requires Enum<T>
     constexpr Buffer& operator<<(detail::Manipulator<T>&& m)
     {
         return operator<<(m.template convert<std::underlying_type_t<T>>());
@@ -499,10 +503,7 @@ struct Buffer final
         return operator<<(m.template convert<detail::Pointer>());
     }
 
-    constexpr Buffer& operator<<(const std::string& string)
-    {
-        return operator<<(std::string_view(string));
-    }
+    Buffer& operator<<(const std::string& string);
 
     template <typename T>
     requires (std::convertible_to<T, std::string> and not std::convertible_to<T, std::string_view>)
@@ -523,7 +524,12 @@ struct Buffer final
 
     constexpr void clear()
     {
-        mSize = 0;
+        mBuffer[mSize = 0] = '\0';
+    }
+
+    constexpr const char* data() const
+    {
+        return mBuffer;
     }
 
     constexpr std::string_view view() const
@@ -531,35 +537,15 @@ struct Buffer final
         return std::string_view(mBuffer, mSize);
     }
 
-    constexpr const char* buffer() const
-    {
-        return mBuffer;
-    }
+    std::string str() const;
 
-    constexpr std::string str() const
-    {
-        return std::string(mBuffer, mSize);
-    }
+    constexpr size_type length() const { return mSize; }
 
-    constexpr size_type length() const
-    {
-        return mSize;
-    }
+    constexpr size_type size() const { return mSize; }
 
-    constexpr size_type size() const
-    {
-        return mSize;
-    }
+    constexpr size_type capacity() const { return mCapacity; }
 
-    constexpr size_type capacity() const
-    {
-        return mCapacity;
-    }
-
-    constexpr operator std::string_view() const
-    {
-        return view();
-    }
+    constexpr operator std::string_view() const { return view(); }
 
     constexpr Buffer& write(const char* data, size_type count)
     {
@@ -591,7 +577,7 @@ private:
 
         other.mBuffer = other.mOwnBuffer;
         other.mCapacity = initialCapacity;
-        other.mSize = 0;
+        other.clear();
     }
 
     constexpr static size_type max(size_type a, size_type b)
@@ -608,7 +594,7 @@ private:
             if (mBuffer == mOwnBuffer)
             {
                 mBuffer = static_cast<char*>(std::malloc(newCapacity));
-                memcpy(mBuffer, mOwnBuffer, mSize);
+                std::memcpy(mBuffer, mOwnBuffer, mSize);
             }
             else
             {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -11,7 +10,7 @@
 namespace sys
 {
 
-using Paths = std::vector<std::filesystem::path>;
+using Paths = std::vector<std::string>;
 
 const char* errorDescribe(Error error);
 void initialize();

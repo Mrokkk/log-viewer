@@ -36,11 +36,13 @@ include(FindPkgConfig)
 pkg_check_modules(BACKTRACE REQUIRED libbacktrace)
 
 option(BUILD_TESTS "Build tests" OFF)
+option(LTO "Enable Link Time Optimization" OFF)
 option(OPTIMIZE "Enable compiler optimizations" ON)
 option(SANITIZE "Enable ASan and UBsan" OFF)
 option(COVERAGE "Enable collecting code coverage in tests" OFF)
 
 message(STATUS "Build tests: ${BUILD_TESTS}")
+message(STATUS "Enable Link Time Optimization: ${LTO}")
 message(STATUS "Enable compiler optimizations: ${OPTIMIZE}")
 message(STATUS "Enable ASan and UBsan: ${SANITIZE}")
 message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
@@ -57,6 +59,10 @@ if(SANITIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined -Wl,-lasan -fno-omit-frame-pointer")
 endif()
 
+if(LTO)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")
+endif()
+
 add_executable(${PROJECT_NAME}
 
     src/core/alias.cpp
@@ -65,7 +71,6 @@ add_executable(${PROJECT_NAME}
     src/core/assert.cpp
     src/core/buffer.cpp
     src/core/buffers.cpp
-    src/core/command.cpp
     src/core/command_line.cpp
     src/core/commands/echo.cpp
     src/core/commands/filter.cpp
@@ -82,22 +87,24 @@ add_executable(${PROJECT_NAME}
     src/core/context.cpp
     src/core/dirs.cpp
     src/core/entity.cpp
-    src/core/error.cpp
     src/core/file.cpp
     src/core/fuzzy.cpp
     src/core/input.cpp
-    src/core/interpreter.cpp
-    src/core/lexer.cpp
+    src/core/interpreter/command.cpp
+    src/core/interpreter/interpreter.cpp
+    src/core/interpreter/lexer.cpp
+    src/core/interpreter/object.cpp
+    src/core/interpreter/symbol.cpp
+    src/core/interpreter/value.cpp
     src/core/logger.cpp
     src/core/main_view.cpp
     src/core/message_line.cpp
     src/core/mode.cpp
-    src/core/path.cpp
     src/core/picker.cpp
     src/core/readline.cpp
+    src/core/regex.cpp
     src/core/thread.cpp
     src/core/type.cpp
-    src/core/variable.cpp
     src/core/window.cpp
     src/core/window_node.cpp
     src/main.cpp
@@ -114,6 +121,7 @@ add_executable(${PROJECT_NAME}
     src/ui/text_box.cpp
     src/ui/ui_component.cpp
     src/ui/window_renderer.cpp
+    src/utils/buffer.cpp
     src/utils/string.cpp
     src/utils/time.cpp
 

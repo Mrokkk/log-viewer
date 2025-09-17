@@ -9,17 +9,16 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/colored_string.hpp>
 
-#include "core/command.hpp"
 #include "core/commands/open.hpp"
 #include "core/dirs.hpp"
 #include "core/fuzzy.hpp"
 #include "core/input.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/symbols_map.hpp"
 #include "core/logger.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
-#include "core/variable.hpp"
-#include "core/variables_map.hpp"
 #include "ui/event_handler.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
@@ -205,8 +204,8 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
 
         case Picker::Type::commands:
             strings.clear();
-            core::Commands::forEach(
-                [this, leftWidth, width](const core::Command& command)
+            core::interpreter::Commands::forEach(
+                [this, leftWidth, width](const core::interpreter::Command& command)
                 {
                     utils::Buffer commandDesc;
 
@@ -214,7 +213,7 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
 
                     for (const auto& flag : command.flags.get())
                     {
-                        commandDesc << "[-" << flag << "] ";
+                        commandDesc << "[-" << flag.name << "] ";
                     }
 
                     for (const auto& arg : command.arguments.get())
@@ -239,23 +238,26 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::variables:
-            strings = core::variablesMap()
+            strings = core::interpreter::symbolsMap()
                 | views::transform(
-                    [&context, leftWidth, width](const auto& e)
+                    [leftWidth, width](const core::interpreter::SymbolsMap::const_reference& e)
                     {
-                        utils::Buffer variableDesc;
-                        variableDesc << e.second.name << '{';
-                        if (not e.second.writer)
-                        {
-                            variableDesc << "const ";
-                        }
+                        auto& variable = *e.second;
+                        auto& variableName = e.first;
 
-                        variableDesc << e.second.type << "} : " << core::VariableWithContext{e.second, context};
+                        utils::Buffer variableDesc;
+                        variableDesc << variableName << '{';
+
+                        variableDesc << variable.value().type() << "} : " << variable;
 
                         std::ostringstream ss;
-                        ss << std::left << std::setw(leftWidth) << variableDesc.view()
-                           << std::right << std::setw(width - leftWidth)
-                           << ColorWrapped(e.second.help, Palette::Picker::additionalInfoFg);
+                        ss << std::left << std::setw(leftWidth) << variableDesc.view();
+
+                        if (auto help = variable.help())
+                        {
+                           ss << std::right << std::setw(width - leftWidth)
+                              << ColorWrapped(help, Palette::Picker::additionalInfoFg);
+                        }
 
                         return ss.str();
                     })
@@ -335,7 +337,7 @@ bool Picker::Impl::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Conte
         content->TakeFocus(); // Make sure that picker view is always focused
         return input->OnEvent(event);
     }
-    return result.value();
+    return *result;
 }
 
 void Picker::Impl::onFilePickerChange()
@@ -350,7 +352,7 @@ void Picker::Impl::onFilePickerChange()
         return;
     }
 
-    cachedStrings = result.value();
+    cachedStrings = *result;
 
     for (auto& entry : cachedStrings)
     {

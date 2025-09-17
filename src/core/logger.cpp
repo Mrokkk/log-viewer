@@ -1,9 +1,8 @@
 #include "logger.hpp"
 
 #include <atomic>
+#include <cstdio>
 #include <ctime>
-#include <fstream>
-#include <iostream>
 #include <mutex>
 #include <string_view>
 
@@ -15,10 +14,23 @@
 
 using LogRingBuffer = utils::RingBuffer<LogEntry>;
 
-static std::atomic_bool closed;
-static std::ofstream    fileStream;
-static std::mutex       lock;
-static LogRingBuffer    ringBuffer(1024);
+namespace core
+{
+
+namespace
+{
+
+struct LoggerState
+{
+    std::atomic_bool closed{false};
+    FILE*            fileStream{nullptr};
+    std::mutex       lock;
+    LogRingBuffer    ringBuffer{1024};
+};
+
+}  // namespace
+
+static LoggerState state;
 
 static thread_local utils::Buffer buffer;
 
@@ -29,28 +41,34 @@ Logger::Flusher Logger::log(Severity severity, LogEntryFlags flags, const char* 
 
 void Logger::flushToStderr()
 {
-    closed = true;
-    if (not fileStream.is_open())
+    state.closed = true;
+    if (not state.fileStream)
     {
-        ringBuffer.forEach(
+        state.ringBuffer.forEach(
             [](const LogEntry& entry)
             {
-                sys::printLogEntry(entry, std::cerr);
+                sys::printLogEntry(entry, stderr);
             });
-        std::cerr.flush();
+        fflush(stderr);
     }
 }
 
 void Logger::setLogFile(std::string_view path)
 {
-    fileStream.open(path.data());
+    std::string str(path);
+    state.fileStream = fopen(str.c_str(), "w");
+
+    if (not state.fileStream)
+    {
+        fprintf(stderr, "Failed to open: %s\n", str.c_str());
+    }
 }
 
 LogEntries Logger::logEntries()
 {
     LogEntries logs;
-    logs.reserve(ringBuffer.size());
-    ringBuffer.forEach(
+    logs.reserve(state.ringBuffer.size());
+    state.ringBuffer.forEach(
         [&logs](const auto& entry)
         {
             logs.push_back(entry);
@@ -71,22 +89,23 @@ void Logger::registerLogEntry(Severity severity, LogEntryFlags flags, const char
 
     buffer.clear();
 
-    std::scoped_lock scopedLock(lock);
+    std::scoped_lock scopedLock(state.lock);
 
-    if (fileStream.is_open())
+    if (state.fileStream)
     {
-        sys::printLogEntry(entry, fileStream);
-        fileStream.flush();
-    }
-
-    if (closed) [[unlikely]]
-    {
-        sys::printLogEntry(entry, std::cerr);
-        std::cerr.flush();
+        sys::printLogEntry(entry, state.fileStream);
+        fflush(state.fileStream);
         return;
     }
 
-    ringBuffer.pushBack(std::move(entry));
+    if (state.closed) [[unlikely]]
+    {
+        sys::printLogEntry(entry, stderr);
+        fflush(stderr);
+        return;
+    }
+
+    state.ringBuffer.pushBack(std::move(entry));
 }
 
 Logger::Flusher::Flusher(
@@ -102,3 +121,5 @@ Logger::Flusher::Flusher(
     , mBuffer(buffer)
 {
 }
+
+}  // namespace core

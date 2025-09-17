@@ -1,6 +1,6 @@
-#include "core/command.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/symbol.hpp"
 #include "core/message_line.hpp"
-#include "core/variable.hpp"
 
 namespace core
 {
@@ -17,21 +17,22 @@ DEFINE_COMMAND(get)
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "variable")
+            {Type::string, "variable"}
         };
     };
 
     EXECUTOR()
     {
-        const auto variable = Variables::find(args[0].string);
+        const auto variableName = *args[0].string();
+        const auto variable = interpreter::Symbols::find(variableName);
 
         if (not variable)
         {
-            context.messageLine.error() << "Unknown variable: " << args[0].string;
+            context.messageLine.error() << "Unknown variable: " << variableName;
             return false;
         }
 
-        context.messageLine.info() << VariableWithContext{*variable, context};
+        context.messageLine.info() << variable->value();
 
         return true;
     }

@@ -1,3 +1,5 @@
+#include <cstdio>
+#include <ctime>
 #ifdef __unix__
 #define LOG_FLAGS LogEntryFlags::noSourceLocation
 #include "system.hpp"
@@ -10,9 +12,6 @@
 #include <dlfcn.h>
 #include <expected>
 #include <fcntl.h>
-#include <ios>
-#include <iostream>
-#include <sstream>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -49,14 +48,6 @@ struct BacktraceContext
     ProcessMappings maps;
 };
 
-template <typename T>
-std::string toHex(T value)
-{
-    std::ostringstream ss;
-    ss << std::hex << std::showbase << value;
-    return ss.str();
-}
-
 static std::string mappingNameFind(const ProcessMappings& mappings, uintptr_t address)
 {
     auto mappingIt = std::ranges::find_if(
@@ -66,9 +57,18 @@ static std::string mappingNameFind(const ProcessMappings& mappings, uintptr_t ad
             return address >= mapping.start and address < mapping.end;
         });
 
-    return mappingIt != mappings.end()
-        ? mappingIt->name + "+" + toHex(address - mappingIt->start)
-        : "??";
+    utils::Buffer buf;
+
+    if (mappingIt != mappings.end())
+    {
+        buf << mappingIt->name << '+' << ((address - mappingIt->start) | utils::hex(utils::showbase));
+    }
+    else
+    {
+        buf << "??";
+    }
+
+    return buf.str();
 }
 
 using BacktraceCreateStateFn = decltype(&backtrace_create_state);
@@ -122,11 +122,7 @@ static void backtraceErrorCallback(void*, const char* message, int error)
 template <typename T>
 static T hexTo(const std::string& string)
 {
-    T value;
-    std::stringstream ss;
-    ss << std::hex << string;
-    ss >> value;
-    return value;
+    return strtol(string.c_str(), nullptr, 16);
 }
 
 static void logLineOfWords(const utils::Strings& words)
@@ -209,7 +205,7 @@ void initialize()
 
     if (not libbacktrace)
     {
-        std::cerr << "cannot load libbacktrace.so\n";
+        fprintf(stderr, "cannot load libbacktrace.so\n");
         return;
     }
 
@@ -218,7 +214,7 @@ void initialize()
 
     if (not backtraceFull or not backtraceCreateState)
     {
-        std::cerr << "cannot find backtrace_full or backtrace_create_state\n";
+        fprintf(stderr, "cannot find backtrace_full or backtrace_create_state\n");
         backtraceFull = nullptr;
         backtraceCreateState = nullptr;
         return;
@@ -326,50 +322,69 @@ Paths getConfigFiles()
         return {};
     }
 
-    return {std::filesystem::path(home) / ".config/log-viewer/config"};
+    utils::Buffer buf;
+
+    buf << home << "/.config/log-viewer/config";
+
+    auto path = buf.str();
+
+    struct stat s;
+
+    if (stat(path.c_str(), &s) == -1) [[unlikely]]
+    {
+        return {};
+    }
+
+    return {path};
 }
 
 int copyToClipboard(std::string string)
 {
-    std::stringstream ss;
-    ss << "echo \'" << std::move(string) << "\' | xclip -sel clip";
-    auto command = ss.str();
-    system(command.c_str());
+    utils::Buffer buf;
+    buf << "echo \'" << std::move(string) << "\' | xclip -sel clip";
+    system(buf.data());
     return 0;
 }
 
-void printLogEntry(const LogEntry& entry, std::ostream& os)
+void printLogEntry(const LogEntry& entry, FILE* file)
 {
-    std::string_view file(entry.location.file);
+    char timeBuf[32];
 
-    os << COLOR_GREEN "[" << std::put_time(std::localtime(&entry.time), "%F %T") << "]" COLOR_RESET " ";
+    struct tm tmInfo;
+    localtime_r(&entry.time, &tmInfo);
+
+    strftime(timeBuf, sizeof(timeBuf), "%F %T", &tmInfo);
+
+#define COLORED(STRING, COLOR) \
+    COLOR STRING COLOR_RESET
+
+    fprintf(file, COLORED("[%s]", COLOR_GREEN) " ", timeBuf);
 
     if (entry.header)
     {
-        os << COLOR_BLUE "[" << entry.header << "]" COLOR_RESET " ";
+        fprintf(file, COLORED("[%s]", COLOR_BLUE) " ", entry.header);
     }
 
     if (not entry.flags[LogEntryFlags::noSourceLocation])
     {
-        os << entry.location.func << ": ";
+        fprintf(file, "%s: ", entry.location.func);
     }
 
     switch (entry.severity)
     {
         case Severity::debug:
-            os << "\e[38;5;245m";
+            fprintf(file, COLORED("%s\n", "\e[38;5;245m"), entry.message.c_str());
             break;
         case Severity::warning:
-            os << COLOR_YELLOW;
+            fprintf(file, COLORED("%s\n", COLOR_YELLOW), entry.message.c_str());
             break;
         case Severity::error:
-            os << COLOR_RED;
+            fprintf(file, COLORED("%s\n", COLOR_RED), entry.message.c_str());
             break;
         default:
+            fprintf(file, "%s\n", entry.message.c_str());
             break;
     }
-
-    os << entry.message << COLOR_RESET "\n";
 }
 
 }  // namespace sys

@@ -1,12 +1,12 @@
 #pragma once
 
-#include <expected>
 #include <functional>
 #include <initializer_list>
 #include <utility>
 
 #include "core/fwd.hpp"
 #include "ui/fwd.hpp"
+#include "utils/maybe.hpp"
 
 namespace ftxui
 {
@@ -24,7 +24,7 @@ struct EventHandlers
     EventHandlers(std::initializer_list<EventHandlerPair>&& list);
     ~EventHandlers();
 
-    std::expected<bool, int> handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const;
+    utils::Maybe<bool> handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const;
 
 private:
     struct Impl;

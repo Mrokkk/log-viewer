@@ -3,9 +3,6 @@
 #include <cassert>
 #include <flat_map>
 #include <getopt.h>
-#include <iomanip>
-#include <ios>
-#include <iostream>
 #include <string_view>
 #include <vector>
 
@@ -21,11 +18,11 @@ namespace core
 
     std::vector<const Option*> positionalOptions;
 
-    size_t columnWidth{0};
+    int columnWidth{0};
 
     for (const auto& option : registeredOptions)
     {
-        size_t optionWidth{10};
+        int optionWidth{10};
         if (not option.longName.empty())
         {
             optionWidth += 2 + option.longName.length();
@@ -40,16 +37,14 @@ namespace core
         }
     }
 
-    std::cerr << "Usage: " << program_invocation_short_name << " [option]...";
+    fprintf(stderr, "Usage: %s [option]...", program_invocation_short_name);
 
     for (const auto positionalOption : positionalOptions)
     {
-        std::cerr << " [" << positionalOption->longName << ']';
+        fprintf(stderr, " [%s]", positionalOption->longName.data());
     }
 
-    std::cerr << "\n\n";
-
-    std::cerr << "Options:\n\n";
+    fprintf(stderr, "\n\nOptions:\n\n");
 
     for (const auto& option : registeredOptions)
     {
@@ -83,10 +78,8 @@ namespace core
             buf << "--" << option.longName;
         }
 
-        std::cerr << std::left << std::setw(columnWidth) << buf.str() << std::setw(0) << option.help << '\n';
+        fprintf(stderr, "%*s %s\n", -columnWidth, buf.data(), option.help.data());
     }
-
-    std::cerr << std::endl;
 
     exit(0);
 }

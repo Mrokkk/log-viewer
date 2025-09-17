@@ -52,6 +52,9 @@ read_cache()
                 "OPTIMIZE:"*)
                     OPTIMIZE="${line#*=}"
                     ;;
+                "LTO:"*)
+                    LTO="${line#*=}"
+                    ;;
                 "COVERAGE:"*)
                     COVERAGE="${line#*=}"
                     ;;
@@ -80,6 +83,14 @@ read_flags()
                     REGENERATE="true"
                 fi
                 OPTIMIZE="${temp}"
+                ;;
+            --lto=*)
+                temp="${1#*=}"
+                if [ "${temp}" != "${LTO}" ]
+                then
+                    REGENERATE="true"
+                fi
+                LTO="${temp}"
                 ;;
             --coverage=*)
                 temp="${1#*=}"
@@ -123,7 +134,14 @@ regenerate_cmake()
 {
     if [ ! -d "${BUILD_DIR}" ] || [ ! -f "${BUILD_DIR}/build.ninja" ] || [ -n "${REGENERATE}" ]
     then
-        cmake -DOPTIMIZE=${OPTIMIZE} -DSANITIZE=${SANITIZE} -DCOVERAGE=${COVERAGE} -DBUILD_TESTS=${BUILD_TESTS} -GNinja -B "${BUILD_DIR}" "${SRC_DIR}"
+        cmake \
+            -DOPTIMIZE=${OPTIMIZE} \
+            -DLTO=${LTO} \
+            -DSANITIZE=${SANITIZE} \
+            -DCOVERAGE=${COVERAGE} \
+            -DBUILD_TESTS=${BUILD_TESTS} \
+            -GNinja \
+            -B "${BUILD_DIR}" "${SRC_DIR}"
     fi
 }
 
@@ -191,6 +209,7 @@ fi
 COMMAND=
 ARGS=
 OPTIMIZE="ON"
+LTO="OFF"
 COVERAGE="OFF"
 SANITIZE="OFF"
 BUILD_TESTS="OFF"

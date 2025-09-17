@@ -7,13 +7,12 @@
 #include <string_view>
 #include <type_traits>
 
-#include <re2/re2.h>
-
 #include "core/assert.hpp"
 #include "core/config.hpp"
 #include "core/context.hpp"
 #include "core/line.hpp"
 #include "core/logger.hpp"
+#include "core/regex.hpp"
 #include "core/thread.hpp"
 #include "utils/format.hpp"
 #include "utils/math.hpp"
@@ -24,9 +23,9 @@
 namespace core
 {
 
-using Result = std::expected<bool, Error>;
+using Result = std::expected<bool, BufferError>;
 using Results = std::vector<Result>;
-using StringViewOrError = std::expected<std::string_view, Error>;
+using StringViewOrError = std::expected<std::string_view, BufferError>;
 
 enum struct BufferType : char
 {
@@ -210,7 +209,7 @@ void Buffer::load(std::string path, Context& context, FinishedCallback callback)
     if (auto result = mFile.open(std::move(path)); not result) [[unlikely]]
     {
         impl.setAborted();
-        callback(std::unexpected(Error::systemError(std::move(result.error()))));
+        callback(std::unexpected(BufferError::systemError(std::move(result.error()))));
         return;
     }
 
@@ -253,7 +252,7 @@ void Buffer::grep(std::string pattern, GrepOptions options, BufferId parentBuffe
             if (not parentBuffer) [[unlikely]]
             {
                 impl.setAborted();
-                callback(std::unexpected(Error::aborted("Parent buffer has been closed")));
+                callback(std::unexpected(BufferError::aborted("Parent buffer has been closed")));
                 return;
             }
 
@@ -295,7 +294,7 @@ void Buffer::filter(size_t start, size_t end, BufferId parentBufferId, Context& 
             if (not parentBuffer) [[unlikely]]
             {
                 impl.setAborted();
-                callback(std::unexpected(Error::aborted("Parent buffer has been closed")));
+                callback(std::unexpected(BufferError::aborted("Parent buffer has been closed")));
                 return;
             }
 
@@ -333,7 +332,7 @@ StringOrError Buffer::readLine(size_t i)
         return std::unexpected(std::move(result.error()));
     }
 
-    return std::string(result.value());
+    return std::string(*result);
 }
 
 void Buffer::search(SearchRequest req, FinishedSearchCallback callback)
@@ -528,7 +527,7 @@ Result Buffer::Impl::readLines(
 
         if (auto result = file.remap(offset, toRead); not result) [[unlikely]]
         {
-            return std::unexpected(Error::systemError(std::move(result.error())));
+            return std::unexpected(BufferError::systemError(std::move(result.error())));
         }
 
         const auto text = file.at(offset);
@@ -539,7 +538,7 @@ Result Buffer::Impl::readLines(
             {
                 if (mStopFlag) [[unlikely]]
                 {
-                    return std::unexpected(Error::aborted("Loading was aborted"));
+                    return std::unexpected(BufferError::aborted("Loading was aborted"));
                 }
 
                 lines.emplace_back(Line{.start = lineStart, .len = offset + i - lineStart});
@@ -568,15 +567,6 @@ static bool caseInsensitiveCheck(const std::string_view& line, const std::string
         {
             return std::tolower(c1) == std::tolower(c2);
         }) != line.end();
-}
-
-static RE2 regexCreate(std::string pattern, bool caseInsensitive)
-{
-    RE2::Options reOptions;
-    reOptions.set_log_errors(false);
-    reOptions.set_case_sensitive(not caseInsensitive);
-
-    return RE2(std::move(pattern), reOptions);
 }
 
 Result Buffer::Impl::singleThreadedGrep(
@@ -708,7 +698,7 @@ Result Buffer::Impl::grep(
             { \
                 if (mStopFlag) [[unlikely]] \
                 { \
-                    return std::unexpected(Error::aborted("Loading was aborted")); \
+                    return std::unexpected(BufferError::aborted("Loading was aborted")); \
                 } \
                 auto lineIndex = LINE_INDEX_TRANSFORM(i); \
                 auto result = readInternal(fileLines[lineIndex], file); \
@@ -734,54 +724,54 @@ Result Buffer::Impl::grep(
         {
             if (parentBuffer.mType == cast(BufferType::filtered))
             {
-                GREP_LOOP(not lineCheck(result.value(), pattern), FILTERED_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(not lineCheck(*result, pattern), FILTERED_LINE_INDEX_TRANSFORM);
             }
             else
             {
-                GREP_LOOP(not lineCheck(result.value(), pattern), FILE_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(not lineCheck(*result, pattern), FILE_LINE_INDEX_TRANSFORM);
             }
         }
         else
         {
             if (parentBuffer.mType == cast(BufferType::filtered))
             {
-                GREP_LOOP(lineCheck(result.value(), pattern), FILTERED_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(lineCheck(*result, pattern), FILTERED_LINE_INDEX_TRANSFORM);
             }
             else
             {
-                GREP_LOOP(lineCheck(result.value(), pattern), FILE_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(lineCheck(*result, pattern), FILE_LINE_INDEX_TRANSFORM);
             }
         }
     }
     else
     {
-        auto re = regexCreate(std::move(pattern), options.caseInsensitive);
+        Regex re(std::move(pattern), options.caseInsensitive);
 
         if (not re.ok()) [[unlikely]]
         {
-            return std::unexpected(Error::regexError(re.error()));
+            return std::unexpected(BufferError::regexError(re.error()));
         }
 
         if (options.inverted)
         {
             if (parentBuffer.mType == cast(BufferType::filtered))
             {
-                GREP_LOOP(not RE2::PartialMatch(result.value(), re), FILTERED_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(not re.partialMatch(*result), FILTERED_LINE_INDEX_TRANSFORM);
             }
             else
             {
-                GREP_LOOP(not RE2::PartialMatch(result.value(), re), FILE_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(not re.partialMatch(*result), FILE_LINE_INDEX_TRANSFORM);
             }
         }
         else
         {
             if (parentBuffer.mType == cast(BufferType::filtered))
             {
-                GREP_LOOP(RE2::PartialMatch(result.value(), re), FILTERED_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(re.partialMatch(*result), FILTERED_LINE_INDEX_TRANSFORM);
             }
             else
             {
-                GREP_LOOP(RE2::PartialMatch(result.value(), re), FILE_LINE_INDEX_TRANSFORM);
+                GREP_LOOP(re.partialMatch(*result), FILE_LINE_INDEX_TRANSFORM);
             }
         }
     }
@@ -837,7 +827,7 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
             return {};
         }
 
-        const auto& line = result.value();
+        const auto& line = *result;
 
         if (req.direction == SearchDirection::forward)
         {
@@ -883,7 +873,7 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
                 return {};
             }
 
-            const auto& line = result.value();
+            const auto& line = *result;
 
             auto it = line.find(pattern);
 
@@ -913,7 +903,7 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
                 return {};
             }
 
-            const auto& line = result.value();
+            const auto& line = *result;
             auto it = line.find(pattern);
 
             if (it != line.npos)
@@ -948,11 +938,66 @@ StringViewOrError Buffer::Impl::readInternal(Line line, File& file)
 
         if (auto result = file.remap(line.start, mappingLen); not result) [[unlikely]]
         {
-            return std::unexpected(Error::systemError(std::move(result.error())));
+            return std::unexpected(BufferError::systemError(std::move(result.error())));
         }
     }
 
     return std::string_view(file.at(line.start), line.len);
+}
+
+BufferError::BufferError(Type error, std::string message)
+    : mMessage(message)
+{
+    mMessage[mMessage.size()] = char(error);
+}
+
+BufferError::operator Type() const
+{
+    return static_cast<Type>(mMessage[mMessage.size()]);
+}
+
+bool BufferError::operator==(Type error) const
+{
+    return static_cast<Type>(mMessage[mMessage.size()]) == error;
+}
+
+std::string_view BufferError::message() const
+{
+    return std::string_view(mMessage.begin(), mMessage.end());
+}
+
+BufferError BufferError::aborted(std::string message)
+{
+    return BufferError(Type::Aborted, std::move(message));
+}
+
+BufferError BufferError::systemError(std::string message)
+{
+    return BufferError(Type::SystemError, std::move(message));
+}
+
+BufferError BufferError::regexError(std::string message)
+{
+    return BufferError(Type::RegexError, std::move(message));
+}
+
+utils::Buffer& operator<<(utils::Buffer& buf, const BufferError& error)
+{
+    switch (error)
+    {
+        case BufferError::Aborted:
+            buf << "[Aborted] ";
+            break;
+
+        case BufferError::SystemError:
+            buf << "[System error] ";
+            break;
+
+        case BufferError::RegexError:
+            buf << "[Regex error] ";
+            break;
+    }
+    return buf << error.message();
 }
 
 }  // namespace core

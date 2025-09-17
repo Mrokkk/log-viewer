@@ -7,54 +7,54 @@
 #include <string_view>
 
 #include "core/alias.hpp"
-#include "core/command.hpp"
 #include "core/context.hpp"
-#include "core/lexer.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/lexer.hpp"
+#include "core/interpreter/symbol.hpp"
+#include "core/interpreter/value.hpp"
 #include "core/main_loop.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "core/type.hpp"
-#include "core/variable.hpp"
 #include "utils/buffer.hpp"
+#include "utils/maybe.hpp"
 #include "utils/string.hpp"
 
-namespace core
+namespace core::interpreter
 {
 
 using TokensSpan = std::span<const Token>;
 
-std::expected<Variable::Value, bool> resolveReference(const std::string& name, Context& context)
+static utils::Maybe<Value> resolveSymbol(const std::string& name, Context& context)
 {
-    const auto variable = Variables::find(name);
+    const auto variable = Symbols::find(name);
 
-    if (not variable)
+    if (not variable) [[unlikely]]
     {
         context.messageLine.error() << "No such variable: " << name;
-        return std::unexpected(false);
+        return {};
     }
 
-    return variable->reader(context);
+    return variable->value();
 }
 
-std::expected<std::string, bool> resolveCurrentPath(Context& context)
+static utils::Maybe<Value> resolveCurrentPath(Context& context)
 {
-    auto path = Variables::find("path");
-
-    if (not path)
+    if (not context.mainView.isCurrentWindowLoaded())
     {
-        context.messageLine.error() << "path variable does not exist";
-        return std::unexpected(false);
+        context.messageLine.error() << "No buffer loaded yet";
+        return {};
     }
 
-    auto value = path->reader(context);
+    auto buffer = context.mainView.currentBuffer();
 
-    if (not value.string)
+    if (not buffer)
     {
-        context.messageLine.error() << "path not set";
-        return std::unexpected(false);
+        context.messageLine.error() << "No buffer loaded yet";
+        return {};
     }
 
-    return *value.string;
+    return Value(Object::create(buffer->filePath()));
 }
 
 static bool executeShellCommand(const TokensSpan& tokens, Context& context)
@@ -74,14 +74,14 @@ static bool executeShellCommand(const TokensSpan& tokens, Context& context)
             }
 
             ++i;
-            const auto value = resolveReference(std::string(tokens[i].value), context);
+            const auto symbol = resolveSymbol(std::string(tokens[i].value), context);
 
-            if (not value)
+            if (not symbol)
             {
                 return false;
             }
 
-            command << getValueString(value.value());
+            command << getValueString(*symbol);
 
             start = nullptr;
         }
@@ -143,6 +143,44 @@ static bool executeGoToCommand(const TokensSpan& tokens, Context& context)
     return true;
 }
 
+static Type convert(const Value& value)
+{
+    switch (value.type())
+    {
+        case Value::Type::boolean:
+            return Type::boolean;
+
+        case Value::Type::integer:
+            return Type::integer;
+
+        case Value::Type::object:
+            switch (value.object()->type())
+            {
+                case Object::Type::string:
+                    return Type::string;
+                default:
+                    return Type::null;
+            }
+
+        case Value::Type::null:
+        default:
+            return Type::null;
+    }
+}
+
+static utils::Maybe<int> getCommandFlagMask(const Command& command, const std::string_view& sv)
+{
+    for (const auto& [flag, flagMask] : command.flags.get())
+    {
+        if (flag == sv)
+        {
+            return flagMask;
+        }
+    }
+
+    return {};
+}
+
 static bool executeCommand(const TokensSpan& tokens, Context& context)
 {
     std::string commandName(tokens[0].value.begin(), tokens[0].value.end());
@@ -155,8 +193,8 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
     }
 
     bool force{false};
-    Arguments args;
-    Flags flags;
+    Values args;
+    std::vector<std::string_view> flags;
 
     for (size_t i = 1; i < tokens.size(); ++i)
     {
@@ -176,16 +214,11 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
                 switch (tokens[i + 1].type)
                 {
                     case Token::Type::intLiteral:
-                        args.emplace_back(
-                            Argument{
-                                .type = Type::integer,
-                                .integer = -1 * (tokens[i + 1].value | utils::to<long>),
-                                .string{tokens[i].value.begin(), tokens[i + 1].value.end()},
-                            });
+                        args.emplace_back(Value(-1 * (tokens[i + 1].value | utils::to<long>)));
                         ++i;
                         break;
                     case Token::Type::identifier:
-                        flags.insert(std::string(tokens[i + 1].value));
+                        flags.emplace_back(tokens[i + 1].value);
                         ++i;
                         break;
                     default:
@@ -202,30 +235,16 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
                 [[fallthrough]];
 
             case Token::Type::intLiteral:
-                args.emplace_back(
-                    Argument{
-                        .type = Type::integer,
-                        .integer = tokens[i].value | utils::to<long>,
-                        .string{tokens[i].value.begin(), tokens[i].value.end()},
-                    });
+                args.emplace_back(Value(tokens[i].value | utils::to<long>));
                 break;
 
             case Token::Type::booleanLiteral:
-                args.emplace_back(
-                    Argument{
-                        .type = Type::boolean,
-                        .boolean = tokens[i].value == "true",
-                        .string{tokens[i].value.begin(), tokens[i].value.end()},
-                    });
+                args.emplace_back(Value(tokens[i].value == "true"));
                 break;
 
             case Token::Type::identifier:
             case Token::Type::stringLiteral:
-                args.emplace_back(
-                    Argument{
-                        .type = Type::string,
-                        .string{tokens[i].value.begin(), tokens[i].value.end()},
-                    });
+                args.emplace_back(Value(Object::create(tokens[i].value)));
                 break;
 
             case Token::Type::percent:
@@ -237,11 +256,7 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
                     return false;
                 }
 
-                args.emplace_back(
-                    Argument{
-                        .type = Type::string,
-                        .string = std::move(maybePath.value()),
-                    });
+                args.emplace_back(*maybePath);
                 break;
             }
 
@@ -252,33 +267,15 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
                     goto error;
                 }
                 ++i;
-                auto maybeValue = resolveReference(std::string(tokens[i].value), context);
+
+                auto maybeValue = resolveSymbol(std::string(tokens[i].value), context);
 
                 if (not maybeValue)
                 {
                     return false;
                 }
 
-                auto& value = maybeValue.value();
-
-                auto argument = Argument{
-                    .type = value.type,
-                    .string{getValueString(value)},
-                };
-
-                switch (value.type)
-                {
-                    case Type::boolean:
-                        argument.boolean = value.boolean;
-                        break;
-                    case Type::integer:
-                        argument.integer = value.integer;
-                        break;
-                    default:
-                        break;
-                }
-
-                args.emplace_back(std::move(argument));
+                args.emplace_back(std::move(*maybeValue));
 
                 break;
             }
@@ -321,16 +318,31 @@ static bool executeCommand(const TokensSpan& tokens, Context& context)
     for (size_t i = 0; i < commandArgsCount; ++i)
     {
         auto commandType = command->arguments.get()[i].type;
-        auto argType = args[i].type;
+        auto argType = args[i].type();
 
-        if (commandType != Type::any and commandType != argType)
+        if (commandType != Type::any and commandType != convert(args[i]))
         {
             context.messageLine.error() << "Argument " << i << "; expected " << commandType << ", got " << argType;
             return false;
         }
     }
 
-    return command->handler(args, flags, force, context);
+    int flagsMask = 0;
+
+    for (const auto& flag : flags)
+    {
+        auto result = getCommandFlagMask(*command, flag);
+
+        if (not result) [[unlikely]]
+        {
+            context.messageLine.error() << "Unknown flag: " << flag;
+            return false;
+        }
+
+        flagsMask |= *result;
+    }
+
+    return command->handler(args, flagsMask, force, context);
 }
 
 static bool executeStatement(const TokensSpan& tokens, Context& context)
@@ -356,7 +368,7 @@ static bool executeStatement(const TokensSpan& tokens, Context& context)
     return true;
 }
 
-bool executeCode(const std::string& line, Context& context)
+bool execute(const std::string& line, Context& context)
 {
     if (line.empty())
     {
@@ -371,7 +383,7 @@ bool executeCode(const std::string& line, Context& context)
         return false;
     }
 
-    const auto& tokens = result.value();
+    const auto& tokens = *result;
 
     auto current = tokens.begin();
 
@@ -408,4 +420,4 @@ bool executeCode(const std::string& line, Context& context)
     return true;
 }
 
-}  // namespace core
+}  // namespace core::interpreter

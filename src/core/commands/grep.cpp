@@ -1,13 +1,21 @@
 #include "core/buffer.hpp"
-#include "core/command.hpp"
 #include "core/grep_options.hpp"
-#include "core/interpreter.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/interpreter.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
+#include "utils/bitflag.hpp"
 #include "utils/buffer.hpp"
 
 namespace core
 {
+
+DEFINE_BITFLAG(GrepFlags, uint8_t,
+{
+    regex,
+    caseInsensitive,
+    inverted,
+});
 
 DEFINE_COMMAND(grep)
 {
@@ -16,21 +24,23 @@ DEFINE_COMMAND(grep)
     FLAGS()
     {
         return {
-            "c",
-            "i",
-            "r",
+            {"c", GrepFlags::caseInsensitive},
+            {"i", GrepFlags::inverted},
+            {"r", GrepFlags::regex},
         };
     }
 
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "pattern")
+            {Type::string, "pattern"}
         };
     }
 
     EXECUTOR()
     {
+        GrepFlags flags(flagsMask);
+
         auto parentWindow = context.mainView.currentWindowNode();
 
         if (not parentWindow) [[unlikely]]
@@ -39,22 +49,22 @@ DEFINE_COMMAND(grep)
             return false;
         }
 
-        auto pattern = args[0].string;
+        auto pattern = *args[0].string();
 
         GrepOptions options;
         std::string optionsString;
 
-        if (flags.contains("r"))
+        if (flags[GrepFlags::regex])
         {
             options.regex = true;
             optionsString += 'r';
         }
-        if (flags.contains("c"))
+        if (flags[GrepFlags::caseInsensitive])
         {
             options.caseInsensitive = true;
             optionsString += 'c';
         }
-        if (flags.contains("i"))
+        if (flags[GrepFlags::inverted])
         {
             options.inverted = true;
             optionsString += 'i';
@@ -82,7 +92,7 @@ DEFINE_COMMAND(grep)
             {
                 if (context.running)
                 {
-                    context.mainView.bufferLoaded(result, newWindow, context);
+                    context.mainView.bufferLoaded(std::move(result), newWindow, context);
                 }
             });
 
@@ -114,7 +124,7 @@ bool grep(const std::string& pattern, const GrepOptions& options, Context& conte
     command += pattern;
     command += '\"';
 
-    return executeCode(command, context);
+    return interpreter::execute(command, context);
 }
 
 }  // namespace commands

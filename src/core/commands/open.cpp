@@ -2,8 +2,8 @@
 
 #include "core/alias.hpp"
 #include "core/buffer.hpp"
-#include "core/command.hpp"
-#include "core/interpreter.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/interpreter.hpp"
 #include "core/main_view.hpp"
 #include "utils/buffer.hpp"
 
@@ -22,26 +22,26 @@ DEFINE_COMMAND(open)
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "path")
+            {Type::string, "path"}
         };
     };
 
     EXECUTOR()
     {
-        auto& path = args[0].string;
+        auto path = *args[0].string();
 
         auto& newWindow = context.mainView.createWindow(path, MainView::Parent::root, context);
 
         auto newBuffer = newWindow.buffer();
 
         newBuffer->load(
-            path,
+            std::move(path),
             context,
             [&newWindow, &context](TimeOrError result)
             {
                 if (context.running)
                 {
-                    context.mainView.bufferLoaded(result, newWindow, context);
+                    context.mainView.bufferLoaded(std::move(result), newWindow, context);
                 }
             });
 
@@ -58,7 +58,7 @@ bool open(const std::string& path, Context& context)
 {
     utils::Buffer buf;
     buf << open::Command::name << " \"" << path << "\"";
-    return executeCode(buf.str(), context);
+    return interpreter::execute(buf.str(), context);
 }
 
 }  // namespace commands

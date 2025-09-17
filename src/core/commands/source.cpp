@@ -1,7 +1,7 @@
 #include "source.hpp"
 
-#include "core/command.hpp"
-#include "core/interpreter.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/interpreter.hpp"
 #include "utils/buffer.hpp"
 #include "utils/string.hpp"
 #include "utils/units.hpp"
@@ -21,14 +21,14 @@ DEFINE_COMMAND(source)
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "path")
+            {Type::string, "path"}
         };
     }
 
     EXECUTOR()
     {
-        auto code = args[0].string | utils::readText(1_MiB);
-        return executeCode(code, context);
+        auto code = *args[0].string() | utils::readText(1_MiB);
+        return interpreter::execute(code, context);
     }
 }
 
@@ -39,7 +39,7 @@ bool source(const std::string& filename, Context& context)
 {
     utils::Buffer buf;
     buf << source::Command::name << " \"" << filename << '\"';
-    return executeCode(buf.str(), context);
+    return interpreter::execute(buf.str(), context);
 }
 
 }  // namespace commands

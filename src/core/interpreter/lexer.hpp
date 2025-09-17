@@ -7,7 +7,7 @@
 
 #include "utils/fwd.hpp"
 
-namespace core
+namespace core::interpreter
 {
 
 struct Token
@@ -48,4 +48,4 @@ std::expected<Tokens, std::string> parse(const std::string& code);
 utils::Buffer& operator<<(utils::Buffer& buf, const Token::Type type);
 utils::Buffer& operator<<(utils::Buffer& buf, const Token& token);
 
-}  // namespace core
+}  // namespace core::interpreter

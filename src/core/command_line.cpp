@@ -4,11 +4,11 @@
 #include <flat_set>
 
 #include "core/alias.hpp"
-#include "core/command.hpp"
 #include "core/context.hpp"
 #include "core/dirs.hpp"
 #include "core/input.hpp"
-#include "core/interpreter.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/interpreter.hpp"
 #include "core/main_view.hpp"
 #include "core/readline.hpp"
 #include "utils/string.hpp"
@@ -46,8 +46,8 @@ CommandLine::CommandLine()
             [](std::string_view pattern)
             {
                 std::flat_set<std::string_view> result;
-                Commands::forEach(
-                    [&result, &pattern](const Command& command)
+                interpreter::Commands::forEach(
+                    [&result, &pattern](const interpreter::Command& command)
                     {
                         if (command.name.starts_with(pattern))
                         {
@@ -78,7 +78,7 @@ CommandLine::~CommandLine() = default;
 
 void CommandLine::acceptCommand(Context& context)
 {
-    executeCode(commandReadline.line(), context);
+    interpreter::execute(commandReadline.line(), context);
     commandReadline.clear();
 }
 

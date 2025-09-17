@@ -1,6 +1,6 @@
-#include "core/command.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/symbol.hpp"
 #include "core/message_line.hpp"
-#include "core/variable.hpp"
 
 namespace core
 {
@@ -17,75 +17,33 @@ DEFINE_COMMAND(set)
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "variable"),
-            ARGUMENT(any, "value")
+            {Type::string, "variable"},
+            {Type::any, "value"}
         };
     };
 
     EXECUTOR()
     {
-        const auto& name = args[0].string;
+        const auto name = *args[0].string();
+        const auto value = args[1];
 
-        const auto variable = Variables::find(name);
+        const auto variable = interpreter::Symbols::find(name);
 
         if (not variable)
         {
-            switch (args[1].type)
-            {
-                case Type::boolean:
-                    Variables::addUserDefined(name, Type::boolean, args[1].boolean);
-                    break;
-
-                case Type::string:
-                    Variables::addUserDefined(name, Type::string, args[1].string);
-                    break;
-
-                case Type::integer:
-                    Variables::addUserDefined(name, Type::integer, args[1].integer);
-                    break;
-
-                [[unlikely]] default:
-                    goto unknown;
-            }
+            interpreter::Symbols::addReadWrite(name, value);
             return true;
         }
 
-        if (variable->access != Variable::Access::readWrite) [[unlikely]]
+        auto result = variable->assign(args[1], context);
+
+        if (not result) [[unlikely]]
         {
-            context.messageLine.error() << "Not writable: " << args[0].string;
+            context.messageLine.error() << "Cannot set value: " << result.error();
             return false;
         }
 
-        if (variable->type != args[1].type) [[unlikely]]
-        {
-            context.messageLine.error() << "Wrong type of argument; expected " << variable->type
-                << ", got " << args[1].type;
-            return false;
-        }
-
-        switch (args[1].type)
-        {
-            case Type::boolean:
-                variable->writer(Variable::Value(args[1].boolean), context);
-                return true;
-
-            case Type::string:
-                variable->writer(Variable::Value(&args[1].string), context);
-                return true;
-
-            case Type::integer:
-                variable->writer(Variable::Value(args[1].integer), context);
-                return true;
-
-            default:
-                break;
-        }
-
-        unknown:
-        {
-            context.messageLine.error() << "Unknown type of value: " << args[1].type;
-            return false;
-        }
+        return true;
     }
 }
 

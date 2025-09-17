@@ -4,11 +4,11 @@
 #include <ftxui/component/component_base.hpp>
 #include <ftxui/component/component_options.hpp>
 
-#include "core/command.hpp"
 #include "core/commands/grep.hpp"
 #include "core/context.hpp"
 #include "core/grep_options.hpp"
 #include "core/input.hpp"
+#include "core/interpreter/command.hpp"
 #include "core/main_view.hpp"
 #include "core/mode.hpp"
 #include "core/readline.hpp"

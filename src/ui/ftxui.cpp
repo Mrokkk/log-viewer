@@ -105,7 +105,7 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
 
     auto result = ui.eventHandlers.handleEvent(event, ui, context);
 
-    if (result and result.value())
+    if (result and *result)
     {
         return true;
     }

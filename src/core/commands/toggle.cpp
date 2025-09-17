@@ -1,6 +1,6 @@
-#include "core/command.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/symbol.hpp"
 #include "core/message_line.hpp"
-#include "core/variable.hpp"
 
 namespace core
 {
@@ -17,39 +17,39 @@ DEFINE_COMMAND(toggle)
     ARGUMENTS()
     {
         return {
-            ARGUMENT(string, "variable")
+            {Type::string, "variable"}
         };
     };
 
     EXECUTOR()
     {
-        auto variable = Variables::find(args[0].string);
+        auto variableName = *args[0].string();
+        auto variable = interpreter::Symbols::find(variableName);
 
         if (not variable)
         {
-            context.messageLine.error() << "Unknown variable: " << args[0].string;
+            context.messageLine.error() << "Unknown variable: " << variableName;
             return false;
         }
 
-        if (variable->type != Type::boolean)
+        auto boolean = variable->value().boolean();
+
+        if (not boolean)
         {
-            context.messageLine.error() << "Not a boolean: " << args[0].string;
+            context.messageLine.error() << "Not a boolean: " << variableName;
             return false;
         }
 
-        if (variable->access != Variable::Access::readWrite)
-        {
-            context.messageLine.error() << "Not writable: " << args[0].string;
-            return false;
-        }
-
-        auto value = variable->reader(context);
-
-        bool modifiedValue = value.boolean;
+        bool modifiedValue = boolean.value();
         modifiedValue ^= true;
-        Variable::Value modified(modifiedValue);
 
-        variable->writer(modified, context);
+        auto result = variable->assign(interpreter::Value(modifiedValue), context);
+
+        if (not result)
+        {
+            context.messageLine.error() << "Cannot modify " << variableName << ": " << result.error();
+            return false;
+        }
 
         return true;
     }

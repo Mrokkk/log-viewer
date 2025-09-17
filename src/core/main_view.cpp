@@ -285,7 +285,7 @@ WindowNode& MainView::createWindow(std::string name, Parent parent, Context& con
     return *mCurrentWindowNode;
 }
 
-void MainView::bufferLoaded(const TimeOrError& result, WindowNode& node, Context& context)
+void MainView::bufferLoaded(TimeOrError result, WindowNode& node, Context& context)
 {
     if (result) [[likely]]
     {
@@ -305,12 +305,12 @@ void MainView::bufferLoaded(const TimeOrError& result, WindowNode& node, Context
 
         context.messageLine.info()
             << node.parent()->name() << ": buffer loaded; lines: " << newBuffer->lineCount() << "; took "
-            << (result.value() | utils::precision(3)) << " s";
+            << (*result | utils::precision(3)) << " s";
     }
     else
     {
         const auto& error = result.error();
-        if (error == Error::Aborted)
+        if (error == BufferError::Aborted)
         {
             context.messageLine.info() << error;
         }
@@ -319,7 +319,7 @@ void MainView::bufferLoaded(const TimeOrError& result, WindowNode& node, Context
             context.messageLine.error() << error;
 
             context.mainLoop->executeTask(
-                [result, &node, &context, this]
+                [result = std::move(result), &node, &context, this]
                 {
                     Impl::get(this).removeWindow(*node.parent(), context);
                 });
@@ -555,7 +555,7 @@ static BufferLine getLine(Buffer& buffer, size_t lineIndex, Context& context)
 
     const auto& config = context.config;
 
-    const auto& data = result.value();
+    const auto& data = *result;
 
     BufferLine line{
         .lineNumber = lineIndex,
@@ -1225,7 +1225,7 @@ void MainView::Impl::yank(Context& context)
     {
         if (const auto result = buffer->readLine(i))
         {
-            buf << result.value() << '\n';
+            buf << *result << '\n';
         }
     }
 
@@ -1245,7 +1245,7 @@ void MainView::Impl::yankSingle(Context& context)
 
     if (const auto result = buffer->readLine(w.ycurrent + w.yoffset))
     {
-        buf << result.value() << '\n';
+        buf << *result << '\n';
     }
 
     sys::copyToClipboard(buf.str());

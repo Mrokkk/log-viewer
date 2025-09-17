@@ -1,5 +1,5 @@
 #include "core/buffer.hpp"
-#include "core/command.hpp"
+#include "core/interpreter/command.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 
@@ -59,7 +59,7 @@ DEFINE_COMMAND(filter)
             {
                 if (context.running)
                 {
-                    context.mainView.bufferLoaded(result, newWindow, context);
+                    context.mainView.bufferLoaded(std::move(result), newWindow, context);
                 }
             });
 

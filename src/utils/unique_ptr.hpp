@@ -42,6 +42,13 @@ struct UniquePtr final
         other.mPtr = nullptr;
     }
 
+    constexpr auto release()
+    {
+        auto ptr = mPtr;
+        mPtr = nullptr;
+        return ptr;
+    }
+
     constexpr void reset()
     {
         if (mPtr)

@@ -1,10 +1,11 @@
 #include "event_handler.hpp"
 
-#include <expected>
 #include <flat_map>
 #include <utility>
 
 #include <ftxui/component/event.hpp>
+
+#include "utils/maybe.hpp"
 
 namespace ui
 {
@@ -16,13 +17,13 @@ struct EventHandlers::Impl
     {
     }
 
-    std::expected<bool, int> handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const
+    utils::Maybe<bool> handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const
     {
         auto it = handlers.find(event);
 
         if (it == handlers.end())
         {
-            return std::unexpected(0);
+            return {};
         }
 
         return it->second(ui, context);
@@ -41,7 +42,7 @@ EventHandlers::~EventHandlers()
     delete mPimpl;
 }
 
-std::expected<bool, int> EventHandlers::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const
+utils::Maybe<bool> EventHandlers::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const
 {
     return mPimpl->handleEvent(event, ui, context);
 }

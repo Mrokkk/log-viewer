@@ -1,16 +1,20 @@
-#include "core/command.hpp"
+#include "command.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <flat_map>
 #include <string_view>
 
-namespace core
+namespace core::interpreter
 {
 
 using CommandsMap = std::flat_map<std::string_view, Command>;
 
-static CommandsMap map;
+static CommandsMap& map()
+{
+    static CommandsMap map;
+    return map;
+}
 
 CommandArguments::CommandArguments() = default;
 
@@ -19,6 +23,8 @@ CommandArguments::CommandArguments(std::initializer_list<ArgumentSignature> n)
 {
 }
 
+CommandArguments::~CommandArguments() = default;
+
 const std::vector<CommandArguments::ArgumentSignature>& CommandArguments::get() const
 {
     return mTypes;
@@ -26,19 +32,21 @@ const std::vector<CommandArguments::ArgumentSignature>& CommandArguments::get() 
 
 CommandFlags::CommandFlags() = default;
 
-CommandFlags::CommandFlags(std::initializer_list<std::string> n)
+CommandFlags::~CommandFlags() = default;
+
+CommandFlags::CommandFlags(std::initializer_list<FlagSignature>&& n)
     : mFlags(std::move(n))
 {
 }
 
-const std::flat_set<std::string>& CommandFlags::get() const
+const std::vector<CommandFlags::FlagSignature>& CommandFlags::get() const
 {
     return mFlags;
 }
 
 Command* Commands::find(const std::string& name)
 {
-    auto& commands = map;
+    auto& commands = map();
     const auto commandIt = commands.find(name);
 
     return commandIt != commands.end()
@@ -46,10 +54,8 @@ Command* Commands::find(const std::string& name)
         : nullptr;
 }
 
-void Commands::$register(Command command)
+static void validate(const Command& command)
 {
-    auto& commands = map;
-
     const auto& commandArgs = command.arguments.get();
 
     const auto variadicArgument = std::ranges::find_if(
@@ -61,6 +67,13 @@ void Commands::$register(Command command)
         std::fprintf(stderr, "%s: %s: variadic argument can appear only as last one\n", __func__, command.name.data());
         std::abort();
     }
+}
+
+void Commands::$register(Command command)
+{
+    validate(command);
+
+    auto& commands = map();
 
     auto result = commands.emplace(std::make_pair(command.name, std::move(command)));
 
@@ -73,10 +86,10 @@ void Commands::$register(Command command)
 
 void Commands::forEach(std::function<void(const Command&)> callback)
 {
-    for (const auto& [_, command] : map)
+    for (const auto& [_, command] : map())
     {
         callback(command);
     }
 }
 
-}  // namespace core
+}  // namespace core::interpreter

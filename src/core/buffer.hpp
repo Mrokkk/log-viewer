@@ -6,15 +6,42 @@
 #include <functional>
 
 #include "core/buffers.hpp"
-#include "core/error.hpp"
 #include "core/file.hpp"
 #include "core/fwd.hpp"
 #include "core/grep_options.hpp"
 #include "core/line.hpp"
+#include "utils/fwd.hpp"
 #include "utils/immobile.hpp"
 
 namespace core
 {
+
+struct BufferError final
+{
+    enum Type : char
+    {
+        Aborted = 1,
+        SystemError,
+        RegexError,
+    };
+
+    operator Type() const;
+
+    bool operator==(Type error) const;
+
+    std::string_view message() const;
+
+    static BufferError aborted(std::string message);
+    static BufferError systemError(std::string message);
+    static BufferError regexError(std::string message);
+
+private:
+    BufferError(Type error, std::string message);
+
+    std::string mMessage;
+};
+
+utils::Buffer& operator<<(utils::Buffer& buf, const BufferError& error);
 
 enum class SearchDirection
 {
@@ -38,8 +65,8 @@ struct SearchRequest
     std::string           pattern;
 };
 
-using TimeOrError = std::expected<float, Error>;
-using StringOrError = std::expected<std::string, Error>;
+using TimeOrError = std::expected<float, BufferError>;
+using StringOrError = std::expected<std::string, BufferError>;
 using FinishedCallback = std::function<void(TimeOrError)>;
 using FinishedSearchCallback = std::function<void(SearchResult, float)>;
 

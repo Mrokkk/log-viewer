@@ -1,119 +1,146 @@
 #pragma once
 
-#include <climits>
 #include <concepts>
 #include <cstdint>
-#include <string>
+#include <limits>
+#include <string_view>
 #include <type_traits>
 
+#include "core/fwd.hpp"
+#include "core/interpreter/symbol.hpp"
+#include "utils/bitflag.hpp"
 #include "utils/immobile.hpp"
-#include "utils/units.hpp"
 
 namespace core
 {
 
-template <size_t N, size_t ...T>
-struct ChooseNth {};
+struct Config;
 
-template <size_t N, size_t T, size_t ...U>
-struct ChooseNth<N, T, U...> : ChooseNth<N - 1, U...> {};
-
-template <size_t T, size_t ...U>
-struct ChooseNth<0, T, U...>
+DEFINE_BITFLAG(ConfigFlags, uint8_t,
 {
-    constexpr static auto value = T;
+    reloadAllWindows,
+});
+
+namespace detail
+{
+
+template <typename T>
+concept Integral = std::integral<T> and not std::is_same_v<T, bool>;
+
+template <typename T>
+struct Limits
+{
 };
 
-template <typename T, T ...Args>
-struct ConfigVariable : utils::Immobile
+template <typename T>
+requires Integral<T>
+struct Limits<T>
 {
-    constexpr static bool hasRange = sizeof...(Args) == 2;
+    const T min;
+    const T max;
+};
 
-    constexpr ConfigVariable() = default;
+template <typename T>
+struct ConfigVariable final : interpreter::Symbol
+{
+    constexpr inline operator T() const { return get(); }
+    constexpr inline operator T()       { return get(); }
 
-    template <typename U>
-    requires std::convertible_to<U, T>
-    constexpr ConfigVariable(U value)
-        : mValue(value)
+    constexpr inline auto get() const
     {
-    }
-
-    consteval static T min()
-    {
-        return ChooseNth<0, Args...>::value;
-    }
-
-    consteval static T max()
-    {
-        return ChooseNth<1, Args...>::value;
-    }
-
-    constexpr operator auto&() const { return mValue; }
-
-    template <typename U>
-    requires std::convertible_to<U, T>
-    constexpr bool set(U value)
-    {
-        if constexpr (hasRange)
+        if constexpr (std::is_same_v<T, std::string_view>)
         {
-            if (not validateRange(value)) [[unlikely]]
-            {
-                return false;
-            }
+            return value().object()->stringView();
         }
-        mValue = std::move(value);
-        return true;
-    }
-
-    constexpr const T& get() const
-    {
-        return mValue;
-    }
-
-private:
-    constexpr static bool validateRange(long value)
-    {
-        if constexpr (sizeof(T) >= sizeof(long) * (std::is_unsigned_v<T> + 1))
+        else if constexpr (std::is_same_v<T, bool>)
         {
-            if (static_cast<T>(value) < min() or
-                static_cast<T>(value) > max())
-            {
-                return false;
-            }
+            return *value().boolean();
+        }
+        else if constexpr (std::is_integral_v<T>)
+        {
+            return static_cast<T>(*value().integer());
         }
         else
         {
-            if (static_cast<long long>(value) < static_cast<long long>(min()) or
-                static_cast<unsigned long>(value) > static_cast<unsigned long>(max()))
-            {
-                return false;
-            }
+            static_assert(false, "Invalid type");
         }
-
-        return true;
     }
 
-    T mValue;
+    ConfigVariable& setFlag(ConfigFlags flags);
+
+    interpreter::OpResult assign(interpreter::Value newValue, Context& context) override;
+
+private:
+    template <typename U>
+    requires std::convertible_to<U, std::string_view>
+    constexpr static interpreter::Value createValue(U value)
+    {
+        return interpreter::Value(interpreter::Object::create(std::string_view(value)));
+    }
+
+    constexpr static interpreter::Value createValue(T value)
+        requires std::is_same_v<T, bool>
+    {
+        return interpreter::Value(value);
+    }
+
+    constexpr static interpreter::Value createValue(T value)
+        requires detail::Integral<T>
+    {
+        return interpreter::Value(long(value));
+    }
+
+    void onChange(Context& context);
+
+private:
+    friend Config;
+
+    template <typename U>
+    requires (not detail::Integral<U>)
+    constexpr ConfigVariable(U defaultValue)
+        : Symbol(Symbol::Access::readWrite, createValue(defaultValue))
+    {
+    }
+
+    template <typename U>
+    requires detail::Integral<U>
+    constexpr ConfigVariable(
+        U defaultValue,
+        T min = std::numeric_limits<T>::min(),
+        T max = std::numeric_limits<T>::max())
+        : Symbol(Symbol::Access::readWrite, createValue(defaultValue))
+        , mLimits{min, max}
+    {
+    }
+
+    ConfigFlags       mFlags;
+    detail::Limits<T> mLimits;
 };
 
-struct Config
-{
-    template <size_t ...Args> using Uint8  = ConfigVariable<uint8_t, Args...>;
-    template <size_t ...Args> using Size   = ConfigVariable<size_t, Args...>;
-                              using Bool   = ConfigVariable<bool>;
-                              using String = ConfigVariable<std::string>;
+}  // namespace detail
 
-    Uint8<0, UCHAR_MAX> maxThreads = 8;
-    Size<0, LONG_MAX>   linesPerThread = 5000000;
-    Size<0, LONG_MAX>   bytesPerThread = 1_GiB;
-    Bool                showLineNumbers = false;
-    Bool                absoluteLineNumbers = false;
-    Uint8<0, 16>        scrollJump = 5;
-    Uint8<0, 8>         scrollOff = 3;
-    Uint8<0, UCHAR_MAX> fastMoveLen = 16;
-    Uint8<0, 8>         tabWidth = 4;
-    String              lineNumberSeparator = " ";
-    String              tabChar = "›";
+struct Config : utils::Immobile
+{
+    using Uint8  = detail::ConfigVariable<uint8_t>;
+    using Size   = detail::ConfigVariable<size_t>;
+    using Bool   = detail::ConfigVariable<bool>;
+    using String = detail::ConfigVariable<std::string_view>;
+
+    Size   maxThreads;
+    Size   linesPerThread;
+    Size   bytesPerThread;
+    Bool   showLineNumbers;
+    Bool   absoluteLineNumbers;
+    Uint8  scrollJump;
+    Uint8  scrollOff;
+    Uint8  fastMoveLen;
+    Uint8  tabWidth;
+    String lineNumberSeparator;
+    String tabChar;
+
+private:
+    friend Context;
+    Config();
 };
 
 }  // namespace core

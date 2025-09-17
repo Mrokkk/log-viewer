@@ -8,7 +8,7 @@ namespace utils
 
 struct SourceLocation
 {
-    static consteval SourceLocation current(
+    consteval static SourceLocation current(
         const char* file = __builtin_FILE(),
         const char* func = __builtin_FUNCTION(),
         size_t line = __builtin_LINE())

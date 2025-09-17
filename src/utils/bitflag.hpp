@@ -1,42 +1,41 @@
 #pragma once
 
 #include "utils/enum_traits.hpp"
+#include "utils/inline.hpp"
 
 namespace utils
 {
 
-namespace detail
-{
-
 template <typename T, typename U>
-requires IsEnum<U>
-constexpr T bitMask(U v)
+requires Enum<U>
+ALWAYS_INLINE constexpr T bitMask(U v)
 {
     return 1 << static_cast<int>(v);
 }
-
-}  // namespace detail
 
 template <typename T>
 struct BitFlag
 {
     using Underlying = T;
 
-    constexpr BitFlag() : value(0) {}
+    ALWAYS_INLINE constexpr BitFlag()
+        : value(0)
+    {
+    }
 
-    constexpr explicit BitFlag(T v)
+    ALWAYS_INLINE constexpr explicit BitFlag(T v)
         : value(v)
     {
     }
 
     template <typename U>
-    requires IsEnum<U>
-    constexpr BitFlag(U v)
-        : value(detail::bitMask<T>(v))
+    requires Enum<U>
+    ALWAYS_INLINE constexpr BitFlag(U v)
+        : value(bitMask<T>(v))
     {
     }
 
-    constexpr operator T() const
+    ALWAYS_INLINE constexpr operator T() const
     {
         return value;
     }
@@ -52,14 +51,14 @@ concept IsBitFlag = requires(T t)
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr typename T::Underlying bitMask(typename T::Value v)
+ALWAYS_INLINE constexpr typename T::Underlying bitMask(typename T::Value v)
 {
-    return detail::bitMask<typename T::Underlying>(v);
+    return bitMask<typename T::Underlying>(v);
 }
 
 template <typename T, typename U = typename T::Value>
 requires IsBitFlag<T>
-constexpr inline T& operator|=(T& lhs, const U rhs)
+ALWAYS_INLINE constexpr T& operator|=(T& lhs, const U rhs)
 {
     lhs.value |= bitMask<T>(rhs);
     return lhs;
@@ -67,7 +66,7 @@ constexpr inline T& operator|=(T& lhs, const U rhs)
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T& operator|=(T& lhs, const T rhs)
+ALWAYS_INLINE constexpr T& operator|=(T& lhs, const T rhs)
 {
     lhs.value |= rhs.value;
     return lhs;
@@ -75,7 +74,7 @@ constexpr inline T& operator|=(T& lhs, const T rhs)
 
 template <typename T, typename U = typename T::Value>
 requires IsBitFlag<T>
-constexpr inline T& operator&=(T& lhs, const U rhs)
+ALWAYS_INLINE constexpr T& operator&=(T& lhs, const U rhs)
 {
     lhs.value &= bitMask<T>(rhs);
     return lhs;
@@ -83,7 +82,7 @@ constexpr inline T& operator&=(T& lhs, const U rhs)
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T& operator&=(T& lhs, const T rhs)
+ALWAYS_INLINE constexpr T& operator&=(T& lhs, const T rhs)
 {
     lhs.value &= rhs.value;
     return lhs;
@@ -91,7 +90,7 @@ constexpr inline T& operator&=(T& lhs, const T rhs)
 
 template <typename T, typename U = typename T::Value>
 requires IsBitFlag<T>
-constexpr inline T& operator^=(T& lhs, const U rhs)
+ALWAYS_INLINE constexpr T& operator^=(T& lhs, const U rhs)
 {
     lhs.value ^= bitMask<T>(rhs);
     return lhs;
@@ -99,7 +98,7 @@ constexpr inline T& operator^=(T& lhs, const U rhs)
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T& operator^=(T& lhs, const T rhs)
+ALWAYS_INLINE constexpr T& operator^=(T& lhs, const T rhs)
 {
     lhs.value ^= rhs.value;
     return lhs;
@@ -107,28 +106,28 @@ constexpr inline T& operator^=(T& lhs, const T rhs)
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T operator|(const T lhs, const typename T::Value rhs)
+ALWAYS_INLINE constexpr T operator|(const T lhs, const typename T::Value rhs)
 {
     return T(lhs.value | bitMask<T>(rhs));
 }
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T operator&(const T lhs, const typename T::Value rhs)
+ALWAYS_INLINE constexpr T operator&(const T lhs, const typename T::Value rhs)
 {
     return T(lhs.value & bitMask<T>(rhs));
 }
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T operator~(const T val)
+ALWAYS_INLINE constexpr T operator~(const T val)
 {
     return T(~val.value);
 }
 
 template <typename T>
 requires IsBitFlag<T>
-constexpr inline T operator&(const T lhs, const T rhs)
+ALWAYS_INLINE constexpr T operator&(const T lhs, const T rhs)
 {
     return T(lhs.value & rhs.value);
 }

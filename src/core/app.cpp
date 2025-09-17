@@ -1,7 +1,7 @@
 #define LOG_HEADER "core::App"
 #include "app.hpp"
 
-#include <iostream>
+#include <cstdio>
 
 #include "core/argparse.hpp"
 #include "core/commands/open.hpp"
@@ -39,7 +39,7 @@ int run(int argc, char* const* argv, Context& context)
 
     if (auto result = parseArgs(argc, argv); not result) [[unlikely]]
     {
-        std::cerr << result.error() << std::endl;
+        fprintf(stderr, "%s\n", result.error().c_str());
         return -1;
     }
 
@@ -52,12 +52,8 @@ int run(int argc, char* const* argv, Context& context)
 
     for (const auto& configFile : sys::getConfigFiles())
     {
-        if (std::filesystem::exists(configFile))
-        {
-            logger.info() << "sourcing " << configFile;
-            commands::source(configFile.string(), context);
-            break;
-        }
+        logger.info() << "sourcing " << configFile;
+        commands::source(configFile, context);
     }
 
     if (file)

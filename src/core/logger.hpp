@@ -19,6 +19,9 @@ using LogEntries = std::vector<LogEntry>;
 #define LOG_FLAGS
 #endif
 
+namespace core
+{
+
 struct Logger final
 {
     struct Flusher final : utils::Immobile
@@ -104,4 +107,6 @@ private:
         utils::SourceLocation loc);
 };
 
-constexpr static Logger logger;
+}  // namespace core
+
+constexpr static core::Logger logger;

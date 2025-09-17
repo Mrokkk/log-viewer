@@ -1,8 +1,7 @@
 #pragma once
 
-#include <expected>
-
 #include "core/input.hpp"
+#include "utils/maybe.hpp"
 
 namespace ftxui
 {
@@ -12,7 +11,7 @@ struct Event;
 namespace ui
 {
 
-std::expected<core::KeyPress, bool> convertEvent(const ftxui::Event& event);
+utils::Maybe<core::KeyPress> convertEvent(const ftxui::Event& event);
 void initEventConverter();
 
 }  // namespace ui

@@ -42,6 +42,5 @@ struct Ftxui final : core::UserInterface, core::MainLoop
 };
 
 void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context);
-void createFtxuiUserInterface(core::Context& context);
 
 }  // namespace ui
