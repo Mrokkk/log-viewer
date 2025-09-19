@@ -1,12 +1,12 @@
 #pragma once
 
-#include <functional>
 #include <list>
 #include <string>
 
 #include "core/buffers.hpp"
 #include "core/fwd.hpp"
 #include "core/window.hpp"
+#include "utils/function_ref.hpp"
 #include "utils/immobile.hpp"
 #include "utils/unique_ptr.hpp"
 
@@ -74,7 +74,7 @@ struct WindowNode final : utils::Immobile
 
     Buffer* buffer();
 
-    using Visitor = std::function<void(WindowNode&)>;
+    using Visitor = utils::FunctionRef<void(WindowNode&)>;
 
     void forEachRecursive(const Visitor& functor);
 

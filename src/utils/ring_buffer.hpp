@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "utils/function_ref.hpp"
 #include "utils/noncopyable.hpp"
 
 namespace utils
@@ -74,8 +75,7 @@ struct RingBuffer final : NonCopyable
         return *this;
     }
 
-    template <typename U>
-    constexpr void forEach(const U& callback) const
+    constexpr void forEach(const FunctionRef<void(const T&)> callback) const
     {
         if (mSize == 0) [[unlikely]]
         {

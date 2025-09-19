@@ -5,6 +5,8 @@
 #include <flat_map>
 #include <string_view>
 
+#include "utils/function_ref.hpp"
+
 namespace core::interpreter
 {
 
@@ -84,7 +86,7 @@ void Commands::$register(Command command)
     }
 }
 
-void Commands::forEach(std::function<void(const Command&)> callback)
+void Commands::forEach(utils::FunctionRef<void(const Command&)> callback)
 {
     for (const auto& [_, command] : map())
     {

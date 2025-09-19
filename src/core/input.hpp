@@ -1,12 +1,19 @@
 #pragma once
 
-#include <functional>
 #include <string>
 #include <vector>
 
 #include "core/fwd.hpp"
 #include "utils/bitflag.hpp"
 #include "utils/fwd.hpp"
+
+namespace std
+{
+
+template <typename Signature>
+class function;
+
+}  // namespace std
 
 namespace core
 {

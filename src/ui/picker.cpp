@@ -269,20 +269,19 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::logs:
-            strings = logger.logEntries()
-                | views::transform(
-                    [](const LogEntry& entry)
+            strings.clear();
+            logger.forEachLogEntry(
+                [this](const LogEntry& entry)
+                {
+                    std::ostringstream ss;
+                    ss << ColorWrapped(std::put_time(std::localtime(&entry.time), "%F %T"), Color::Green);
+                    if (entry.header)
                     {
-                        std::ostringstream ss;
-                        ss << ColorWrapped(std::put_time(std::localtime(&entry.time), "%F %T"), Color::Green);
-                        if (entry.header)
-                        {
-                            ss << ' ' << ColorWrapped(entry.header, Color::Blue) << ":";
-                        }
-                        ss << ' ' << ColorWrapped(entry.message, severityToColor[static_cast<int>(entry.severity)]);
-                        return ss.str();
-                    })
-                | to<utils::Strings>();
+                        ss << ' ' << ColorWrapped(entry.header, Color::Blue) << ":";
+                    }
+                    ss << ' ' << ColorWrapped(entry.message, severityToColor[static_cast<int>(entry.severity)]);
+                    strings.emplace_back(ss.str());
+                });
             break;
 
         default:

@@ -1,7 +1,8 @@
 #pragma once
 
-#include <functional>
 #include <string_view>
+
+#include "utils/function_ref.hpp"
 
 namespace core
 {
@@ -17,7 +18,7 @@ struct Aliases final
     Aliases() = delete;
     static void $register(Alias alias);
     static Alias* find(const std::string_view& name);
-    static void forEach(std::function<void(const Alias&)> callback);
+    static void forEach(utils::FunctionRef<void(const Alias&)> callback);
 };
 
 #define DEFINE_ALIAS(NAME, COMMAND) \

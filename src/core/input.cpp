@@ -7,6 +7,7 @@
 #include <functional>
 #include <string_view>
 
+#include "core/assert.hpp"
 #include "core/command_line.hpp"
 #include "core/context.hpp"
 #include "core/logger.hpp"
@@ -14,23 +15,18 @@
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "utils/buffer.hpp"
+#include "utils/maybe.hpp"
+#include "utils/memory.hpp"
+#include "utils/noncopyable.hpp"
 #include "utils/string.hpp"
 
 namespace core
 {
 
-struct KeyPressNode
+namespace
 {
-    using ChildrenMap = std::flat_map<KeyPress, KeyPressNode>;
 
-    KeyPressNode(KeyPress keyPress);
-
-    KeyPress    keyPress;
-    int         refCount;
-    ChildrenMap children;
-};
-
-struct InputMapping
+struct InputMapping final : utils::NonCopyable
 {
     enum class Type
     {
@@ -38,17 +34,110 @@ struct InputMapping
         builtinCommand,
     };
 
-    InputMapping(KeyPresses keySequence);
-    InputMapping(BuiltinCommand command);
-    ~InputMapping();
+    constexpr InputMapping(KeyPresses k)
+        : type(Type::command)
+        , keySequence(k)
+    {
+    }
 
-    InputMapping(const InputMapping& other);
-    InputMapping& operator=(const InputMapping& other);
+    constexpr InputMapping(BuiltinCommand c)
+        : type(Type::builtinCommand)
+        , builtinCommand(c)
+    {
+    }
 
-    InputMapping(InputMapping&& other);
-    InputMapping& operator=(InputMapping&& other);
+    constexpr ~InputMapping()
+    {
+        switch (type)
+        {
+            case Type::command:
+                utils::destroyAt(&keySequence);
+                break;
+            case Type::builtinCommand:
+                utils::destroyAt(&builtinCommand);
+                break;
+        }
+    }
 
-    bool operator()(core::Context& context);
+    constexpr InputMapping(const InputMapping& other)
+        : type(other.type)
+    {
+        switch (type)
+        {
+            case Type::command:
+                utils::constructAt(&keySequence, other.keySequence);
+                break;
+
+            case Type::builtinCommand:
+                utils::constructAt(&builtinCommand, other.builtinCommand);
+                break;
+        }
+    }
+
+    constexpr InputMapping& operator=(const InputMapping& other)
+    {
+        type = other.type;
+        switch (type)
+        {
+            case Type::command:
+                utils::constructAt(&keySequence, other.keySequence);
+                break;
+
+            case Type::builtinCommand:
+                utils::constructAt(&builtinCommand, other.builtinCommand);
+                break;
+        }
+        return *this;
+    }
+
+    constexpr InputMapping(InputMapping&& other)
+        : type(other.type)
+    {
+        switch (type)
+        {
+            case Type::command:
+                utils::constructAt(&keySequence, std::move(other.keySequence));
+                break;
+
+            case Type::builtinCommand:
+                utils::constructAt(&builtinCommand, std::move(other.builtinCommand));
+                break;
+        }
+    }
+
+    constexpr InputMapping& operator=(InputMapping&& other)
+    {
+        type = other.type;
+        switch (type)
+        {
+            case Type::command:
+                utils::constructAt(&keySequence, std::move(other.keySequence));
+                break;
+
+            case Type::builtinCommand:
+                utils::constructAt(&builtinCommand, std::move(other.builtinCommand));
+                break;
+        }
+        return *this;
+    }
+
+    constexpr bool operator()(core::Context& context) const
+    {
+        switch (type)
+        {
+            case Type::command:
+                for (auto keyPress : keySequence)
+                {
+                    registerKeyPress(keyPress, InputSource::internal, context);
+                }
+                return true;
+
+            case Type::builtinCommand:
+                assert(builtinCommand);
+                return builtinCommand(context);
+        }
+        return false;
+    }
 
     Type type;
     union
@@ -58,9 +147,38 @@ struct InputMapping
     };
 };
 
-using InputMappingMap = std::flat_map<KeyPresses, InputMapping>;
+}  // namespace
 
-static InputMappingMap inputMappings[3];
+struct KeyPressNode final : utils::NonCopyable
+{
+    constexpr static inline struct Root{} root = {};
+
+    using ChildrenMap = std::flat_map<KeyPress, KeyPressNode>;
+    using MaybeInputMapping = utils::Maybe<InputMapping>;
+
+    constexpr KeyPressNode(Root)
+        : refCount(1)
+    {
+    }
+
+    constexpr KeyPressNode(KeyPress k)
+        : keyPress(k)
+        , refCount(1)
+    {
+    }
+
+    constexpr KeyPressNode(KeyPress k, InputMapping m)
+        : keyPress(k)
+        , refCount(1)
+        , mapping(m)
+    {
+    }
+
+    KeyPress          keyPress;
+    int               refCount;
+    ChildrenMap       children;
+    MaybeInputMapping mapping;
+};
 
 KeyPress KeyPress::escape{         .type = KeyPress::Type::escape};
 KeyPress KeyPress::cr{             .type = KeyPress::Type::cr};
@@ -199,19 +317,8 @@ std::string KeyPress::name() const
     return buf.str();
 }
 
-KeyPressNode::KeyPressNode(KeyPress k)
-    : keyPress(k)
-    , refCount(1)
-{
-}
-
 InputState::InputState()
-    : nodes(
-        new KeyPressNode[3]{
-            KeyPress::character('\0'),
-            KeyPress::character('\0'),
-            KeyPress::character('\0')
-        })
+    : nodes(new KeyPressNode[3]{KeyPressNode::root, KeyPressNode::root, KeyPressNode::root})
     , current(nullptr)
 {
     state.reserve(128);
@@ -220,93 +327,6 @@ InputState::InputState()
 InputState::~InputState()
 {
     delete[] nodes;
-}
-
-InputMapping::InputMapping(KeyPresses k)
-    : type(Type::command)
-    , keySequence(k)
-{
-}
-
-InputMapping::InputMapping(BuiltinCommand c)
-    : type(Type::builtinCommand)
-    , builtinCommand(c)
-{
-}
-
-InputMapping::~InputMapping()
-{
-    switch (type)
-    {
-        case Type::command:
-            std::destroy_at(&keySequence);
-            break;
-        case Type::builtinCommand:
-            std::destroy_at(&builtinCommand);
-            break;
-    }
-}
-
-InputMapping::InputMapping(const InputMapping& other)
-    : type(other.type)
-{
-    switch (type)
-    {
-        case Type::command:
-            std::construct_at(&keySequence, other.keySequence);
-            break;
-
-        case Type::builtinCommand:
-            std::construct_at(&builtinCommand, other.builtinCommand);
-            break;
-    }
-}
-
-InputMapping& InputMapping::operator=(const InputMapping& other)
-{
-    type = other.type;
-    switch (type)
-    {
-        case Type::command:
-            std::construct_at(&keySequence, other.keySequence);
-            break;
-
-        case Type::builtinCommand:
-            std::construct_at(&builtinCommand, other.builtinCommand);
-            break;
-    }
-    return *this;
-}
-
-InputMapping::InputMapping(InputMapping&& other)
-    : type(other.type)
-{
-    switch (type)
-    {
-        case Type::command:
-            std::construct_at(&keySequence, std::move(other.keySequence));
-            break;
-
-        case Type::builtinCommand:
-            std::construct_at(&builtinCommand, std::move(other.builtinCommand));
-            break;
-    }
-}
-
-InputMapping& InputMapping::operator=(InputMapping&& other)
-{
-    type = other.type;
-    switch (type)
-    {
-        case Type::command:
-            std::construct_at(&keySequence, std::move(other.keySequence));
-            break;
-
-        case Type::builtinCommand:
-            std::construct_at(&builtinCommand, std::move(other.builtinCommand));
-            break;
-    }
-    return *this;
 }
 
 static std::expected<KeyPresses, std::string> convertKeys(std::string_view input)
@@ -384,7 +404,7 @@ static std::expected<KeyPresses, std::string> convertKeys(std::string_view input
 
             auto lowerKey = key | utils::lowerCase;
 
-            if (auto it = nameToKeyPress.find(lowerKey); it != nameToKeyPress.end())
+            if (auto it = nameToKeyPress.find(lowerKey); it != nameToKeyPress.end()) [[likely]]
             {
                 keys.push_back(it->second);
             }
@@ -403,45 +423,86 @@ static std::expected<KeyPresses, std::string> convertKeys(std::string_view input
     return keys;
 }
 
-bool InputMapping::operator()(core::Context& context)
+namespace
 {
-    switch (type)
-    {
-        case Type::command:
-            for (auto keyPress : keySequence)
-            {
-                registerKeyPress(keyPress, InputSource::internal, context);
-            }
-            return true;
 
-        case Type::builtinCommand:
-            return builtinCommand(context);
-    }
-    return false;
-}
+struct Transaction
+{
+    using KeyPressNodeRefs = std::vector<KeyPressNode*>;
+    using Operations = std::vector<std::move_only_function<void()>>;
+    KeyPressNodeRefs refCountIncreaseNodes;
+    Operations       operations;
+};
 
-static void updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root)
+}  // namespace
+
+static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, InputMapping mapping, bool force, Transaction& transaction)
 {
     auto currentNode = &root;
 
-    for (size_t i = 0; i < keySequence.size(); ++i)
+    for (size_t i = 0; i < keySequence.size() - 1; ++i)
     {
         auto keyPress = keySequence[i];
         auto it = currentNode->children.find(keyPress);
         if (it == currentNode->children.end())
         {
-            currentNode = &currentNode->children.emplace(
-                std::make_pair(
-                    keyPress,
-                    KeyPressNode(keyPress)))
-                .first->second;
+            transaction.operations.emplace_back(
+                [currentNode, i, keySequence = std::move(keySequence), mapping = std::move(mapping)] mutable
+                {
+                    for (; i < keySequence.size() - 1; ++i)
+                    {
+                        auto keyPress = keySequence[i];
+                        currentNode = &currentNode->children.emplace(
+                            keyPress,
+                            KeyPressNode(keyPress))
+                            .first->second;
+                    }
+
+                    auto keyPress = keySequence.back();
+
+                    currentNode->children.emplace(
+                        keyPress,
+                        KeyPressNode(keyPress, std::move(mapping)));
+                });
+            return true;
         }
         else
         {
             currentNode = &it->second;
-            ++currentNode->refCount;
+            transaction.refCountIncreaseNodes.emplace_back(currentNode);
         }
     }
+
+    auto keyPress = keySequence.back();
+    auto it = currentNode->children.find(keyPress);
+
+    if (it != currentNode->children.end())
+    {
+        if (force)
+        {
+            transaction.operations.emplace_back(
+                [mapping = std::move(mapping), it]
+                {
+                    it->second.mapping = std::move(mapping);
+                });
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        transaction.operations.emplace_back(
+            [mapping = std::move(mapping), currentNode, keyPress]
+            {
+                currentNode->children.emplace(
+                    keyPress,
+                    KeyPressNode(keyPress, std::move(mapping)));
+            });
+    }
+
+    return true;
 }
 
 static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, InputMappingFlags flags, Context& context)
@@ -456,72 +517,40 @@ static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, Inpu
 
     const auto& keySequence = *converted;
 
-    if (flags & InputMappingFlags::force)
-    {
-        if (flags & InputMappingFlags::normal)
-        {
-            inputMappings[static_cast<int>(Mode::normal)].erase(keySequence);
-        }
-        if (flags & InputMappingFlags::visual)
-        {
-            inputMappings[static_cast<int>(Mode::visual)].erase(keySequence);
-        }
-        if (flags & InputMappingFlags::command)
-        {
-            inputMappings[static_cast<int>(Mode::command)].erase(keySequence);
-        }
-    }
-    else
-    {
-        if (flags & InputMappingFlags::normal)
-        {
-            auto& map = inputMappings[static_cast<int>(Mode::normal)];
-            if (map.contains(keySequence))
-            {
-                goto failure;
-            }
-            map.emplace(
-                std::make_pair(
-                    keySequence,
-                    rhs));
-        }
-        if (flags & InputMappingFlags::visual)
-        {
-            auto& map = inputMappings[static_cast<int>(Mode::visual)];
-            if (map.contains(keySequence))
-            {
-                goto failure;
-            }
-            map.emplace(
-                std::make_pair(
-                    keySequence,
-                    rhs));
-        }
-        if (flags & InputMappingFlags::command)
-        {
-            auto& map = inputMappings[static_cast<int>(Mode::command)];
-            if (map.contains(keySequence))
-            {
-                goto failure;
-            }
-            map.emplace(
-                std::make_pair(
-                    keySequence,
-                    rhs));
-        }
-    }
+    bool force = flags & InputMappingFlags::force;
+
+    Transaction transaction;
 
     if (flags & InputMappingFlags::normal)
     {
-        updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::normal)]);
+        if (not updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::normal)], rhs, force, transaction))
+        {
+            goto failure;
+        }
     }
     if (flags & InputMappingFlags::visual)
     {
-        updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::visual)]);
+        if (not updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::visual)], rhs, force, transaction))
+        {
+            goto failure;
+        }
     }
     if (flags & InputMappingFlags::command)
     {
-        updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::command)]);
+        if (not updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::command)], rhs, force, transaction))
+        {
+            goto failure;
+        }
+    }
+
+    for (auto& operation : transaction.operations)
+    {
+        operation();
+    }
+
+    for (auto node : transaction.refCountIncreaseNodes)
+    {
+        ++node->refCount;
     }
 
     return true;
@@ -614,8 +643,6 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
     static_assert(static_cast<int>(Mode::visual)  == 1);
     static_assert(static_cast<int>(Mode::command) == 2);
 
-    InputMappingMap* map = nullptr;
-
     if (not inputState.current)
     {
         switch (mode)
@@ -629,8 +656,6 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
         }
     }
 
-    map = &inputMappings[static_cast<int>(mode)];
-
     inputState.state.push_back(keyPress);
 
     const auto node = inputState.current->children.find(keyPress);
@@ -643,10 +668,11 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     inputState.current = &node->second;
 
-    if (const auto it = map->find(inputState.state); it != map->end())
+    if (inputState.current->mapping)
     {
+        auto& handler = *inputState.current->mapping;
         clearInputState(inputState);
-        it->second(context);
+        handler(context);
     }
 
     return true;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <string>
 
 #include "core/fwd.hpp"
@@ -12,8 +11,6 @@ namespace core
 
 struct MainLoop : utils::Immobile
 {
-    using Closure = std::function<void()>;
-
     virtual ~MainLoop() = default;
     virtual void run(Context& context) = 0;
     virtual void quit(Context& context) = 0;

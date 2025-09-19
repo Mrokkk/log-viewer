@@ -1,15 +1,13 @@
 #pragma once
 
 #include <string_view>
-#include <vector>
 
 #include "core/log_entry.hpp"
 #include "core/severity.hpp"
+#include "utils/function_ref.hpp"
 #include "utils/immobile.hpp"
 #include "utils/buffer.hpp"
 #include "utils/source_location.hpp"
-
-using LogEntries = std::vector<LogEntry>;
 
 #ifndef LOG_HEADER
 #define LOG_HEADER nullptr
@@ -91,7 +89,7 @@ struct Logger final
 
     static void flushToStderr();
     static void setLogFile(std::string_view path);
-    static LogEntries logEntries();
+    static void forEachLogEntry(utils::FunctionRef<void(const LogEntry&)> visitor);
 
 private:
     static Flusher log(

@@ -2,6 +2,8 @@
 
 #include <flat_map>
 
+#include "utils/function_ref.hpp"
+
 namespace core
 {
 
@@ -30,7 +32,7 @@ Alias* Aliases::find(const std::string_view& name)
     return &aliasIt->second;
 }
 
-void Aliases::forEach(std::function<void(const Alias&)> callback)
+void Aliases::forEach(utils::FunctionRef<void(const Alias&)> callback)
 {
     for (const auto& [_, alias] : map())
     {

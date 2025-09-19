@@ -218,7 +218,7 @@ Buffer* WindowNode::buffer()
     return getBuffer(mWindow.bufferId, Context::instance());
 }
 
-void WindowNode::forEachRecursive(const std::function<void(WindowNode&)>& functor)
+void WindowNode::forEachRecursive(const Visitor& functor)
 {
     for (auto& child : mChildren)
     {

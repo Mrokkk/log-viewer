@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -10,6 +9,7 @@
 #include "core/type.hpp"
 #include "utils/bitflag.hpp"
 #include "utils/enum_traits.hpp"
+#include "utils/function_ref.hpp"
 #include "utils/noncopyable.hpp"
 
 namespace core::interpreter
@@ -81,7 +81,7 @@ struct Commands final
     Commands() = delete;
     static Command* find(const std::string& name);
     static void $register(Command command);
-    static void forEach(std::function<void(const Command&)> callback);
+    static void forEach(utils::FunctionRef<void(const Command&)> callback);
 };
 
 #define EXECUTOR() \

@@ -64,16 +64,9 @@ void Logger::setLogFile(std::string_view path)
     }
 }
 
-LogEntries Logger::logEntries()
+void Logger::forEachLogEntry(utils::FunctionRef<void(const LogEntry&)> visitor)
 {
-    LogEntries logs;
-    logs.reserve(state.ringBuffer.size());
-    state.ringBuffer.forEach(
-        [&logs](const auto& entry)
-        {
-            logs.push_back(entry);
-        });
-    return logs;
+    state.ringBuffer.forEach(visitor);
 }
 
 void Logger::registerLogEntry(Severity severity, LogEntryFlags flags, const char* header, utils::SourceLocation loc)
