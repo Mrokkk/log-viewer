@@ -2,7 +2,22 @@ cmake_minimum_required(VERSION 3.12)
 
 project(log-viewer CXX)
 
+option(BUILD_TESTS "Build tests" OFF)
+option(LTO         "Enable Link Time Optimization" OFF)
+option(OPTIMIZE    "Enable compiler optimizations" ON)
+option(SANITIZE    "Enable ASan and UBsan" OFF)
+option(COVERAGE    "Enable collecting code coverage in tests" OFF)
+
+message(STATUS "Build tests: ${BUILD_TESTS}")
+message(STATUS "Enable Link Time Optimization: ${LTO}")
+message(STATUS "Enable compiler optimizations: ${OPTIMIZE}")
+message(STATUS "Enable ASan and UBsan: ${SANITIZE}")
+message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 find_program(CCACHE ccache)
+
 if(CCACHE)
     message(STATUS "Using ccache: ${CCACHE}")
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE}")
@@ -10,8 +25,15 @@ if(CCACHE)
 endif()
 
 include(FetchContent)
-
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+
+if(OPTIMIZE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+endif()
+
+if(LTO)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")
+endif()
 
 FetchContent_Declare(ftxui
     GIT_REPOSITORY https://github.com/Mrokkk/FTXUI.git
@@ -35,32 +57,10 @@ FetchContent_MakeAvailable(re2)
 include(FindPkgConfig)
 pkg_check_modules(BACKTRACE REQUIRED libbacktrace)
 
-option(BUILD_TESTS "Build tests" OFF)
-option(LTO "Enable Link Time Optimization" OFF)
-option(OPTIMIZE "Enable compiler optimizations" ON)
-option(SANITIZE "Enable ASan and UBsan" OFF)
-option(COVERAGE "Enable collecting code coverage in tests" OFF)
-
-message(STATUS "Build tests: ${BUILD_TESTS}")
-message(STATUS "Enable Link Time Optimization: ${LTO}")
-message(STATUS "Enable compiler optimizations: ${OPTIMIZE}")
-message(STATUS "Enable ASan and UBsan: ${SANITIZE}")
-message(STATUS "Enable collecting coverage in tests: ${COVERAGE}")
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pipe -std=c++2c -ggdb3 -Wall -Wextra -Werror -Wno-missing-field-initializers -fno-exceptions")
-
-if(OPTIMIZE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-endif()
 
 if(SANITIZE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined -Wl,-lasan -fno-omit-frame-pointer")
-endif()
-
-if(LTO)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=auto")
 endif()
 
 add_executable(${PROJECT_NAME}
