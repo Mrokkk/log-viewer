@@ -1,10 +1,11 @@
 #include "event_handler.hpp"
 
-#include <flat_map>
 #include <utility>
 
 #include <ftxui/component/event.hpp>
 
+#include "ui/event_hash.hpp"
+#include "utils/hash_map.hpp"
 #include "utils/maybe.hpp"
 
 namespace ui
@@ -19,17 +20,17 @@ struct EventHandlers::Impl
 
     utils::Maybe<bool> handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) const
     {
-        auto it = handlers.find(event);
+        auto node = handlers.find(event);
 
-        if (it == handlers.end())
+        if (not node) [[unlikely]]
         {
             return {};
         }
 
-        return it->second(ui, context);
+        return node->second(ui, context);
     }
 
-    std::flat_map<ftxui::Event, EventHandler> handlers;
+    utils::HashMap<ftxui::Event, EventHandler> handlers;
 };
 
 EventHandlers::EventHandlers(std::initializer_list<EventHandlerPair>&& list)

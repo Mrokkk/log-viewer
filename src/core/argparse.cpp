@@ -1,13 +1,14 @@
 #include "argparse.hpp"
 
 #include <cassert>
-#include <flat_map>
 #include <getopt.h>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "core/type.hpp"
 #include "utils/buffer.hpp"
+#include "utils/hash_map.hpp"
 
 namespace core
 {
@@ -124,8 +125,8 @@ std::expected<int, std::string> parseArgs(int argc, char* const* argv)
     std::string shortopts = "-";
     std::vector<option> longopts;
 
-    std::flat_map<std::string_view, Option*> longNameToOption;
-    std::flat_map<char, Option*> shortNameToOption;
+    utils::HashMap<std::string_view, Option*> longNameToOption;
+    utils::HashMap<char, Option*> shortNameToOption;
     Option* positionalOption = nullptr;
 
     auto& registeredOptions = CommandLineOptions::list();
@@ -143,7 +144,7 @@ std::expected<int, std::string> parseArgs(int argc, char* const* argv)
                 .val = 0,
             });
 
-            auto result = longNameToOption.emplace(std::make_pair(option.longName, &option));
+            auto result = longNameToOption.insert(option.longName, &option);
 
             if (not result.second)
             {
@@ -153,7 +154,7 @@ std::expected<int, std::string> parseArgs(int argc, char* const* argv)
 
             if (option.shortName)
             {
-                auto result = shortNameToOption.emplace(std::make_pair(option.shortName, &option));
+                auto result = shortNameToOption.insert(option.shortName, &option);
 
                 if (not result.second)
                 {
@@ -186,7 +187,7 @@ std::expected<int, std::string> parseArgs(int argc, char* const* argv)
             {
                 auto optionIt = longNameToOption.find(longopts[optindex].name);
 
-                if (optionIt == longNameToOption.end())
+                if (not optionIt)
                 {
                     error << INTERNAL_ERROR("unknown option");
                     return std::unexpected(error.str());
@@ -234,7 +235,7 @@ std::expected<int, std::string> parseArgs(int argc, char* const* argv)
             {
                 auto optionIt = shortNameToOption.find(res);
 
-                if (optionIt != shortNameToOption.end())
+                if (optionIt)
                 {
                     saveValue(*optionIt->second);
                 }

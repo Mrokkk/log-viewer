@@ -1,13 +1,12 @@
 #include "alias.hpp"
 
-#include <flat_map>
-
 #include "utils/function_ref.hpp"
+#include "utils/hash_map.hpp"
 
 namespace core
 {
 
-using AliasesMap = std::flat_map<std::string_view, Alias>;
+using AliasesMap = utils::HashMap<std::string_view, Alias>;
 
 static AliasesMap& map()
 {
@@ -17,27 +16,28 @@ static AliasesMap& map()
 
 void Aliases::$register(Alias alias)
 {
-    map()[alias.name] = std::move(alias);
+    map().insert(alias.name, std::move(alias));
 }
 
 Alias* Aliases::find(const std::string_view& name)
 {
-    auto aliasIt = map().find(name);
+    auto node = map().find(name);
 
-    if (aliasIt == map().end()) [[unlikely]]
+    if (not node) [[unlikely]]
     {
         return nullptr;
     }
 
-    return &aliasIt->second;
+    return &node->second;
 }
 
 void Aliases::forEach(utils::FunctionRef<void(const Alias&)> callback)
 {
-    for (const auto& [_, alias] : map())
-    {
-        callback(alias);
-    }
+    map().forEach(
+        [&callback](const auto& node)
+        {
+            callback(node.second);
+        });
 }
 
 }  // namespace core

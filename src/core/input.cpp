@@ -3,7 +3,6 @@
 
 #include <cctype>
 #include <expected>
-#include <flat_map>
 #include <functional>
 #include <string_view>
 
@@ -15,10 +14,20 @@
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
 #include "utils/buffer.hpp"
+#include "utils/hash_map.hpp"
 #include "utils/maybe.hpp"
 #include "utils/memory.hpp"
 #include "utils/noncopyable.hpp"
 #include "utils/string.hpp"
+
+template<>
+struct std::hash<core::KeyPress>
+{
+    std::size_t operator()(const core::KeyPress& k) const noexcept
+    {
+        return *reinterpret_cast<const uint16_t*>(&k);
+    }
+};
 
 namespace core
 {
@@ -153,7 +162,7 @@ struct KeyPressNode final : utils::NonCopyable
 {
     constexpr static inline struct Root{} root = {};
 
-    using ChildrenMap = std::flat_map<KeyPress, KeyPressNode>;
+    using ChildrenMap = utils::HashMap<KeyPress, KeyPressNode>;
     using MaybeInputMapping = utils::Maybe<InputMapping>;
 
     constexpr KeyPressNode(Root)
@@ -334,7 +343,7 @@ static std::expected<KeyPresses, std::string> convertKeys(std::string_view input
 #define KEYPRESS(K) \
     {constevalName(KeyPress::K), KeyPress::K}
 
-    static std::flat_map<std::string_view, KeyPress> nameToKeyPress = {
+    static utils::HashMap<std::string_view, KeyPress> nameToKeyPress = {
         {"leader",    KeyPress::character(',')},
         KEYPRESS(escape),
         KEYPRESS(backspace),
@@ -404,9 +413,9 @@ static std::expected<KeyPresses, std::string> convertKeys(std::string_view input
 
             auto lowerKey = key | utils::lowerCase;
 
-            if (auto it = nameToKeyPress.find(lowerKey); it != nameToKeyPress.end()) [[likely]]
+            if (auto node = nameToKeyPress.find(lowerKey)) [[likely]]
             {
-                keys.push_back(it->second);
+                keys.push_back(node->second);
             }
             else
             {
@@ -444,7 +453,7 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
     {
         auto keyPress = keySequence[i];
         auto it = currentNode->children.find(keyPress);
-        if (it == currentNode->children.end())
+        if (not it)
         {
             transaction.operations.emplace_back(
                 [currentNode, i, keySequence = std::move(keySequence), mapping = std::move(mapping)] mutable
@@ -452,15 +461,15 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
                     for (; i < keySequence.size() - 1; ++i)
                     {
                         auto keyPress = keySequence[i];
-                        currentNode = &currentNode->children.emplace(
+                        currentNode = &currentNode->children.insert(
                             keyPress,
                             KeyPressNode(keyPress))
-                            .first->second;
+                            .second;
                     }
 
                     auto keyPress = keySequence.back();
 
-                    currentNode->children.emplace(
+                    currentNode->children.insert(
                         keyPress,
                         KeyPressNode(keyPress, std::move(mapping)));
                 });
@@ -476,7 +485,7 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
     auto keyPress = keySequence.back();
     auto it = currentNode->children.find(keyPress);
 
-    if (it != currentNode->children.end())
+    if (it)
     {
         if (force)
         {
@@ -496,7 +505,7 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
         transaction.operations.emplace_back(
             [mapping = std::move(mapping), currentNode, keyPress]
             {
-                currentNode->children.emplace(
+                currentNode->children.insert(
                     keyPress,
                     KeyPressNode(keyPress, std::move(mapping)));
             });
@@ -660,7 +669,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     const auto node = inputState.current->children.find(keyPress);
 
-    if (node == inputState.current->children.end())
+    if (not node)
     {
         clearInputState(inputState);
         return false;

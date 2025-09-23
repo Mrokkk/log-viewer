@@ -40,6 +40,7 @@ struct UniquePtr final
         reset();
         mPtr = other.mPtr;
         other.mPtr = nullptr;
+        return *this;
     }
 
     constexpr auto release()
@@ -57,6 +58,8 @@ struct UniquePtr final
             mPtr = nullptr;
         }
     }
+
+    constexpr operator bool() const { return mPtr != nullptr; }
 
     constexpr auto operator->() const { return mPtr; }
     constexpr auto operator->()       { return mPtr; }

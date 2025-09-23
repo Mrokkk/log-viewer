@@ -2,15 +2,15 @@
 
 #include <algorithm>
 #include <cstdio>
-#include <flat_map>
 #include <string_view>
 
 #include "utils/function_ref.hpp"
+#include "utils/hash_map.hpp"
 
 namespace core::interpreter
 {
 
-using CommandsMap = std::flat_map<std::string_view, Command>;
+using CommandsMap = utils::HashMap<std::string_view, Command>;
 
 static CommandsMap& map()
 {
@@ -49,10 +49,10 @@ const std::vector<CommandFlags::FlagSignature>& CommandFlags::get() const
 Command* Commands::find(const std::string& name)
 {
     auto& commands = map();
-    const auto commandIt = commands.find(name);
+    const auto node = commands.find(name);
 
-    return commandIt != commands.end()
-        ? &commandIt->second
+    return node
+        ? &node->second
         : nullptr;
 }
 
@@ -77,21 +77,22 @@ void Commands::$register(Command command)
 
     auto& commands = map();
 
-    auto result = commands.emplace(std::make_pair(command.name, std::move(command)));
-
-    if (not result.second) [[unlikely]]
+    if (commands.find(command.name)) [[unlikely]]
     {
         std::fprintf(stderr, "%s: %s: already defined\n", __func__, command.name.data());
         std::abort();
     }
+
+    commands.insert(command.name, std::move(command));
 }
 
 void Commands::forEach(utils::FunctionRef<void(const Command&)> callback)
 {
-    for (const auto& [_, command] : map())
-    {
-        callback(command);
-    }
+    map().forEach(
+        [&callback](const auto& node)
+        {
+            callback(node.second);
+        });
 }
 
 }  // namespace core::interpreter

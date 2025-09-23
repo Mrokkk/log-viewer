@@ -4,6 +4,7 @@
 #include "core/fwd.hpp"
 #include "core/window_node.hpp"
 #include "utils/immobile.hpp"
+#include "utils/trie.hpp"
 
 namespace core
 {
@@ -41,17 +42,20 @@ struct MainView : utils::Immobile
     void scrollTo(size_t lineNumber, Context& context);
     void searchForward(std::string pattern, Context& context);
     void searchBackward(std::string pattern, Context& context);
+    void highlight(std::string pattern, std::string colorString, Context& context);
 
 private:
     struct Impl;
+    struct Pattern;
 
-    WindowNode      mRoot;
-    WindowNode*     mCurrentWindowNode;
-    size_t          mWidth;
-    size_t          mHeight;
-    int             mActiveTabline;
-    SearchDirection mSearchMode;
-    std::string     mSearchPattern;
+    WindowNode           mRoot;
+    WindowNode*          mCurrentWindowNode;
+    size_t               mWidth;
+    size_t               mHeight;
+    int                  mActiveTabline;
+    SearchDirection      mSearchMode;
+    std::string          mSearchPattern;
+    utils::Trie<Pattern> mTrie;
 };
 
 }  // namespace core

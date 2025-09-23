@@ -122,6 +122,7 @@ private:
 struct Config : utils::Immobile
 {
     using Uint8  = detail::ConfigVariable<uint8_t>;
+    using Uint32 = detail::ConfigVariable<uint32_t>;
     using Size   = detail::ConfigVariable<size_t>;
     using Bool   = detail::ConfigVariable<bool>;
     using String = detail::ConfigVariable<std::string_view>;
@@ -131,10 +132,12 @@ struct Config : utils::Immobile
     Size   bytesPerThread;
     Bool   showLineNumbers;
     Bool   absoluteLineNumbers;
+    Bool   highlightSearch;
     Uint8  scrollJump;
     Uint8  scrollOff;
     Uint8  fastMoveLen;
     Uint8  tabWidth;
+    Uint32 highlightColor;
     String lineNumberSeparator;
     String tabChar;
 

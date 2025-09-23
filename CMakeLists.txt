@@ -77,6 +77,7 @@ add_executable(${PROJECT_NAME}
     src/core/commands/get.cpp
     src/core/commands/grep.cpp
     src/core/commands/help.cpp
+    src/core/commands/highlight.cpp
     src/core/commands/map.cpp
     src/core/commands/open.cpp
     src/core/commands/quit.cpp

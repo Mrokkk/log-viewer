@@ -1,10 +1,10 @@
 #include "event_converter.hpp"
 
-#include <flat_map>
-
 #include <ftxui/component/event.hpp>
 
 #include "core/input.hpp"
+#include "ui/event_hash.hpp"
+#include "utils/hash_map.hpp"
 #include "utils/maybe.hpp"
 
 using namespace ftxui;
@@ -12,18 +12,18 @@ using namespace ftxui;
 namespace ui
 {
 
-static std::flat_map<Event, core::KeyPress> eventToKeyPress;
+static utils::HashMap<Event, core::KeyPress> eventToKeyPress;
 
 utils::Maybe<core::KeyPress> convertEvent(const ftxui::Event& event)
 {
-    auto it = eventToKeyPress.find(event);
+    auto node = eventToKeyPress.find(event);
 
-    if (it == eventToKeyPress.end()) [[unlikely]]
+    if (not node) [[unlikely]]
     {
         return {};
     }
 
-    return it->second;
+    return node->second;
 }
 
 void initEventConverter()
@@ -85,39 +85,36 @@ void initEventConverter()
         char ctrl = c - 0x40;
 
         // Small letter
-        eventToKeyPress.emplace(
-            std::make_pair(
-                Event::Character(std::string{small}),
-                core::KeyPress::character(small)));
+        eventToKeyPress.insert(
+            Event::Character(std::string{small}),
+            core::KeyPress::character(small));
 
         // Capital letter
-        eventToKeyPress.emplace(
-            std::make_pair(
-                Event::Character(std::string{capital}),
-                core::KeyPress::character(capital)));
+        eventToKeyPress.insert(
+            Event::Character(std::string{capital}),
+            core::KeyPress::character(capital));
 
-        if (ctrl != '\e' and ctrl != '\t')
+        auto ctrlCharacter = Event::Special(std::string{ctrl});
+
+        if (not eventToKeyPress.find(ctrlCharacter))
         {
             // Ctrl+letter
-            eventToKeyPress.emplace(
-                std::make_pair(
-                    Event::Special(std::string{ctrl}),
-                    core::KeyPress::ctrl(small)));
+            eventToKeyPress.insert(
+                std::move(ctrlCharacter),
+                core::KeyPress::ctrl(small));
         }
 
         // Alt+letter
-        eventToKeyPress.emplace(
-            std::make_pair(
-                Event::Special(std::string{'\e', small}),
-                core::KeyPress::alt(small)));
+        eventToKeyPress.insert(
+            Event::Special(std::string{'\e', small}),
+            core::KeyPress::alt(small));
     }
 
     for (char c = ' '; c <= '?'; ++c)
     {
-        eventToKeyPress.emplace(
-            std::make_pair(
-                Event::Character(std::string{c}),
-                core::KeyPress::character(c)));
+        eventToKeyPress.insert(
+            Event::Character(std::string{c}),
+            core::KeyPress::character(c));
     }
 }
 

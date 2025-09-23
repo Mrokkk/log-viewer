@@ -1,9 +1,9 @@
 #pragma once
 
-#include <flat_map>
 #include <string>
 
 #include "core/interpreter/symbol.hpp"
+#include "utils/hash_map.hpp"
 #include "utils/unique_ptr.hpp"
 
 namespace core::interpreter
@@ -58,7 +58,7 @@ private:
     Symbol* mSymbol;
 };
 
-using SymbolsMap = std::flat_map<std::string, SymbolNode>;
+using SymbolsMap = utils::HashMap<std::string, SymbolNode>;
 
 const SymbolsMap& symbolsMap();
 

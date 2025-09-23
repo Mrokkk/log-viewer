@@ -60,13 +60,14 @@ struct SearchResult
 struct SearchRequest
 {
     const SearchDirection direction;
+    const bool            continuation;
     const size_t          startLineIndex;
     const size_t          startLinePosition;
     std::string           pattern;
 };
 
 using TimeOrError = std::expected<float, BufferError>;
-using StringOrError = std::expected<std::string, BufferError>;
+using StringViewOrError = std::expected<std::string_view, BufferError>;
 using FinishedCallback = std::function<void(TimeOrError)>;
 using FinishedSearchCallback = std::function<void(SearchResult, float)>;
 
@@ -78,7 +79,7 @@ struct Buffer : utils::Immobile
     void load(std::string path, Context& context, FinishedCallback callback);
     void grep(std::string pattern, GrepOptions options, BufferId parentBufferId, Context& context, FinishedCallback callback);
     void filter(size_t start, size_t end, BufferId parentBufferId, Context& context, FinishedCallback callback);
-    StringOrError readLine(size_t i);
+    StringViewOrError readLine(size_t i);
 
     void search(SearchRequest req, FinishedSearchCallback callback);
 

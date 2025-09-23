@@ -23,10 +23,12 @@ struct FunctionRef;
 template <typename R, typename ...Args>
 struct FunctionRef<R(Args...)>
 {
+    constexpr FunctionRef() = default;
+
     template <typename F>
     requires (not std::is_same_v<std::decay_t<F>, FunctionRef> and std::is_invocable_r_v<R, F&&, Args...>)
     constexpr FunctionRef(F&& f)
-        : mData(const_cast<void*>(reinterpret_cast<const void *>(std::addressof(f))))
+        : mData(const_cast<void*>(reinterpret_cast<const void*>(std::addressof(f))))
         , mFunctionPtr(
             [](void* obj, Args... args) -> R
             {

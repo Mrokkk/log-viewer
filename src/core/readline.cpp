@@ -1,12 +1,12 @@
 #include "readline.hpp"
 
-#include <flat_map>
 #include <flat_set>
 #include <ranges>
 
 #include "core/input.hpp"
 #include "core/picker.hpp"
 #include "utils/bitflag.hpp"
+#include "utils/hash_map.hpp"
 #include "utils/immobile.hpp"
 #include "utils/string.hpp"
 
@@ -173,7 +173,7 @@ private:
         AcceptBehaviour acceptBehaviour;
     };
 
-    using Pickers = std::flat_map<char, PickerData>;
+    using Pickers = utils::HashMap<char, PickerData>;
 
     std::string          mLine;
     size_t               mCursor = 0;
@@ -406,7 +406,7 @@ void Readline::Impl::setPageSize(size_t pageSize)
 
 void Readline::Impl::connectPicker(Picker& picker, char ctrlCharacter, AcceptBehaviour acceptBehaviour)
 {
-    mPickers.emplace(std::make_pair(ctrlCharacter, PickerData{.picker = &picker, .acceptBehaviour = acceptBehaviour}));
+    mPickers.insert(ctrlCharacter, PickerData{.picker = &picker, .acceptBehaviour = acceptBehaviour});
 }
 
 const std::string& Readline::Impl::line() const
@@ -771,7 +771,7 @@ bool Readline::Impl::activatePicker(char c, Context& context)
 {
     auto pickerIt = mPickers.find(c);
 
-    if (pickerIt == mPickers.end())
+    if (not pickerIt)
     {
         return false;
     }

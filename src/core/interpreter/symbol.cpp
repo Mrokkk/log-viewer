@@ -35,26 +35,26 @@ Symbol* Symbols::find(const std::string& name)
 {
     const auto& symbols = map();
 
-    const auto variableIt = symbols.find(name);
+    const auto node = symbols.find(name);
 
-    return variableIt != symbols.end()
-        ? &variableIt->second.get()
+    return node
+        ? &node->second.get()
         : nullptr;
 }
 
 void Symbols::addReadWrite(std::string name, Value value)
 {
-    map().emplace(std::move(name), utils::makeUnique<Symbol>(Symbol::Access::readWrite, value));
+    map().insert(std::move(name), utils::makeUnique<Symbol>(Symbol::Access::readWrite, value));
 }
 
 void Symbols::addReadOnly(std::string name, Value value)
 {
-    map().emplace(std::move(name), utils::makeUnique<Symbol>(Symbol::Access::readOnly, value));
+    map().insert(std::move(name), utils::makeUnique<Symbol>(Symbol::Access::readOnly, value));
 }
 
 void Symbols::add(std::string name, Symbol& symbol)
 {
-    map().emplace(std::move(name), &symbol);
+    map().insert(std::move(name), &symbol);
 }
 
 utils::Buffer& operator<<(utils::Buffer& buf, const Symbol& symbol)

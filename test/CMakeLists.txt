@@ -45,9 +45,11 @@ add_executable(test
 
     bitflag_tests.cpp
     buffer_tests.cpp
+    hash_map_tests.cpp
     lexer_tests.cpp
     maybe_tests.cpp
     ring_buffer_tests.cpp
+    trie_tests.cpp
     value_tests.cpp
 
 )

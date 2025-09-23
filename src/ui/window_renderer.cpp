@@ -36,6 +36,15 @@ static std::string convertToString(uint32_t value)
     return std::string((const char*)&value, strnlen((const char*)&value, 4));
 }
 
+static Color convertToColor(uint32_t value)
+{
+    return Color(
+        (value >> 16) & 0xff,
+        (value >>  8) & 0xff,
+        (value      ) & 0xff
+    );
+}
+
 void WindowRenderer::Render(ftxui::Screen& screen)
 {
     auto t = utils::startTimeMeasurement();
@@ -105,6 +114,7 @@ void WindowRenderer::Render(ftxui::Screen& screen)
             // Draw line
             for (const auto& segment : line.segments)
             {
+                auto fgColor = convertToColor(segment.color);
                 for (const auto& glyph : segment.glyphs)
                 {
                     if (position < xoffset)
@@ -140,18 +150,18 @@ void WindowRenderer::Render(ftxui::Screen& screen)
                             auto& pixel = screen.PixelAt(x, y);
                             pixel.character = convertToString(glyph.characters[i]);
                             pixel.background_color = bgColor;
-                            pixel.foreground_color = Color::Default;
+                            pixel.foreground_color = fgColor;
                             ++x;
                         }
                     }
                     ++position;
                 }
+            }
 
-                for (; x <= box_.x_max; ++x)
-                {
-                    auto& pixel = screen.PixelAt(x, y);
-                    pixel.background_color = bgColor;
-                }
+            for (; x <= box_.x_max; ++x)
+            {
+                auto& pixel = screen.PixelAt(x, y);
+                pixel.background_color = bgColor;
             }
 
             next_line:

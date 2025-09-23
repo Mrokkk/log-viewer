@@ -12,6 +12,7 @@
 #include "core/logger.hpp"
 #include "core/main_loop.hpp"
 #include "sys/system.hpp"
+#include "utils/time.hpp"
 
 namespace core
 {
@@ -52,8 +53,9 @@ int run(int argc, char* const* argv, Context& context)
 
     for (const auto& configFile : sys::getConfigFiles())
     {
-        logger.info() << "sourcing " << configFile;
+        auto t = utils::startTimeMeasurement();
         commands::source(configFile, context);
+        logger.info() << "sourced " << configFile << "; took: " << 1000 * t.elapsed() << " ms";
     }
 
     if (file)

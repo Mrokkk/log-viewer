@@ -36,8 +36,9 @@ using GlyphsSpan = std::span<Glyph>;
 
 struct ColoredString
 {
+    uint32_t   color:24;
+    uint32_t   defColor:1;
     GlyphsSpan glyphs;
-    uint32_t   color;
 };
 
 using ColoredStrings = std::vector<ColoredString>;
@@ -63,6 +64,7 @@ struct Window final : utils::NonCopyable
     bool       initialized;
     bool       loaded;
     bool       pendingSearch;
+    bool       foundAnything;
     BufferId   bufferId;
     size_t     lineCount;
     size_t     width;

@@ -14,12 +14,16 @@
 #include "core/main_loop.hpp"
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
+#include "core/palette.hpp"
 #include "core/utf8.hpp"
 #include "core/window.hpp"
 #include "sys/system.hpp"
 #include "utils/buffer.hpp"
 #include "utils/format.hpp"
+#include "utils/hash_map.hpp"
 #include "utils/math.hpp"
+#include "utils/maybe.hpp"
+#include "utils/string.hpp"
 
 namespace core
 {
@@ -27,6 +31,20 @@ namespace core
 using utils::max;
 using utils::min;
 using utils::clamp;
+
+struct MainView::Pattern
+{
+    enum class Type
+    {
+        matchPatternOnly,
+        matchAfter,
+        matchBefore,
+    };
+
+    Type      type;
+    uint32_t  fgColor;
+    uint32_t  bgColor;
+};
 
 struct MainView::Impl final : MainView
 {
@@ -98,6 +116,9 @@ struct MainView::Impl final : MainView
     void removeWindow(WindowNode& node, Context&);
     void reloadWindow(WindowNode& node, Context& context);
     void reloadLines(Buffer& buffer, Window& w, Context& context);
+
+    BufferLine getLine(Buffer& buffer, size_t lineIndex, Context& context);
+
     void alignCursor(Window& w);
     void updateSelection(Window& w);
 
@@ -124,13 +145,23 @@ struct MainView::Impl final : MainView
     void wordBeginning();
     void wordEnd();
 
+    void startSearch(std::string pattern, SearchDirection direction);
     void search(std::string pattern, SearchDirection direction, Context& context);
     void search(Context& context);
-    void handleSearchResult(const SearchResult& result, const std::string& pattern, Window& w, float time, Context& context);
+
+    void handleSearchResult(
+        const SearchResult& result,
+        const std::string& pattern,
+        Window& w,
+        Buffer& buffer,
+        float time,
+        Context& context);
 
     void selectionModeToggle(Context& context);
     void yank(Context& context);
     void yankSingle(Context& context);
+
+    static utils::Maybe<Pattern> parse(std::string& pattern, std::string& colorString);
 
     WindowNode* getActiveLineView();
     void activeTablineLeft();
@@ -364,16 +395,51 @@ void MainView::scrollTo(size_t lineNumber, Context& context)
 
 void MainView::searchForward(std::string pattern, Context& context)
 {
-    mSearchPattern = std::move(pattern);
-    mSearchMode = SearchDirection::forward;
-    Impl::get(this).search(mSearchPattern, mSearchMode, context);
+    auto& impl = Impl::get(this);
+    impl.startSearch(std::move(pattern), SearchDirection::forward);
+    impl.search(mSearchPattern, mSearchMode, context);
 }
 
 void MainView::searchBackward(std::string pattern, Context& context)
 {
-    mSearchPattern = std::move(pattern);
-    mSearchMode = SearchDirection::backward;
-    Impl::get(this).search(mSearchPattern, mSearchMode, context);
+    auto& impl = Impl::get(this);
+    impl.startSearch(std::move(pattern), SearchDirection::backward);
+    impl.search(mSearchPattern, mSearchMode, context);
+}
+
+const static utils::HashMap<std::string, uint32_t> colors{
+    {"black",   Palette::black},
+    {"red",     Palette::red},
+    {"green",   Palette::green},
+    {"yellow",  Palette::yellow},
+    {"blue",    Palette::blue},
+    {"magenta", Palette::magenta},
+    {"cyan",    Palette::cyan},
+    {"white",   Palette::white},
+    {"grey",    Palette::grey},
+};
+
+void MainView::highlight(std::string pattern, std::string colorString, Context& context)
+{
+    auto& impl = Impl::get(this);
+
+    if (pattern.empty())
+    {
+        return;
+    }
+
+    auto data = impl.parse(pattern, colorString);
+
+    if (not data)
+    {
+        return;
+    }
+
+    impl.mTrie.insert(
+        std::move(pattern),
+        std::move(*data));
+
+    impl.reloadAll(context);
 }
 
 void MainView::Impl::removeWindow(WindowNode& node, Context&)
@@ -544,7 +610,7 @@ static Glyphs getGlyphs(std::string_view line, const Config& config)
     return glyphs;
 }
 
-static BufferLine getLine(Buffer& buffer, size_t lineIndex, Context& context)
+BufferLine MainView::Impl::getLine(Buffer& buffer, size_t lineIndex, Context& context)
 {
     auto result = buffer.readLine(lineIndex);
 
@@ -555,7 +621,7 @@ static BufferLine getLine(Buffer& buffer, size_t lineIndex, Context& context)
 
     const auto& config = context.config;
 
-    const auto& data = *result;
+    auto& data = *result;
 
     BufferLine line{
         .lineNumber = lineIndex,
@@ -563,22 +629,67 @@ static BufferLine getLine(Buffer& buffer, size_t lineIndex, Context& context)
         .glyphs = getGlyphs(data, config),
     };
 
-    //if (data.find("ERR") != std::string::npos)
-    //{
-        //line.segments.emplace_back(line.glyphs, 0xff0000);
-    //}
-    //else if (data.find("WRN") != std::string::npos)
-    //{
-        //line.segments.emplace_back(line.glyphs, Color::Yellow);
-    //}
-    //else if (data.find("DBG") != std::string::npos)
-    //{
-        //line.segments.emplace_back(line.glyphs, Color::Palette256(245));
-    //}
-    //else
+    line.segments.reserve(4);
+
+    uint32_t fgColor = Palette::white;
+    uint32_t prevFgColor = fgColor;
+
+    auto startIt = line.glyphs.begin();
+
+    auto ctx = mTrie.createScanContext();
+
+    while (const auto node = mTrie.scan(data, ctx))
     {
-        line.segments.emplace_back(line.glyphs, 0);
+        const auto nodeKeySize = node->first.size();
+        const auto match = ctx.currentOffset - nodeKeySize;
+
+        if (node->second.type == Pattern::Type::matchBefore)
+        {
+            fgColor = node->second.fgColor;
+            for (auto& segment : line.segments)
+            {
+                if (segment.defColor)
+                {
+                    segment.color = fgColor;
+                    segment.defColor = false;
+                }
+            }
+        }
+
+        auto endIt = line.glyphs.begin() + match;
+
+        if (endIt != startIt)
+        {
+            line.segments.emplace_back(
+                fgColor,
+                true,
+                GlyphsSpan(startIt, endIt));
+        }
+
+        startIt = endIt;
+        endIt += nodeKeySize;
+
+        if (node->second.type == Pattern::Type::matchAfter)
+        {
+            fgColor = node->second.fgColor;
+        }
+        else if (node->second.type == Pattern::Type::matchBefore)
+        {
+            fgColor = prevFgColor;
+        }
+
+        line.segments.emplace_back(
+            node->second.fgColor,
+            false,
+            GlyphsSpan(startIt, endIt));
+
+        startIt = endIt;
     }
+
+    line.segments.emplace_back(
+        fgColor,
+        true,
+        GlyphsSpan(startIt, line.glyphs.end()));
 
     return line;
 }
@@ -748,11 +859,14 @@ void MainView::Impl::right(Context& context)
     auto lineId = lineIndex(w);
 
     // Already reached line end, move to the next line if possible
-    if (linePos >= lineLen and lineId < w.lineCount - 1)
+    if (linePos >= lineLen)
     {
-        down(context);
-        w.xcurrent = 0;
-        w.xoffset = 0;
+        if (lineId < w.lineCount - 1)
+        {
+            down(context);
+            w.xcurrent = 0;
+            w.xoffset = 0;
+        }
         return;
     }
 
@@ -1067,6 +1181,20 @@ void MainView::Impl::wordEnd()
     lineEnd();
 }
 
+void MainView::Impl::startSearch(std::string pattern, SearchDirection direction)
+{
+    GET_WINDOW(w);
+
+    mTrie.erase(mSearchPattern);
+
+    mSearchPattern = std::move(pattern);
+    mSearchMode = direction;
+
+    mTrie.insert(mSearchPattern, Pattern{.type = Pattern::Type::matchPatternOnly, .fgColor = Palette::magenta});
+
+    w.foundAnything = false;
+}
+
 void MainView::Impl::search(std::string pattern, SearchDirection direction, Context& context)
 {
     GET_WINDOW_AND_BUFFER(w, buffer);
@@ -1081,11 +1209,12 @@ void MainView::Impl::search(std::string pattern, SearchDirection direction, Cont
     buffer->search(
         SearchRequest{
             .direction = direction,
+            .continuation = w.foundAnything,
             .startLineIndex = lineIndex(w),
             .startLinePosition = linePosition(w),
             .pattern = pattern,
         },
-        [this, &context, &w, pattern](SearchResult result, float time)
+        [this, &context, &w, buffer, pattern](SearchResult result, float time)
         {
             if (not context.running)
             {
@@ -1093,9 +1222,9 @@ void MainView::Impl::search(std::string pattern, SearchDirection direction, Cont
             }
 
             context.mainLoop->executeTask(
-                [this, &context, &w, pattern = std::move(pattern), result, time]
+                [this, &context, &w, buffer, pattern = std::move(pattern), result, time]
                 {
-                    handleSearchResult(result, pattern, w, time, context);
+                    handleSearchResult(result, pattern, w, *buffer, time, context);
                 });
         });
 }
@@ -1112,7 +1241,13 @@ void MainView::Impl::search(Context& context)
     search(mSearchPattern, mSearchMode, context);
 }
 
-void MainView::Impl::handleSearchResult(const SearchResult& result, const std::string& pattern, Window& w, float time, Context& context)
+void MainView::Impl::handleSearchResult(
+    const SearchResult& result,
+    const std::string& pattern,
+    Window& w,
+    Buffer& buffer,
+    float time,
+    Context& context)
 {
     if (result.aborted)
     {
@@ -1124,9 +1259,20 @@ void MainView::Impl::handleSearchResult(const SearchResult& result, const std::s
 
     if (not result.valid)
     {
-        context.messageLine.error() << "Pattern not found: " << pattern;
+        if (w.foundAnything)
+        {
+            context.messageLine.error() << "Search hit "
+                << (mSearchMode == SearchDirection::forward ? "bottom" : "top")
+                << ": " << pattern;
+        }
+        else
+        {
+            context.messageLine.error() << "Pattern not found: " << pattern;
+        }
         return;
     }
+
+    w.foundAnything = true;
 
     if (result.lineIndex >= w.yoffset + w.height)
     {
@@ -1175,9 +1321,18 @@ void MainView::Impl::handleSearchResult(const SearchResult& result, const std::s
 
     alignCursor(w);
 
+    if (w.config->highlightSearch)
+    {
+        reloadLines(buffer, w, context);
+    }
+
     if (time > 0.01)
     {
         context.messageLine.info() << "took " << (time | utils::precision(3)) << " s";
+    }
+    else
+    {
+        context.messageLine.clear();
     }
 }
 
@@ -1253,6 +1408,48 @@ void MainView::Impl::yankSingle(Context& context)
     w.selectionMode = false;
 
     context.messageLine.info() << "1 line copied to clipboard";
+}
+
+utils::Maybe<MainView::Pattern> MainView::Impl::parse(std::string& pattern, std::string& colorString)
+{
+    uint32_t color;
+    colorString = colorString | utils::lowerCase;
+
+    if (const auto node = colors.find(colorString))
+    {
+        color = node->second;
+    }
+    else
+    {
+        auto converted = strtoul(colorString.c_str(), nullptr, 16);
+        if (converted == ULONG_MAX)
+        {
+            return {};
+        }
+        color = converted;
+    }
+
+    Pattern::Type type;
+
+    if (pattern[0] == '*')
+    {
+        type = Pattern::Type::matchBefore;
+        pattern = pattern.substr(1);
+    }
+    else if (pattern.back() == '*')
+    {
+        pattern.pop_back();
+        type = Pattern::Type::matchAfter;
+    }
+    else
+    {
+        type = Pattern::Type::matchPatternOnly;
+    }
+
+    return Pattern{
+        .type = type,
+        .fgColor = color,
+    };
 }
 
 WindowNode* MainView::Impl::getActiveLineView()

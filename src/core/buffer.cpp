@@ -15,6 +15,7 @@
 #include "core/regex.hpp"
 #include "core/thread.hpp"
 #include "utils/format.hpp"
+#include "utils/function_ref.hpp"
 #include "utils/math.hpp"
 #include "utils/memory.hpp"
 #include "utils/time.hpp"
@@ -25,7 +26,6 @@ namespace core
 
 using Result = std::expected<bool, BufferError>;
 using Results = std::vector<Result>;
-using StringViewOrError = std::expected<std::string_view, BufferError>;
 
 enum struct BufferType : char
 {
@@ -309,7 +309,7 @@ void Buffer::filter(size_t start, size_t end, BufferId parentBufferId, Context& 
         });
 }
 
-StringOrError Buffer::readLine(size_t i)
+StringViewOrError Buffer::readLine(size_t i)
 {
     auto lineIndex = i;
 
@@ -332,7 +332,7 @@ StringOrError Buffer::readLine(size_t i)
         return std::unexpected(std::move(result.error()));
     }
 
-    return std::string(*result);
+    return *result;
 }
 
 void Buffer::search(SearchRequest req, FinishedSearchCallback callback)
@@ -804,17 +804,20 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
 {
     const auto lineCount = mLineCount;
 
-    std::function<size_t(size_t)> lineIndexTransform;
+    utils::FunctionRef<size_t(size_t)> lineIndexTransform;
 
     std::string_view pattern = req.pattern;
 
+    auto filteredLinesTransform = [this](size_t i){ return mFilteredLines[i]; };
+    auto fileLinesTransform = [](size_t i){ return i; };
+
     if (mType == cast(BufferType::filtered))
     {
-        lineIndexTransform = [this](size_t i){ return mFilteredLines[i]; };
+        lineIndexTransform = filteredLinesTransform;
     }
     else
     {
-        lineIndexTransform = [](size_t i){ return i; };
+        lineIndexTransform = fileLinesTransform;
     }
 
     auto& fileLines = *mFileLines;
@@ -831,9 +834,10 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
 
         if (req.direction == SearchDirection::forward)
         {
-            auto it = line.find(pattern, req.startLinePosition);
+            auto startLinePosition = req.startLinePosition + static_cast<int>(req.continuation);
+            auto it = line.find(pattern, startLinePosition);
 
-            if (it != line.npos and it != req.startLinePosition)
+            if (it != line.npos)
             {
                 return SearchResult{
                     .valid = true,
@@ -844,15 +848,19 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
         }
         else
         {
-            auto it = line.rfind(pattern, req.startLinePosition);
-
-            if (it != line.npos and it != req.startLinePosition)
+            if (req.startLinePosition > 1)
             {
-                return SearchResult{
-                    .valid = true,
-                    .linePosition = unsigned(it),
-                    .lineIndex = req.startLineIndex
-                };
+                auto startLinePosition = req.startLinePosition - static_cast<int>(req.continuation);
+                auto it = line.rfind(pattern, startLinePosition);
+
+                if (it != line.npos)
+                {
+                    return SearchResult{
+                        .valid = true,
+                        .linePosition = unsigned(it),
+                        .lineIndex = req.startLineIndex
+                    };
+                }
             }
         }
     }
@@ -889,7 +897,7 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
     }
     else
     {
-        for (size_t i = req.startLineIndex - 1; i > 0; --i)
+        for (size_t i = req.startLineIndex - 1; static_cast<long>(i) >= 0; --i)
         {
             if (mStopFlag) [[unlikely]]
             {
@@ -904,7 +912,7 @@ SearchResult Buffer::Impl::search(const SearchRequest& req, File& file)
             }
 
             const auto& line = *result;
-            auto it = line.find(pattern);
+            auto it = line.rfind(pattern, result->size());
 
             if (it != line.npos)
             {
@@ -996,6 +1004,9 @@ utils::Buffer& operator<<(utils::Buffer& buf, const BufferError& error)
         case BufferError::RegexError:
             buf << "[Regex error] ";
             break;
+
+        default:
+            buf << "[Unknown error] ";
     }
     return buf << error.message();
 }

@@ -7,6 +7,7 @@
 #include "core/interpreter/symbol.hpp"
 #include "core/interpreter/value.hpp"
 #include "core/main_view.hpp"
+#include "core/palette.hpp"
 #include "core/thread.hpp"
 #include "utils/buffer.hpp"
 #include "utils/units.hpp"
@@ -106,10 +107,12 @@ Config::Config()
     , bytesPerThread{1_GiB, 0, LONG_MAX}
     , showLineNumbers{false}
     , absoluteLineNumbers{false}
+    , highlightSearch{true}
     , scrollJump{5, 0, 16}
     , scrollOff{3, 0, 8}
     , fastMoveLen{16, 0, UCHAR_MAX}
     , tabWidth{4, 0, 8}
+    , highlightColor(Palette::yellow, 0, 0xffffff)
     , lineNumberSeparator{" "}
     , tabChar{"›"}
 {
@@ -124,10 +127,12 @@ Config::Config()
     Symbols::add("bytesPerThread", bytesPerThread.setHelp("Number of bytes processed per thread in parallel file loading"));
     Symbols::add("showLineNumbers", showLineNumbers.setFlag(ConfigFlags::reloadAllWindows).setHelp("Show line numbers on the left"));
     Symbols::add("absoluteLineNumbers", absoluteLineNumbers.setHelp("Print file absolute line numbers"));
+    Symbols::add("highlightSearch", highlightSearch.setFlag(ConfigFlags::reloadAllWindows).setHelp("Highlight searched text"));
     Symbols::add("scrollJump", scrollJump.setHelp("Minimal number of lines to scroll when the cursor gets off the screen"));
     Symbols::add("scrollOff", scrollOff.setHelp("Minimal number of screen lines to keep above and below the cursor"));
     Symbols::add("fastMoveLen", fastMoveLen.setHelp("Amount of characters to jump in fast forward/backward movement"));
     Symbols::add("tabWidth", tabWidth.setFlag(ConfigFlags::reloadAllWindows).setHelp("Tab width"));
+    Symbols::add("highlightColor", highlightColor.setFlag(ConfigFlags::reloadAllWindows).setHelp("Color of highlight"));
     Symbols::add("lineNumberSeparator", lineNumberSeparator.setHelp("Line number and view separator"));
     Symbols::add("tabChar", tabChar.setFlag(ConfigFlags::reloadAllWindows).setHelp("Tab character"));
 }

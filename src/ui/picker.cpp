@@ -238,30 +238,29 @@ void Picker::Impl::load(Ftxui& ui, Picker::Type type, core::Context& context)
             break;
 
         case Picker::Type::variables:
-            strings = core::interpreter::symbolsMap()
-                | views::transform(
-                    [leftWidth, width](const core::interpreter::SymbolsMap::const_reference& e)
+            strings.clear();
+            core::interpreter::symbolsMap().forEach(
+                [this, leftWidth, width](const core::interpreter::SymbolsMap::Node& node)
+                {
+                    auto& variable = *node.second;
+                    auto& variableName = node.first;
+
+                    utils::Buffer variableDesc;
+                    variableDesc << variableName << '{';
+
+                    variableDesc << variable.value().type() << "} : " << variable;
+
+                    std::ostringstream ss;
+                    ss << std::left << std::setw(leftWidth) << variableDesc.view();
+
+                    if (auto help = variable.help())
                     {
-                        auto& variable = *e.second;
-                        auto& variableName = e.first;
+                       ss << std::right << std::setw(width - leftWidth)
+                          << ColorWrapped(help, Palette::Picker::additionalInfoFg);
+                    }
 
-                        utils::Buffer variableDesc;
-                        variableDesc << variableName << '{';
-
-                        variableDesc << variable.value().type() << "} : " << variable;
-
-                        std::ostringstream ss;
-                        ss << std::left << std::setw(leftWidth) << variableDesc.view();
-
-                        if (auto help = variable.help())
-                        {
-                           ss << std::right << std::setw(width - leftWidth)
-                              << ColorWrapped(help, Palette::Picker::additionalInfoFg);
-                        }
-
-                        return ss.str();
-                    })
-                | to<utils::Strings>();
+                    strings.emplace_back(ss.str());
+                });
             break;
 
         case Picker::Type::messages:
