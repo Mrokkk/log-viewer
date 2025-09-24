@@ -37,12 +37,13 @@ struct Readline final : utils::Immobile
     Readline& setupCompletion(RefreshCompletion refreshCompletion);
     Readline& enableSuggestions();
     Readline& disableHistory();
-    void setPageSize(size_t pageSize) const;
 
     Readline& connectPicker(
         Picker& picker,
         char ctrlCharacter,
         AcceptBehaviour acceptBehaviour = AcceptBehaviour::replace);
+
+    Readline& connectPicker(Picker& picker, Context& context);
 
     const std::string& line() const;
     const size_t& cursor() const;

@@ -10,10 +10,8 @@ namespace ui
 
 struct CommandLine final : UIComponent
 {
-    CommandLine(Ftxui& ui, core::Context& context);
+    CommandLine(core::Context& context);
     ~CommandLine();
-    void takeFocus() override;
-    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) override;
     ftxui::Element render(core::Context& context) override;
 
 private:

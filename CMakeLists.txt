@@ -76,10 +76,12 @@ add_executable(${PROJECT_NAME}
     src/core/commands/filter.cpp
     src/core/commands/get.cpp
     src/core/commands/grep.cpp
+    src/core/commands/grepper.cpp
     src/core/commands/help.cpp
     src/core/commands/highlight.cpp
     src/core/commands/map.cpp
     src/core/commands/open.cpp
+    src/core/commands/picker.cpp
     src/core/commands/quit.cpp
     src/core/commands/set.cpp
     src/core/commands/source.cpp
@@ -90,6 +92,7 @@ add_executable(${PROJECT_NAME}
     src/core/entity.cpp
     src/core/file.cpp
     src/core/fuzzy.cpp
+    src/core/grepper.cpp
     src/core/input.cpp
     src/core/interpreter/command.cpp
     src/core/interpreter/interpreter.cpp
@@ -98,6 +101,7 @@ add_executable(${PROJECT_NAME}
     src/core/interpreter/symbol.cpp
     src/core/interpreter/value.cpp
     src/core/logger.cpp
+    src/core/main_picker.cpp
     src/core/main_view.cpp
     src/core/message_line.cpp
     src/core/mode.cpp
@@ -120,11 +124,11 @@ add_executable(${PROJECT_NAME}
     src/ui/picker_entry.cpp
     src/ui/status_line.cpp
     src/ui/text_box.cpp
-    src/ui/ui_component.cpp
     src/ui/window_renderer.cpp
     src/utils/buffer.cpp
     src/utils/string.cpp
     src/utils/time.cpp
+    src/utils/time_format.cpp
 
 )
 

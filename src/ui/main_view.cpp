@@ -11,9 +11,7 @@
 
 #include "core/context.hpp"
 #include "core/main_view.hpp"
-#include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
-#include "ui/ui_component.hpp"
 #include "ui/window_renderer.hpp"
 
 using namespace ftxui;
@@ -22,21 +20,11 @@ namespace ui
 {
 
 MainView::MainView()
-    : UIComponent(UIComponent::mainView)
-    , mPlaceholder(Container::Vertical({}))
+    : mPlaceholder(Container::Vertical({}))
 {
 }
 
 MainView::~MainView() = default;
-
-void MainView::takeFocus()
-{
-}
-
-bool MainView::handleEvent(const ftxui::Event&, Ftxui&, core::Context&)
-{
-    return false;
-}
 
 Element MainView::render(core::Context& context)
 {

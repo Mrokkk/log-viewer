@@ -33,6 +33,8 @@ public:
     CommandLine&     commandLine;
     MessageLine&     messageLine;
     MainView&        mainView;
+    MainPicker&      mainPicker;
+    Grepper&         grepper;
     Config&          config;
     UserInterface*   ui;
     MainLoop*        mainLoop;

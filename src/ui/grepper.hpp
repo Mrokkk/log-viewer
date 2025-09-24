@@ -1,10 +1,11 @@
 #pragma once
 
-#include <ftxui/component/component_base.hpp>
-#include <ftxui/dom/elements.hpp>
+#include <string_view>
+
+#include <ftxui/fwd.hpp>
 
 #include "core/fwd.hpp"
-#include "ui/fwd.hpp"
+#include "ui/text_box.hpp"
 #include "ui/ui_component.hpp"
 
 namespace ui
@@ -12,17 +13,14 @@ namespace ui
 
 struct Grepper final : UIComponent
 {
-    Grepper();
+    Grepper(core::Context& context);
     ~Grepper();
     ftxui::Element render(core::Context& context) override;
-    bool handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context) override;
-    operator ftxui::Component&();
 
 private:
-    void accept(Ftxui& ui, core::Context& context);
+    ftxui::Element renderCheckbox(bool value, std::string_view description);
 
-    struct Impl;
-    Impl* mPimpl;
+    TextBox mTextBox;
 };
 
 }  // namespace ui

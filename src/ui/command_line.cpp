@@ -1,6 +1,5 @@
 #include "command_line.hpp"
 
-#include <ranges>
 #include <string>
 
 #include <ftxui/component/component_base.hpp>
@@ -8,9 +7,10 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "core/command_line.hpp"
+#include "core/context.hpp"
 #include "core/message_line.hpp"
+#include "core/mode.hpp"
 #include "core/severity.hpp"
-#include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
 #include "ui/picker_entry.hpp"
 #include "ui/text_box.hpp"
@@ -21,14 +21,8 @@ using namespace ftxui;
 namespace ui
 {
 
-static size_t pickerHeight(size_t terminalHeight)
-{
-    return terminalHeight / 3;
-}
-
-CommandLine::CommandLine(Ftxui& ui, core::Context& context)
-    : UIComponent(UIComponent::commandLine)
-    , mCommandTextBox({
+CommandLine::CommandLine(core::Context& context)
+    : mCommandTextBox({
         .content = context.commandLine.commandReadline.line(),
         .cursorPosition = &context.commandLine.commandReadline.cursor(),
         .suggestion = &context.commandLine.commandReadline.suggestion(),
@@ -39,32 +33,16 @@ CommandLine::CommandLine(Ftxui& ui, core::Context& context)
         .cursorPosition = &context.commandLine.searchReadline.cursor(),
     })
 {
-    context.commandLine->setPageSize(pickerHeight(ui.terminalSize.dimy));
 }
 
 CommandLine::~CommandLine() = default;
 
-void CommandLine::takeFocus()
-{
-}
-
-bool CommandLine::handleEvent(const ftxui::Event& event, Ftxui& ui, core::Context& context)
-{
-    if (event == Event::Resize)
-    {
-        context.commandLine->setPageSize(pickerHeight(ui.terminalSize.dimy));
-        return true;
-    }
-
-    return false;
-}
-
-static Element renderPicker(const core::Picker& picker, Ftxui& ui)
+static Element renderPicker(const core::Picker& picker)
 {
     const auto& pickerContent = picker.filtered();
     Elements elements;
 
-    const size_t resy = ui.terminalSize.dimy / 3;
+    const size_t resy = picker.height();
 
     size_t pickerSize = utils::clamp(pickerContent.size(), 0uz, resy);
     elements.reserve(pickerSize);
@@ -74,16 +52,16 @@ static Element renderPicker(const core::Picker& picker, Ftxui& ui)
         elements.emplace_back(filler());
     }
 
-    size_t i = pickerContent.size() - 1;
+    size_t i = 0;
     size_t cursor = picker.cursor();
 
-    for (const auto& entry : pickerContent | std::ranges::views::reverse)
+    for (const auto& entry : pickerContent)
     {
         const bool active = i == cursor;
         auto element = renderPickerEntry(*entry, active);
         if (active) element |= focus;
         elements.emplace_back(std::move(element));
-        --i;
+        ++i;
     }
 
     return vbox(elements)
@@ -123,9 +101,7 @@ static Element renderCompletions(const utils::StringViews& completions, core::Co
 
 Element CommandLine::render(core::Context& context)
 {
-    auto& ui = context.ui->cast<Ftxui>();
-
-    if (ui.active->type == UIComponent::commandLine)
+    if (context.mode == core::Mode::command)
     {
         auto& completions = context.commandLine->completions();
 
@@ -149,7 +125,7 @@ Element CommandLine::render(core::Context& context)
         if (picker)
         {
             return vbox(
-                renderPicker(*picker, ui),
+                renderPicker(*picker),
                 hbox(
                     text(" FUZZY ")
                         | color(Palette::StatusLine::commandFg)

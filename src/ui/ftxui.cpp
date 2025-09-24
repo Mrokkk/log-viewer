@@ -12,7 +12,6 @@
 
 #include "core/context.hpp"
 #include "core/input.hpp"
-#include "core/main_view.hpp"
 #include "core/mode.hpp"
 #include "core/thread.hpp"
 #include "sys/system.hpp"
@@ -22,7 +21,6 @@
 #include "ui/main_view.hpp"
 #include "ui/picker.hpp"
 #include "ui/status_line.hpp"
-#include "ui/ui_component.hpp"
 
 using namespace ftxui;
 
@@ -38,8 +36,8 @@ static bool abort(Ftxui&, core::Context&)
 static bool resize(Ftxui& ui, core::Context& context)
 {
     ui.terminalSize = Terminal::Size();
-    context.mainView.resize(ui.terminalSize.dimx, ui.terminalSize.dimy, context);
-    return false; // Allow UIComponent to handle it as well
+    core::resize(ui.terminalSize.dimx, ui.terminalSize.dimy, context);
+    return true;
 }
 
 static bool ctrlC(Ftxui&, core::Context& context)
@@ -60,12 +58,12 @@ static Element render(Ftxui& ui, core::Context& context)
 
     Element overlay;
 
-    switch (ui.active->type)
+    switch (context.mode)
     {
-        case UIComponent::picker:
+        case core::Mode::picker:
             overlay = ui.picker.render(context);
             break;
-        case UIComponent::grepper:
+        case core::Mode::grepper:
             overlay = ui.grepper.render(context);
             break;
         default:
@@ -110,7 +108,7 @@ static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
         return true;
     }
 
-    return ui.active->handleEvent(event, ui, context);
+    return false;
 }
 
 static inline ScreenInteractive createScreen(Ftxui& ui, core::Context& context)
@@ -121,8 +119,9 @@ static inline ScreenInteractive createScreen(Ftxui& ui, core::Context& context)
 
 Ftxui::Ftxui(core::Context& context)
     : screen(createScreen(*this, context))
-    , active(&mainView)
-    , commandLine(*this, context)
+    , commandLine(context)
+    , picker(context)
+    , grepper(context)
     , eventHandlers{
         {Event::Resize, resize},
         {Event::F12,    abort},
@@ -133,30 +132,10 @@ Ftxui::Ftxui(core::Context& context)
     initEventConverter();
 }
 
-void Ftxui::onModeSwitch(core::Mode newMode, core::Context& context)
-{
-    switch (newMode)
-    {
-        case core::Mode::command:
-            switchFocus(UIComponent::commandLine, *this, context);
-            break;
-        case core::Mode::normal:
-            switchFocus(UIComponent::mainView, *this, context);
-            break;
-        default:
-            break;
-    }
-}
-
 void Ftxui::run(core::Context& context)
 {
     auto component
         = Renderer(
-            Container::Stacked({
-                picker,
-                grepper,
-                mainView
-            }),
             [&context, this]
             {
                 return render(*this, context);
@@ -167,7 +146,7 @@ void Ftxui::run(core::Context& context)
                 return handleEvent(event, *this, context);
             });
 
-    switchFocus(UIComponent::mainView, *this, context);
+    resize(*this, context);
 
     screen
         .OnCrash([](const int signal){ sys::crashHandle(signal); })
@@ -213,34 +192,6 @@ void createFtxuiUserInterface(core::Context& context)
     auto ui = new Ftxui(context);
     context.ui = ui;
     context.mainLoop = ui;
-}
-
-void switchFocus(UIComponent::Type element, Ftxui& ui, core::Context& context)
-{
-    if (ui.active)
-    {
-        ui.active->onExit();
-    }
-
-    switch (element)
-    {
-        case UIComponent::commandLine:
-            ui.active = &ui.commandLine;
-            break;
-        case UIComponent::mainView:
-            ui.active = &ui.mainView;
-            break;
-        case UIComponent::picker:
-            ui.active = &ui.picker;
-            core::switchMode(core::Mode::custom, context);
-            break;
-        case UIComponent::grepper:
-            ui.active = &ui.grepper;
-            core::switchMode(core::Mode::custom, context);
-            break;
-    }
-
-    ui.active->takeFocus();
 }
 
 }  // namespace ui

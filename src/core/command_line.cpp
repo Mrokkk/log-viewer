@@ -30,8 +30,8 @@ static utils::Strings feedHistory(CommandLine& commandLine)
 
 CommandLine::CommandLine()
     : mMode(Mode::command)
-    , mFilesPicker(&feedFiles)
-    , mHistoryPicker([this](auto&){ return feedHistory(*this); })
+    , mFilesPicker(Picker::Orientation::downTop, &feedFiles)
+    , mHistoryPicker(Picker::Orientation::downTop, [this](auto&){ return feedHistory(*this); })
 {
     commandReadline
         .enableSuggestions()
@@ -114,6 +114,12 @@ bool CommandLine::handleKeyPress(KeyPress keyPress, InputSource source, Context&
 void CommandLine::clearHistory()
 {
     commandReadline.clearHistory();
+}
+
+void CommandLine::resize(int, int resy, Context&)
+{
+    mFilesPicker.setHeight(resy / 3);
+    mHistoryPicker.setHeight(resy / 3);
 }
 
 }  // namespace core

@@ -2,7 +2,9 @@
 
 #include "core/command_line.hpp"
 #include "core/config.hpp"
+#include "core/grepper.hpp"
 #include "core/input.hpp"
+#include "core/main_picker.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "core/user_interface.hpp"
@@ -18,6 +20,8 @@ struct Context::Data final
     CommandLine commandLine;
     MessageLine messageLine;
     MainView    mainView;
+    MainPicker  mainPicker;
+    Grepper     grepper;
     Config      config;
 };
 
@@ -29,6 +33,8 @@ Context::Context()
     , commandLine(mData->commandLine)
     , messageLine(mData->messageLine)
     , mainView(mData->mainView)
+    , mainPicker(mData->mainPicker)
+    , grepper(mData->grepper)
     , config(mData->config)
     , ui(nullptr)
     , mainLoop(nullptr)

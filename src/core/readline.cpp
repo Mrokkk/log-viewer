@@ -112,6 +112,7 @@ DEFINE_BITFLAG(Flags, char,
 {
     suggestionsEnabled,
     historyEnabled,
+    pickerAlwaysOn,
 });
 
 struct Readline::Impl final : utils::Immobile
@@ -131,6 +132,7 @@ struct Readline::Impl final : utils::Immobile
     void disableHistory();
     void setPageSize(size_t pageSize);
     void connectPicker(Picker& picker, char ctrlCharacter, AcceptBehaviour acceptBehaviour);
+    void connectPicker(Picker& picker, Context& context);
 
     const std::string& line() const;
     const size_t& cursor() const;
@@ -177,7 +179,6 @@ private:
 
     std::string          mLine;
     size_t               mCursor = 0;
-    size_t               mPageSize = 0;
     Flags                mFlags = Flags::historyEnabled;
     History              mHistory;
     std::string          mSavedLine;
@@ -241,14 +242,14 @@ bool Readline::Impl::handleKeyPress(KeyPress keyPress, InputSource source, Conte
         case KeyPress::Type::pageUp:
             if (mPicker)
             {
-                mPicker->move(mPageSize);
+                mPicker->movePage(-1);
             }
             break;
 
         case KeyPress::Type::pageDown:
             if (mPicker)
             {
-                mPicker->move(-mPageSize);
+                mPicker->movePage(1);
             }
             break;
 
@@ -331,7 +332,7 @@ bool Readline::Impl::handleKeyPress(KeyPress keyPress, InputSource source, Conte
 
         exitReadline:
         case KeyPress::Type::escape:
-            if (mPicker)
+            if (mPicker and not mFlags[Flags::pickerAlwaysOn])
             {
                 mPicker->clear();
                 mPicker = nullptr;
@@ -399,14 +400,20 @@ void Readline::Impl::disableHistory()
     mFlags &= ~Flags::historyEnabled;
 }
 
-void Readline::Impl::setPageSize(size_t pageSize)
-{
-    mPageSize = pageSize;
-}
-
 void Readline::Impl::connectPicker(Picker& picker, char ctrlCharacter, AcceptBehaviour acceptBehaviour)
 {
     mPickers.insert(ctrlCharacter, PickerData{.picker = &picker, .acceptBehaviour = acceptBehaviour});
+}
+
+void Readline::Impl::connectPicker(Picker& picker, Context& context)
+{
+    if (mPicker)
+    {
+        mPicker->clear();
+    }
+    mPicker = &picker;
+    mFlags |= Flags::pickerAlwaysOn;
+    mPicker->load(context);
 }
 
 const std::string& Readline::Impl::line() const
@@ -521,7 +528,7 @@ void Readline::Impl::selectPrevHistoryEntry()
 {
     if (mPicker)
     {
-        mPicker->move(1);
+        mPicker->move(-1);
         return;
     }
 
@@ -547,7 +554,7 @@ bool Readline::Impl::selectNextHistoryEntry()
 {
     if (mPicker)
     {
-        mPicker->move(-1);
+        mPicker->move(1);
         return false;
     }
 
@@ -707,7 +714,10 @@ bool Readline::Impl::accept(InputSource source, Context& context)
         mPicker->clear();
         mPicker = nullptr;
 
-        return false;
+        if (not mFlags[Flags::pickerAlwaysOn])
+        {
+            return false;
+        }
     }
 
     if (source == InputSource::user and mFlags[Flags::historyEnabled] and not mLine.empty())
@@ -769,6 +779,11 @@ void Readline::Impl::complete(Completion type)
 
 bool Readline::Impl::activatePicker(char c, Context& context)
 {
+    if (mFlags[Flags::pickerAlwaysOn])
+    {
+        return false;
+    }
+
     auto pickerIt = mPickers.find(c);
 
     if (not pickerIt)
@@ -846,6 +861,12 @@ Readline& Readline::connectPicker(Picker& picker, char ctrlCharacter, AcceptBeha
     return *this;
 }
 
+Readline& Readline::connectPicker(Picker& picker, Context& context)
+{
+    mPimpl->connectPicker(picker, context);
+    return *this;
+}
+
 Readline& Readline::setupCompletion(RefreshCompletion refreshCompletion)
 {
     mPimpl->setupCompletion(std::move(refreshCompletion));
@@ -862,11 +883,6 @@ Readline& Readline::disableHistory()
 {
     mPimpl->disableHistory();
     return *this;
-}
-
-void Readline::setPageSize(size_t pageSize) const
-{
-    mPimpl->setPageSize(pageSize);
 }
 
 const std::string& Readline::line() const

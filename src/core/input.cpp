@@ -9,7 +9,9 @@
 #include "core/assert.hpp"
 #include "core/command_line.hpp"
 #include "core/context.hpp"
+#include "core/grepper.hpp"
 #include "core/logger.hpp"
+#include "core/main_picker.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "core/mode.hpp"
@@ -608,36 +610,65 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     logger.debug() << keyPress << "; mode: " << mode;
 
+    constexpr auto commandKeyPress = KeyPress::character(char(CommandLine::Mode::command));
     constexpr auto searchForwardKeyPress = KeyPress::character(char(CommandLine::Mode::searchForward));
+    constexpr auto searchBackwardKeyPress = KeyPress::character(char(CommandLine::Mode::searchBackward));
 
-    if (keyPress == searchForwardKeyPress and mode != Mode::command)
+    switch (mode)
     {
-        enterCommandLine(CommandLine::Mode::searchForward, source, context);
-        return true;
-    }
-
-    if (keyPress == KeyPress::character('?') and mode != Mode::command)
-    {
-        enterCommandLine(CommandLine::Mode::searchBackward, source, context);
-        return true;
-    }
-
-    if (keyPress == KeyPress::character(':') and mode != Mode::command)
-    {
-        enterCommandLine(CommandLine::Mode::command, source, context);
-        return true;
-    }
-
-    if (mode == Mode::command)
-    {
-        if (context.commandLine.handleKeyPress(keyPress, source, context))
-        {
-            if (context.mode == Mode::command)
+        case Mode::command:
+            if (context.commandLine.handleKeyPress(keyPress, source, context))
             {
-                switchMode(Mode::normal, context);
+                if (context.mode == Mode::command)
+                {
+                    switchMode(Mode::normal, context);
+                }
             }
-        }
-        return true;
+            return true;
+
+        case Mode::picker:
+            if (context.mainPicker.handleKeyPress(keyPress, source, context))
+            {
+                if (context.mode == Mode::picker)
+                {
+                    switchMode(Mode::normal, context);
+                }
+            }
+            return true;
+
+        case Mode::grepper:
+            if (context.grepper.handleKeyPress(keyPress, source, context))
+            {
+                if (context.mode == Mode::grepper)
+                {
+                    switchMode(Mode::normal, context);
+                }
+            }
+            return true;
+
+        case Mode::normal:
+        case Mode::visual:
+            if (keyPress == searchForwardKeyPress)
+            {
+                enterCommandLine(CommandLine::Mode::searchForward, source, context);
+                return true;
+            }
+
+            if (keyPress == searchBackwardKeyPress)
+            {
+                enterCommandLine(CommandLine::Mode::searchBackward, source, context);
+                return true;
+            }
+
+            if (keyPress == commandKeyPress)
+            {
+                enterCommandLine(CommandLine::Mode::command, source, context);
+                return true;
+            }
+            break;
+
+        default:
+            break;
     }
 
     if (keyPress == KeyPress::escape)
@@ -716,6 +747,13 @@ void initializeInput(Context& context)
         context);
 
     context.mainView.initializeInputMapping(context);
+}
+
+void resize(int resx, int resy, Context& context)
+{
+    context.commandLine.resize(resx, resy, context);
+    context.mainView.resize(resx, resy, context);
+    context.mainPicker.resize(resx, resy, context);
 }
 
 }  // namespace core

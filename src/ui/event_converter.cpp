@@ -110,7 +110,7 @@ void initEventConverter()
             core::KeyPress::alt(small));
     }
 
-    for (char c = ' '; c <= '?'; ++c)
+    for (char c = '!'; c <= '?'; ++c)
     {
         eventToKeyPress.insert(
             Event::Character(std::string{c}),

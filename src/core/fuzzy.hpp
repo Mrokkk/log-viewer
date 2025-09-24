@@ -10,6 +10,9 @@ namespace core
 
 using StringRefsOrError = std::expected<utils::StringRefs, std::string>;
 
-StringRefsOrError fuzzyFilter(const utils::Strings& strings, const std::string& pattern);
+StringRefsOrError fuzzyFilter(
+    const utils::Strings& strings,
+    const std::string& pattern,
+    bool reversed = false);
 
 }  // namespace core

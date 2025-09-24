@@ -65,6 +65,14 @@ template <> struct FormatterInfo<int>
     constexpr static auto len = sizeof("017777777777");
 };
 
+template <> struct FormatterInfo<short>
+{
+    constexpr static auto fmt = "%d";
+    constexpr static auto fmtChar = 'd';
+    constexpr static auto modifierChar = '\0';
+    constexpr static auto len = sizeof("177777");;
+};
+
 template <> struct FormatterInfo<long>
 {
     constexpr static auto fmt = "%ld";
@@ -79,6 +87,14 @@ template <> struct FormatterInfo<unsigned char>
     constexpr static auto fmtChar = 'd';
     constexpr static auto modifierChar = '\0';
     constexpr static auto len = FormatterInfo<char>::len;
+};
+
+template <> struct FormatterInfo<unsigned short>
+{
+    constexpr static auto fmt = "%u";
+    constexpr static auto fmtChar = 'u';
+    constexpr static auto modifierChar = '\0';
+    constexpr static auto len = FormatterInfo<short>::len;
 };
 
 template <> struct FormatterInfo<unsigned int>

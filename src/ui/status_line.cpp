@@ -5,7 +5,6 @@
 #include "core/main_view.hpp"
 #include "ui/ftxui.hpp"
 #include "ui/palette.hpp"
-#include "ui/ui_component.hpp"
 #include "utils/buffer.hpp"
 
 using namespace ftxui;
@@ -13,54 +12,60 @@ using namespace ftxui;
 namespace ui
 {
 
-Element renderStatusLine(Ftxui& ui, core::Context& context)
+Element renderStatusLine(Ftxui&, core::Context& context)
 {
     const auto fileName{context.mainView.activeFileName()};
     Color statusFg, statusBg;
     const char* status;
 
-    if (context.mode == core::Mode::command)
+    switch (context.mode)
     {
-        statusFg = Palette::StatusLine::commandFg;
-        statusBg = Palette::StatusLine::commandBg;
-        status = " COMMAND ";
-    }
-    else if (context.mode == core::Mode::visual)
-    {
-        statusFg = Palette::StatusLine::visualFg;
-        statusBg = Palette::StatusLine::visualBg;
-        status = " VISUAL ";
-    }
-    else if (context.mode == core::Mode::normal)
-    {
-        statusFg = Palette::StatusLine::normalFg;
-        statusBg = Palette::StatusLine::normalBg;
-        status = " NORMAL ";
-    }
-    else
-    {
-        switch (ui.active->type)
-        {
-            default:
-                status = " UNEXPECTED ";
-                break;
-            case UIComponent::picker:
-                status = " PICKER ";
-                break;
-            case UIComponent::grepper:
-                status = " GREPPER ";
-                break;
-        }
-        statusFg = Palette::StatusLine::normalFg;
-        statusBg = Palette::StatusLine::normalBg;
+        case core::Mode::command:
+            statusFg = Palette::StatusLine::commandFg;
+            statusBg = Palette::StatusLine::commandBg;
+            status = " COMMAND ";
+            break;
+
+        case core::Mode::visual:
+            statusFg = Palette::StatusLine::visualFg;
+            statusBg = Palette::StatusLine::visualBg;
+            status = " VISUAL ";
+            break;
+
+        case core::Mode::normal:
+            statusFg = Palette::StatusLine::normalFg;
+            statusBg = Palette::StatusLine::normalBg;
+            status = " NORMAL ";
+            break;
+
+        case core::Mode::picker:
+            statusFg = Palette::StatusLine::normalFg;
+            statusBg = Palette::StatusLine::normalBg;
+            status = " PICKER ";
+            break;
+
+        case core::Mode::grepper:
+            statusFg = Palette::StatusLine::normalFg;
+            statusBg = Palette::StatusLine::normalBg;
+            status = " GREPPER ";
+            break;
+
+        [[unlikely]] default:
+            statusFg = Palette::StatusLine::normalFg;
+            statusBg = Palette::StatusLine::normalBg;
+            status = " UNEXPECTED ";
+            break;
     }
 
     utils::Buffer buf;
 
     if (const auto node = context.mainView.currentWindowNode()) [[likely]]
     {
-        auto& w = node->window();
-        buf << " " << w.ycurrent + w.yoffset << '/' << w.lineCount << " ℅:" << w.xcurrent + w.xoffset << ' ';
+        const auto& w = node->window();
+        const auto lineCount = w.lineCount;
+        const auto currentLine = w.ycurrent + w.yoffset + 1;
+        const auto currentPosition = w.xcurrent + w.xoffset + 1;
+        buf << " " << currentLine << '/' << lineCount << " ℅:" << currentPosition << ' ';
     }
 
     return hbox({
@@ -78,16 +83,19 @@ Element renderStatusLine(Ftxui& ui, core::Context& context)
             | bgcolor(Palette::StatusLine::bg1)
             | flex,
         text("")
-            | color(Palette::StatusLine::bg3)
+            | color(statusBg)
             | bgcolor(Palette::StatusLine::bg1),
         text(" ")
-            | bgcolor(Palette::StatusLine::bg3),
+            | bgcolor(statusBg),
         text(buf.str())
-            | bgcolor(Palette::StatusLine::bg3),
+            | color(statusFg)
+            | bgcolor(statusBg)
+            | bold,
         text(core::inputStateString(context))
-            | bgcolor(Palette::StatusLine::bg3),
+            | color(statusFg)
+            | bgcolor(statusBg),
         text(" ")
-            | bgcolor(Palette::StatusLine::bg3),
+            | bgcolor(statusBg),
     });
 }
 

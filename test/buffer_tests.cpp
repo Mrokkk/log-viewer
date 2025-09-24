@@ -1,5 +1,6 @@
 #include <cfloat>
 #include <climits>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 
@@ -55,22 +56,46 @@ TEST(BufferTests, canPrintChar)
 TEST(BufferTests, canPrintUnsignedChar)
 {
     Buffer buf;
-    buf << UCHAR_MAX;
+    buf << uint8_t(UCHAR_MAX);
 
     ASSERT_BUF(buf, "255", Buffer::initialCapacity);
+}
+
+TEST(BufferTests, canPrintShort)
+{
+    {
+        Buffer buf;
+        buf << short(SHRT_MAX);
+
+        ASSERT_BUF(buf, "32767", Buffer::initialCapacity);
+    }
+    {
+        Buffer buf;
+        buf << short(SHRT_MIN);
+
+        ASSERT_BUF(buf, "-32768", Buffer::initialCapacity);
+    }
+}
+
+TEST(BufferTests, canPrintUnsignedShort)
+{
+    Buffer buf;
+    buf << uint16_t(USHRT_MAX);
+
+    ASSERT_BUF(buf, "65535", Buffer::initialCapacity);
 }
 
 TEST(BufferTests, canPrintInt)
 {
     {
         Buffer buf;
-        buf << INT_MAX;
+        buf << int(INT_MAX);
 
         ASSERT_BUF(buf, "2147483647", Buffer::initialCapacity);
     }
     {
         Buffer buf;
-        buf << INT_MIN;
+        buf << int(INT_MIN);
 
         ASSERT_BUF(buf, "-2147483648", Buffer::initialCapacity);
     }
@@ -80,13 +105,13 @@ TEST(BufferTests, canPrintUnsignedInt)
 {
     {
         Buffer buf;
-        buf << UINT_MAX;
+        buf << unsigned(UINT_MAX);
 
         ASSERT_BUF(buf, "4294967295", Buffer::initialCapacity);
     }
     {
         Buffer buf;
-        buf << 0u;
+        buf << unsigned(0u);
 
         ASSERT_BUF(buf, "0", Buffer::initialCapacity);
     }
@@ -96,13 +121,13 @@ TEST(BufferTests, canPrintLong)
 {
     {
         Buffer buf;
-        buf << LONG_MAX;
+        buf << long(LONG_MAX);
 
         ASSERT_BUF(buf, "9223372036854775807", Buffer::initialCapacity);
     }
     {
         Buffer buf;
-        buf << LONG_MIN;
+        buf << long(LONG_MIN);
 
         ASSERT_BUF(buf, "-9223372036854775808", Buffer::initialCapacity);
     }
@@ -112,7 +137,7 @@ TEST(BufferTests, canPrintUnsignedLong)
 {
     {
         Buffer buf;
-        buf << ULONG_MAX;
+        buf << (unsigned long)ULONG_MAX;
 
         ASSERT_BUF(buf, "18446744073709551615", Buffer::initialCapacity);
     }
@@ -128,13 +153,13 @@ TEST(BufferTests, canPrintFloat)
 {
     {
         Buffer buf;
-        buf << FLT_MAX;
+        buf << float(FLT_MAX);
 
         ASSERT_BUF(buf, "340282346638528859811704183484516925440.000000", Buffer::initialCapacity);
     }
     {
         Buffer buf;
-        buf << FLT_MIN;
+        buf << float(FLT_MIN);
 
         ASSERT_BUF(buf, "0.000000", Buffer::initialCapacity);
     }

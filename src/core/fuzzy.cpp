@@ -2,6 +2,7 @@
 
 #include <exception>
 #include <expected>
+#include <functional>
 #include <queue>
 #include <string>
 
@@ -21,14 +22,27 @@ bool operator<(const ScoredString& lhs, const ScoredString& rhs)
     return lhs.score < rhs.score;
 }
 
-using PriorityQueueOrError = std::expected<std::priority_queue<ScoredString>, std::string>;
+bool operator>(const ScoredString& lhs, const ScoredString& rhs)
+{
+    return lhs.score > rhs.score;
+}
 
-static PriorityQueueOrError extract(
+using PriorityQueue = std::priority_queue<ScoredString>;
+using ReversedPriorityQueue = std::priority_queue<
+    ScoredString,
+    std::vector<ScoredString>,
+    std::greater<ScoredString>>;
+
+using PriorityQueueOrError = std::expected<PriorityQueue, std::string>;
+using ReversedPriorityQueueOrError = std::expected<ReversedPriorityQueue, std::string>;
+
+template <typename Queue>
+static StringRefsOrError extract(
     const std::string& query,
     const utils::Strings& choices,
     const double score_cutoff = 0.0)
 {
-    std::priority_queue<ScoredString> results;
+    Queue results;
 
     try
     {
@@ -49,10 +63,18 @@ static PriorityQueueOrError extract(
         return std::unexpected(e.what());
     }
 
-    return results;
+    utils::StringRefs refs;
+
+    while (not results.empty())
+    {
+        refs.push_back(results.top().string);
+        results.pop();
+    }
+
+    return refs;
 }
 
-StringRefsOrError fuzzyFilter(const utils::Strings& strings, const std::string& pattern)
+StringRefsOrError fuzzyFilter(const utils::Strings& strings, const std::string& pattern, bool reversed)
 {
     utils::StringRefs refs;
 
@@ -65,20 +87,14 @@ StringRefsOrError fuzzyFilter(const utils::Strings& strings, const std::string& 
         return refs;
     }
 
-    auto values = extract(pattern, strings, 2);
-
-    if (not values) [[unlikely]]
+    if (reversed)
     {
-        return std::unexpected(std::move(values.error()));
+        return extract<ReversedPriorityQueue>(pattern, strings, 2);
     }
-
-    while (not values->empty())
+    else
     {
-        refs.push_back(values->top().string);
-        values->pop();
+        return extract<PriorityQueue>(pattern, strings, 2);
     }
-
-    return refs;
 }
 
 }  // namespace core

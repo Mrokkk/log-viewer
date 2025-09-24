@@ -12,6 +12,8 @@ enum class Mode
     normal,
     visual,
     command,
+    grepper,
+    picker,
     custom,
 };
 
