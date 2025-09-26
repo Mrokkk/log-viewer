@@ -1,13 +1,13 @@
-#include <cstdio>
-#include <ctime>
 #ifdef __unix__
 #define LOG_FLAGS LogEntryFlags::noSourceLocation
 #include "system.hpp"
 
 #include <algorithm>
 #include <backtrace.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <expected>

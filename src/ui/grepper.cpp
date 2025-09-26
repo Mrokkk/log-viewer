@@ -41,7 +41,8 @@ Element Grepper::render(core::Context& context)
             renderCheckbox(options.regex, "regex (a-r)"),
             renderCheckbox(options.caseInsensitive, "case insensitive (a-c)"),
             renderCheckbox(options.inverted, "inverted (a+i)"))
-                | xflex)
+                | xflex,
+        LIGHT)
             | clear_under
             | center
             | xflex;

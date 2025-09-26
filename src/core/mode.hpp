@@ -14,10 +14,9 @@ enum class Mode
     command,
     grepper,
     picker,
-    custom,
 };
 
-bool switchMode(Mode newMode, core::Context& context);
+bool switchMode(Mode newMode, Context& context);
 utils::Buffer& operator<<(utils::Buffer& buf, Mode mode);
 
 }  // namespace core

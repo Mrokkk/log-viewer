@@ -13,8 +13,8 @@ namespace core
 
 struct ScoredString
 {
-    std::string* string;
-    double       score;
+    const std::string* string;
+    double             score;
 };
 
 bool operator<(const ScoredString& lhs, const ScoredString& rhs)
@@ -54,7 +54,7 @@ static StringRefsOrError extract(
 
             if (score >= score_cutoff)
             {
-                results.emplace(ScoredString{.string = (std::string*)&choice, .score = score});
+                results.emplace(ScoredString{.string = &choice, .score = score});
             }
         }
     }

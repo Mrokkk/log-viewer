@@ -218,11 +218,12 @@ const char* MainView::activeFileName() const
     return buffer->filePath().c_str();
 }
 
-#define REGISTER_MAPPING(KEYS, FLAGS, ...) \
+#define REGISTER_MAPPING(KEYS, FLAGS, HELP, ...) \
     addInputMapping( \
         KEYS, \
-        [&]([[maybe_unused]] Context& context) { __VA_ARGS__; return true; }, \
+        [&](InputSource, [[maybe_unused]] Context& context) { __VA_ARGS__; return true; }, \
         FLAGS, \
+        HELP, \
         context)
 
 #define NORMAL InputMappingFlags::normal
@@ -232,42 +233,42 @@ void MainView::initializeInputMapping(Context& context)
 {
     auto& impl = Impl::get(this);
 
-    REGISTER_MAPPING("gg",        NORMAL | VISUAL, impl.goTo(0, context));
-    REGISTER_MAPPING("G",         NORMAL | VISUAL, impl.goTo(-1, context));
-    REGISTER_MAPPING("h",         NORMAL | VISUAL, impl.left(context));
-    REGISTER_MAPPING("l",         NORMAL | VISUAL, impl.right(context));
-    REGISTER_MAPPING("k",         NORMAL | VISUAL, impl.up(context));
-    REGISTER_MAPPING("j",         NORMAL | VISUAL, impl.down(context));
-    REGISTER_MAPPING("H",         NORMAL | VISUAL, impl.fastBackward());
-    REGISTER_MAPPING("L",         NORMAL | VISUAL, impl.fastForward());
-    REGISTER_MAPPING("<left>",    NORMAL | VISUAL, impl.left(context));
-    REGISTER_MAPPING("<right>",   NORMAL | VISUAL, impl.right(context));
-    REGISTER_MAPPING("<up>",      NORMAL | VISUAL, impl.up(context));
-    REGISTER_MAPPING("<down>",    NORMAL | VISUAL, impl.down(context));
-    REGISTER_MAPPING("<pgup>",    NORMAL | VISUAL, impl.pageUp(context));
-    REGISTER_MAPPING("<pgdown>",  NORMAL | VISUAL, impl.pageDown(context));
-    REGISTER_MAPPING("<s-up>",    NORMAL | VISUAL, impl.pageUp(context));
-    REGISTER_MAPPING("<s-down>",  NORMAL | VISUAL, impl.pageDown(context));
-    REGISTER_MAPPING("b",         NORMAL | VISUAL, impl.wordBeginning());
-    REGISTER_MAPPING("e",         NORMAL | VISUAL, impl.wordEnd());
-    REGISTER_MAPPING("<c-e>",     NORMAL | VISUAL, impl.scrollDown(context));
-    REGISTER_MAPPING("<c-y>",     NORMAL | VISUAL, impl.scrollUp(context));
-    REGISTER_MAPPING("zz",        NORMAL | VISUAL, impl.center(context));
-    REGISTER_MAPPING("zs",        NORMAL | VISUAL, impl.scrollHorizontallyToCursor());
-    REGISTER_MAPPING("^",         NORMAL | VISUAL, impl.lineStart());
-    REGISTER_MAPPING("<home>",    NORMAL | VISUAL, impl.lineStart());
-    REGISTER_MAPPING("$",         NORMAL | VISUAL, impl.lineEnd());
-    REGISTER_MAPPING("<end>",     NORMAL | VISUAL, impl.lineEnd());
-    REGISTER_MAPPING("<c-left>",  NORMAL,          impl.activeTablineLeft());
-    REGISTER_MAPPING("<c-right>", NORMAL,          impl.activeTablineRight());
-    REGISTER_MAPPING("<c-up>",    NORMAL,          impl.activeTablineUp());
-    REGISTER_MAPPING("<c-down>",  NORMAL,          impl.activeTablineDown());
-    REGISTER_MAPPING("v",         NORMAL | VISUAL, impl.selectionModeToggle(context));
-    REGISTER_MAPPING("y",         VISUAL,          impl.yank(context));
-    REGISTER_MAPPING("yy",        NORMAL,          impl.yankSingle(context));
-    REGISTER_MAPPING("n",         NORMAL,          mSearchMode = SearchDirection::forward; impl.search(context));
-    REGISTER_MAPPING("N",         NORMAL,          mSearchMode = SearchDirection::backward; impl.search(context));
-    REGISTER_MAPPING("<c-w>q",    NORMAL,          quitCurrentWindow(context));
+    REGISTER_MAPPING("gg",        NORMAL | VISUAL, "Go to buffer beginning", impl.goTo(0, context));
+    REGISTER_MAPPING("G",         NORMAL | VISUAL, "Go to buffer end", impl.goTo(-1, context));
+    REGISTER_MAPPING("h",         NORMAL | VISUAL, "Move cursor left", impl.left(context));
+    REGISTER_MAPPING("l",         NORMAL | VISUAL, "Move cursor right", impl.right(context));
+    REGISTER_MAPPING("k",         NORMAL | VISUAL, "Move cursor up", impl.up(context));
+    REGISTER_MAPPING("j",         NORMAL | VISUAL, "Move cursor down", impl.down(context));
+    REGISTER_MAPPING("H",         NORMAL | VISUAL, "Fast backward move", impl.fastBackward());
+    REGISTER_MAPPING("L",         NORMAL | VISUAL, "Fast forward move", impl.fastForward());
+    REGISTER_MAPPING("<left>",    NORMAL | VISUAL, "Move cursor left", impl.left(context));
+    REGISTER_MAPPING("<right>",   NORMAL | VISUAL, "Move cursor right", impl.right(context));
+    REGISTER_MAPPING("<up>",      NORMAL | VISUAL, "Move cursor up", impl.up(context));
+    REGISTER_MAPPING("<down>",    NORMAL | VISUAL, "Move cursor down", impl.down(context));
+    REGISTER_MAPPING("<pgup>",    NORMAL | VISUAL, "Move cursor page up", impl.pageUp(context));
+    REGISTER_MAPPING("<pgdown>",  NORMAL | VISUAL, "Move cursor page down", impl.pageDown(context));
+    REGISTER_MAPPING("<s-up>",    NORMAL | VISUAL, "Move cursor page up", impl.pageUp(context));
+    REGISTER_MAPPING("<s-down>",  NORMAL | VISUAL, "Move cursor page down", impl.pageDown(context));
+    REGISTER_MAPPING("b",         NORMAL | VISUAL, "Move cursor to word beginning", impl.wordBeginning());
+    REGISTER_MAPPING("e",         NORMAL | VISUAL, "Move cursor to word end", impl.wordEnd());
+    REGISTER_MAPPING("<c-e>",     NORMAL | VISUAL, "Scroll down by 1 line", impl.scrollDown(context));
+    REGISTER_MAPPING("<c-y>",     NORMAL | VISUAL, "Scroll up by 1 line", impl.scrollUp(context));
+    REGISTER_MAPPING("zz",        NORMAL | VISUAL, "Center current line", impl.center(context));
+    REGISTER_MAPPING("zs",        NORMAL | VISUAL, "Scroll horizontally to the cursor", impl.scrollHorizontallyToCursor());
+    REGISTER_MAPPING("^",         NORMAL | VISUAL, "Go to line beginning", impl.lineStart());
+    REGISTER_MAPPING("<home>",    NORMAL | VISUAL, "Go to line beginning", impl.lineStart());
+    REGISTER_MAPPING("$",         NORMAL | VISUAL, "Go to line end", impl.lineEnd());
+    REGISTER_MAPPING("<end>",     NORMAL | VISUAL, "Go to line end", impl.lineEnd());
+    REGISTER_MAPPING("<c-left>",  NORMAL,          "Change active tab", impl.activeTablineLeft());
+    REGISTER_MAPPING("<c-right>", NORMAL,          "Change active tab", impl.activeTablineRight());
+    REGISTER_MAPPING("<c-up>",    NORMAL,          "Move active tabline up", impl.activeTablineUp());
+    REGISTER_MAPPING("<c-down>",  NORMAL,          "Move active tabline down", impl.activeTablineDown());
+    REGISTER_MAPPING("v",         NORMAL | VISUAL, "Visual mode", impl.selectionModeToggle(context));
+    REGISTER_MAPPING("y",         VISUAL,          "Yank selection", impl.yank(context));
+    REGISTER_MAPPING("yy",        NORMAL,          "Yank single line", impl.yankSingle(context));
+    REGISTER_MAPPING("n",         NORMAL,          "Search forward", mSearchMode = SearchDirection::forward; impl.search(context));
+    REGISTER_MAPPING("N",         NORMAL,          "Search backward", mSearchMode = SearchDirection::backward; impl.search(context));
+    REGISTER_MAPPING("<c-w>q",    NORMAL,          "Quit current window", quitCurrentWindow(context));
 }
 
 void MainView::reloadAll(Context& context)

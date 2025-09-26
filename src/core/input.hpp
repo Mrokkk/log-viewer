@@ -115,14 +115,28 @@ constexpr inline bool operator==(const KeyPress lhs, const KeyPress rhs)
 
 struct KeyPressNode;
 
+struct HelpEntry
+{
+    std::string name;
+    std::string help;
+};
+
+using HelpEntries = std::vector<HelpEntry>;
+using KeyPressNodes = std::vector<KeyPressNode*>;
+
 struct InputState
 {
     InputState();
     ~InputState();
 
+    void clear();
+
+    bool          assistedMode;
     KeyPresses    state;
     KeyPressNode* nodes;
     KeyPressNode* current;
+    KeyPressNodes stack;
+    HelpEntries   helpEntries;
 };
 
 DEFINE_BITFLAG(InputMappingFlags, char,
@@ -131,27 +145,30 @@ DEFINE_BITFLAG(InputMappingFlags, char,
     visual,
     command,
     force,
+    noHelp,
 });
-
-using BuiltinCommand = std::function<bool(Context& context)>;
-
-bool addInputMapping(
-    std::string_view lhs,
-    std::string_view rhs,
-    InputMappingFlags flags,
-    Context& context);
-
-bool addInputMapping(
-    std::string_view lhs,
-    BuiltinCommand rhs,
-    InputMappingFlags flags,
-    Context& context);
 
 enum class InputSource
 {
     user,
     internal,
 };
+
+using BuiltinCommand = std::function<bool(InputSource, Context& context)>;
+
+bool addInputMapping(
+    std::string_view lhs,
+    std::string_view rhs,
+    InputMappingFlags flags,
+    std::string help,
+    Context& context);
+
+bool addInputMapping(
+    std::string_view lhs,
+    BuiltinCommand rhs,
+    InputMappingFlags flags,
+    std::string help,
+    Context& context);
 
 bool registerKeyPress(KeyPress c, InputSource source, Context& context);
 utils::Buffer& operator<<(utils::Buffer& buf, const KeyPress k);

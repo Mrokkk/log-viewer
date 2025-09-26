@@ -110,7 +110,8 @@ Element Picker::Picker::render(core::Context& context)
             }),
             separator(),
             vbox(std::move(content)) | yframe | yflex | size(HEIGHT, EQUAL, picker.height()),
-        }))
+        }),
+        LIGHT)
             | size(WIDTH, EQUAL, resx)
             | clear_under
             | center

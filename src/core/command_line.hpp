@@ -58,6 +58,7 @@ struct CommandLine : utils::Immobile
     bool handleKeyPress(KeyPress keyPress, InputSource source, Context& context);
     void clearHistory();
     void resize(int resx, int resy, Context& context);
+    void initializeInputMapping(Context& context);
 
     Readline commandReadline;
     Readline searchReadline;

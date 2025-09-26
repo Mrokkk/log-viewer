@@ -19,6 +19,7 @@
 #include "ui/event_converter.hpp"
 #include "ui/grepper.hpp"
 #include "ui/main_view.hpp"
+#include "ui/palette.hpp"
 #include "ui/picker.hpp"
 #include "ui/status_line.hpp"
 
@@ -55,49 +56,80 @@ static bool ctrlZ(Ftxui&, core::Context& context)
 static Element render(Ftxui& ui, core::Context& context)
 {
     auto view = ui.mainView.render(context);
+    auto mode = context.mode;
 
-    Element overlay;
-
-    switch (context.mode)
+    if (mode == core::Mode::picker or mode == core::Mode::grepper or context.inputState.assistedMode)
     {
-        case core::Mode::picker:
-            overlay = ui.picker.render(context);
-            break;
-        case core::Mode::grepper:
-            overlay = ui.grepper.render(context);
-            break;
-        default:
-            break;
+        Elements overlays;
+        overlays.reserve(4);
+
+        overlays.emplace_back(std::move(view));
+
+        switch (context.mode)
+        {
+            case core::Mode::picker:
+                overlays.emplace_back(ui.picker.render(context));
+                break;
+            case core::Mode::grepper:
+                overlays.emplace_back(ui.grepper.render(context));
+                break;
+            default:
+                break;
+        }
+
+        if (context.inputState.assistedMode)
+        {
+            Elements left;
+            Elements right;
+
+            left.reserve(context.inputState.helpEntries.size());
+            right.reserve(context.inputState.helpEntries.size());
+
+            for (const auto& entry : context.inputState.helpEntries)
+            {
+                left.emplace_back(text(&entry.name));
+                right.emplace_back(text(&entry.help) | align_right);
+            }
+
+            overlays.emplace_back(
+                vbox(
+                    filler(),
+                    hbox(
+                        filler(),
+                        window(
+                            text("Help for " + core::inputStateString(context)),
+                            hbox(
+                                vbox(std::move(left)) | color(Palette::fg1),
+                                filler(),
+                                text(" "),
+                                vbox(std::move(right) | align_right) | color(Palette::fg3)),
+                            LIGHT)
+                                | color(Palette::fg0)
+                                | clear_under
+                                | size(WIDTH, GREATER_THAN, ui.terminalSize.dimx / 4)
+                                | size(HEIGHT, GREATER_THAN, ui.terminalSize.dimy / 3)
+                        )));
+        }
+
+        view = dbox(std::move(overlays)) | flex;
     }
 
-    if (overlay)
-    {
-        view = dbox(
-            std::move(view),
-            std::move(overlay)) | flex;
-    }
-
-    auto children = Elements{
+    return vbox(
         std::move(view),
         renderStatusLine(ui, context),
-        ui.commandLine.render(context)
-    };
-
-    return vbox(std::move(children)) | flex;
+        ui.commandLine.render(context))
+            | flex;
 }
 
 static bool handleEvent(const Event& event, Ftxui& ui, core::Context& context)
 {
-    if (context.mode != core::Mode::custom)
-    {
-        auto keyPress = convertEvent(event);
+    auto keyPress = convertEvent(event);
 
-        if (keyPress)
+    if (keyPress)
+    {
+        if (core::registerKeyPress(*keyPress, core::InputSource::user, context))
         {
-            if (core::registerKeyPress(*keyPress, core::InputSource::user, context))
-            {
-                return true;
-            }
+            return true;
         }
     }
 

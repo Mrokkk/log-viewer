@@ -24,7 +24,6 @@ utils::Buffer& operator<<(utils::Buffer& buf, Mode mode)
         PRINT_MODE(command);
         PRINT_MODE(grepper);
         PRINT_MODE(picker);
-        PRINT_MODE(custom);
     }
     return buf << "unexpected{" << int(mode) << '}';
 }

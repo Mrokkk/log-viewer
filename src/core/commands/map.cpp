@@ -1,8 +1,34 @@
-#include "core/interpreter/command.hpp"
 #include "core/input.hpp"
+#include "core/interpreter/command.hpp"
+#include "core/interpreter/value.hpp"
 
 namespace core
 {
+
+static std::string getHelp(const interpreter::Values& args)
+{
+    if (args.size() > 2)
+    {
+        auto value = args[2].string();
+        if (value)
+        {
+            return *value;
+        }
+    }
+    return "User defined mapping";
+}
+
+static bool map(const interpreter::Values& args, InputMappingFlags mode, bool force, Context& context)
+{
+    const auto lhs = *args[0].stringView();
+    const auto rhs = *args[1].stringView();
+    InputMappingFlags inputFlags = mode;
+    if (force)
+    {
+        inputFlags |= InputMappingFlags::force;
+    }
+    return addInputMapping(lhs, rhs, inputFlags, getHelp(args), context);
+}
 
 #define MAP_COMMAND(PREFIX, MODE) \
     DEFINE_COMMAND(PREFIX##map) \
@@ -13,20 +39,13 @@ namespace core
         { \
             return { \
                 {Type::string, "lhs"}, \
-                {Type::string, "rhs"} \
+                {Type::string, "rhs"}, \
+                {Type::variadic, "name"}, \
             }; \
         } \
         EXECUTOR() \
         { \
-            const auto lhs = *args[0].stringView(); \
-            const auto rhs = *args[1].stringView(); \
-            InputMappingFlags inputFlags; \
-            if (force) \
-            { \
-                inputFlags |= InputMappingFlags::force; \
-            } \
-            inputFlags |= InputMappingFlags::MODE; \
-            return addInputMapping(lhs, rhs, inputFlags, context); \
+            return map(args, InputMappingFlags::MODE, force, context); \
         } \
     }
 

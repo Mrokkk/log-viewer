@@ -10,6 +10,8 @@
 #include "core/interpreter/command.hpp"
 #include "core/interpreter/interpreter.hpp"
 #include "core/main_view.hpp"
+#include "core/message_line.hpp"
+#include "core/mode.hpp"
 #include "core/readline.hpp"
 #include "utils/string.hpp"
 
@@ -120,6 +122,48 @@ void CommandLine::resize(int, int resy, Context&)
 {
     mFilesPicker.setHeight(resy / 3);
     mHistoryPicker.setHeight(resy / 3);
+}
+
+void CommandLine::initializeInputMapping(Context& context)
+{
+    addInputMapping(
+        ":",
+        [this](InputSource source, Context& context)
+        {
+            context.messageLine.clear();
+            enter(source, CommandLine::Mode::command);
+            switchMode(core::Mode::command, context);
+            return true;
+        },
+        InputMappingFlags::normal | InputMappingFlags::visual,
+        "Enter command line",
+        context);
+
+    addInputMapping(
+        "/",
+        [this](InputSource source, Context& context)
+        {
+            context.messageLine.clear();
+            enter(source, CommandLine::Mode::searchForward);
+            switchMode(core::Mode::command, context);
+            return true;
+        },
+        InputMappingFlags::normal | InputMappingFlags::visual,
+        "Search forward",
+        context);
+
+    addInputMapping(
+        "?",
+        [this](InputSource source, Context& context)
+        {
+            context.messageLine.clear();
+            enter(source, CommandLine::Mode::searchBackward);
+            switchMode(core::Mode::command, context);
+            return true;
+        },
+        InputMappingFlags::normal | InputMappingFlags::visual,
+        "Search forward",
+        context);
 }
 
 }  // namespace core

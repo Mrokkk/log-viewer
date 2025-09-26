@@ -5,6 +5,7 @@
 #include <expected>
 #include <functional>
 #include <string_view>
+#include <vector>
 
 #include "core/assert.hpp"
 #include "core/command_line.hpp"
@@ -132,7 +133,7 @@ struct InputMapping final : utils::NonCopyable
         return *this;
     }
 
-    constexpr bool operator()(core::Context& context) const
+    constexpr bool operator()(InputSource source, Context& context) const
     {
         switch (type)
         {
@@ -145,7 +146,7 @@ struct InputMapping final : utils::NonCopyable
 
             case Type::builtinCommand:
                 assert(builtinCommand);
-                return builtinCommand(context);
+                return builtinCommand(source, context);
         }
         return false;
     }
@@ -174,21 +175,26 @@ struct KeyPressNode final : utils::NonCopyable
 
     constexpr KeyPressNode(KeyPress k)
         : keyPress(k)
+        , noHelp(false)
         , refCount(1)
     {
     }
 
-    constexpr KeyPressNode(KeyPress k, InputMapping m)
+    constexpr KeyPressNode(KeyPress k, InputMapping m, bool n, std::string h)
         : keyPress(k)
+        , noHelp(n)
         , refCount(1)
         , mapping(m)
+        , help(h)
     {
     }
 
     KeyPress          keyPress;
+    bool              noHelp;
     int               refCount;
     ChildrenMap       children;
     MaybeInputMapping mapping;
+    std::string       help;
 };
 
 KeyPress KeyPress::escape{         .type = KeyPress::Type::escape};
@@ -332,12 +338,21 @@ InputState::InputState()
     : nodes(new KeyPressNode[3]{KeyPressNode::root, KeyPressNode::root, KeyPressNode::root})
     , current(nullptr)
 {
-    state.reserve(128);
+    state.reserve(32);
 }
 
 InputState::~InputState()
 {
     delete[] nodes;
+}
+
+void InputState::clear()
+{
+    assistedMode = false;
+    state.clear();
+    current = nullptr;
+    stack.clear();
+    helpEntries.clear();
 }
 
 static std::expected<KeyPresses, std::string> convertKeys(std::string_view input)
@@ -437,9 +452,10 @@ static std::expected<KeyPresses, std::string> convertKeys(std::string_view input
 namespace
 {
 
+using KeyPressNodeRefs = std::vector<KeyPressNode*>;
+
 struct Transaction
 {
-    using KeyPressNodeRefs = std::vector<KeyPressNode*>;
     using Operations = std::vector<std::move_only_function<void()>>;
     KeyPressNodeRefs refCountIncreaseNodes;
     Operations       operations;
@@ -447,7 +463,14 @@ struct Transaction
 
 }  // namespace
 
-static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, InputMapping mapping, bool force, Transaction& transaction)
+static bool updateKeyPressTree(
+    KeyPresses keySequence,
+    KeyPressNode& root,
+    InputMapping mapping,
+    std::string help,
+    bool noHelp,
+    bool force,
+    Transaction& transaction)
 {
     auto currentNode = &root;
 
@@ -458,7 +481,7 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
         if (not it)
         {
             transaction.operations.emplace_back(
-                [currentNode, i, keySequence = std::move(keySequence), mapping = std::move(mapping)] mutable
+                [currentNode, i, noHelp, keySequence = std::move(keySequence), mapping = std::move(mapping), help = std::move(help)] mutable
                 {
                     for (; i < keySequence.size() - 1; ++i)
                     {
@@ -473,7 +496,7 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
 
                     currentNode->children.insert(
                         keyPress,
-                        KeyPressNode(keyPress, std::move(mapping)));
+                        KeyPressNode(keyPress, std::move(mapping), noHelp, help));
                 });
             return true;
         }
@@ -505,18 +528,23 @@ static bool updateKeyPressGraph(KeyPresses keySequence, KeyPressNode& root, Inpu
     else
     {
         transaction.operations.emplace_back(
-            [mapping = std::move(mapping), currentNode, keyPress]
+            [mapping = std::move(mapping), help = std::move(help), currentNode, keyPress, noHelp]
             {
                 currentNode->children.insert(
                     keyPress,
-                    KeyPressNode(keyPress, std::move(mapping)));
+                    KeyPressNode(keyPress, std::move(mapping), noHelp, help));
             });
     }
 
     return true;
 }
 
-static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, InputMappingFlags flags, Context& context)
+static bool addInputMappingInternal(
+    std::string_view lhs,
+    InputMapping rhs,
+    InputMappingFlags flags,
+    std::string help,
+    Context& context)
 {
     const auto converted = convertKeys(lhs);
 
@@ -528,27 +556,37 @@ static bool addInputMappingInternal(std::string_view lhs, InputMapping rhs, Inpu
 
     const auto& keySequence = *converted;
 
-    bool force = flags & InputMappingFlags::force;
+    const bool force = flags[InputMappingFlags::force];
+    const bool noHelp = flags[InputMappingFlags::noHelp];
+
+    KeyPressNodeRefs roots;
+    roots.reserve(3);
 
     Transaction transaction;
 
     if (flags & InputMappingFlags::normal)
     {
-        if (not updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::normal)], rhs, force, transaction))
-        {
-            goto failure;
-        }
+        roots.emplace_back(&context.inputState.nodes[static_cast<int>(Mode::normal)]);
     }
     if (flags & InputMappingFlags::visual)
     {
-        if (not updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::visual)], rhs, force, transaction))
-        {
-            goto failure;
-        }
+        roots.emplace_back(&context.inputState.nodes[static_cast<int>(Mode::visual)]);
     }
     if (flags & InputMappingFlags::command)
     {
-        if (not updateKeyPressGraph(keySequence, context.inputState.nodes[static_cast<int>(Mode::command)], rhs, force, transaction))
+        roots.emplace_back(&context.inputState.nodes[static_cast<int>(Mode::command)]);
+    }
+
+    for (auto root : roots)
+    {
+        if (not updateKeyPressTree(
+                keySequence,
+                *root,
+                rhs,
+                help,
+                noHelp,
+                force,
+                transaction)) [[unlikely]]
         {
             goto failure;
         }
@@ -571,7 +609,12 @@ failure:
     return false;
 }
 
-bool addInputMapping(std::string_view lhs, std::string_view rhs, InputMappingFlags flags, Context& context)
+bool addInputMapping(
+    std::string_view lhs,
+    std::string_view rhs,
+    InputMappingFlags flags,
+    std::string help,
+    Context& context)
 {
     const auto converted = convertKeys(rhs);
 
@@ -581,26 +624,36 @@ bool addInputMapping(std::string_view lhs, std::string_view rhs, InputMappingFla
         return false;
     }
 
-    return addInputMappingInternal(lhs, InputMapping(*converted), flags, context);
+    return addInputMappingInternal(lhs, InputMapping(*converted), flags, std::move(help), context);
 }
 
-bool addInputMapping(std::string_view lhs, BuiltinCommand rhs, InputMappingFlags flags, Context& context)
+bool addInputMapping(
+    std::string_view lhs,
+    BuiltinCommand rhs,
+    InputMappingFlags flags,
+    std::string help,
+    Context& context)
 {
-    return addInputMappingInternal(lhs, InputMapping(rhs), flags, context);
+    return addInputMappingInternal(lhs, InputMapping(rhs), flags, std::move(help), context);
 }
 
-static void clearInputState(InputState& inputState)
+static void createHelpEntries(InputState& inputState, KeyPressNode& node)
 {
-    inputState.state.clear();
-    inputState.current = nullptr;
-}
-
-static void enterCommandLine(CommandLine::Mode mode, InputSource source, Context& context)
-{
-    clearInputState(context.inputState);
-    context.messageLine.clear();
-    context.commandLine.enter(source, mode);
-    switchMode(Mode::command, context);
+    inputState.helpEntries.clear();
+    node.children.forEach(
+        [&inputState](const KeyPressNode::ChildrenMap::Node& node)
+        {
+            if (not node.second.noHelp)
+            {
+                inputState.helpEntries.emplace_back(
+                    HelpEntry{
+                       .name = node.first.name(),
+                       .help = node.second.mapping
+                            ? node.second.help
+                            : "[More options]",
+                    });
+            }
+        });
 }
 
 bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
@@ -610,16 +663,12 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     logger.debug() << keyPress << "; mode: " << mode;
 
-    constexpr auto commandKeyPress = KeyPress::character(char(CommandLine::Mode::command));
-    constexpr auto searchForwardKeyPress = KeyPress::character(char(CommandLine::Mode::searchForward));
-    constexpr auto searchBackwardKeyPress = KeyPress::character(char(CommandLine::Mode::searchBackward));
-
     switch (mode)
     {
         case Mode::command:
             if (context.commandLine.handleKeyPress(keyPress, source, context))
             {
-                if (context.mode == Mode::command)
+                if (context.mode == mode)
                 {
                     switchMode(Mode::normal, context);
                 }
@@ -648,34 +697,33 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
         case Mode::normal:
         case Mode::visual:
-            if (keyPress == searchForwardKeyPress)
-            {
-                enterCommandLine(CommandLine::Mode::searchForward, source, context);
-                return true;
-            }
-
-            if (keyPress == searchBackwardKeyPress)
-            {
-                enterCommandLine(CommandLine::Mode::searchBackward, source, context);
-                return true;
-            }
-
-            if (keyPress == commandKeyPress)
-            {
-                enterCommandLine(CommandLine::Mode::command, source, context);
-                return true;
-            }
-            break;
-
         default:
             break;
     }
 
     if (keyPress == KeyPress::escape)
     {
-        clearInputState(inputState);
+        inputState.clear();
         context.mainView.escape();
         switchMode(Mode::normal, context);
+        return true;
+    }
+    else if (keyPress == KeyPress::backspace and inputState.current and inputState.assistedMode)
+    {
+        if (inputState.stack.empty())
+        {
+            return true;
+        }
+
+        inputState.stack.pop_back();
+        inputState.state.pop_back();
+
+        inputState.current = inputState.stack.empty()
+            ? &inputState.nodes[static_cast<int>(mode)]
+            : inputState.stack.back();
+
+        createHelpEntries(inputState, *inputState.current);
+
         return true;
     }
 
@@ -685,14 +733,14 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     if (not inputState.current)
     {
-        switch (mode)
+        inputState.current = &inputState.nodes[static_cast<int>(mode)];
+
+        if (keyPress.type == KeyPress::Type::space)
         {
-            case Mode::custom:
-                // In this mode no key presses are handled here
-                clearInputState(inputState);
-                return false;
-            default:
-                inputState.current = &inputState.nodes[static_cast<int>(mode)];
+            inputState.assistedMode = true;
+            createHelpEntries(inputState, inputState.nodes[static_cast<int>(mode)]);
+            inputState.state.emplace_back(keyPress);
+            return true;
         }
     }
 
@@ -702,8 +750,13 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
     if (not node)
     {
-        clearInputState(inputState);
+        inputState.clear();
         return false;
+    }
+
+    if (inputState.assistedMode)
+    {
+        inputState.stack.emplace_back(inputState.current);
     }
 
     inputState.current = &node->second;
@@ -711,8 +764,12 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
     if (inputState.current->mapping)
     {
         auto& handler = *inputState.current->mapping;
-        clearInputState(inputState);
-        handler(context);
+        inputState.clear();
+        handler(source, context);
+    }
+    else if (inputState.assistedMode)
+    {
+        createHelpEntries(inputState, *inputState.current);
     }
 
     return true;
@@ -732,20 +789,23 @@ void initializeInput(Context& context)
 {
     addInputMapping(
         "<c-c>",
-        [](Context& context)
+        [](InputSource, Context& context)
         {
             context.messageLine.info() << "Type :qa and press <Enter> to quit";
             return true;
         },
-        InputMappingFlags::normal | InputMappingFlags::visual,
+        InputMappingFlags::normal | InputMappingFlags::visual | InputMappingFlags::noHelp,
+        "",
         context);
 
     addInputMapping(
         "<c-z>",
-        [](Context&){ return true; },
-        InputMappingFlags::normal | InputMappingFlags::visual,
+        [](InputSource, Context&){ return true; },
+        InputMappingFlags::normal | InputMappingFlags::visual | InputMappingFlags::noHelp,
+        "",
         context);
 
+    context.commandLine.initializeInputMapping(context);
     context.mainView.initializeInputMapping(context);
 }
 
