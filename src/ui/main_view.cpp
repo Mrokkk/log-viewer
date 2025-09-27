@@ -19,10 +19,7 @@ using namespace ftxui;
 namespace ui
 {
 
-MainView::MainView()
-    : mPlaceholder(Container::Vertical({}))
-{
-}
+MainView::MainView() = default;
 
 MainView::~MainView() = default;
 
@@ -51,11 +48,6 @@ Element MainView::render(core::Context& context)
     }
 
     return vbox(std::move(vertical)) | flex;
-}
-
-MainView::operator ftxui::Component&()
-{
-    return mPlaceholder;
 }
 
 static Element wrapActiveLineIf(Element line, bool condition)
