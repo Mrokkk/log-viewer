@@ -4,6 +4,9 @@
 
 #include "core/commands/open.hpp"
 #include "core/dirs.hpp"
+#include "core/event.hpp"
+#include "core/event_handler.hpp"
+#include "core/events/resize.hpp"
 #include "core/interpreter/command.hpp"
 #include "core/interpreter/symbols_map.hpp"
 #include "core/logger.hpp"
@@ -25,6 +28,14 @@ MainPicker::MainPicker()
         Picker(Picker::Orientation::topDown, feedLogs),
     }
 {
+    registerEventHandler(
+        Event::Type::Resize,
+        [this](EventPtr event, InputSource, Context& context)
+        {
+            auto& ev = event->cast<events::Resize>();
+            resize(ev.resx, ev.resy, context);
+        });
+
     mReadline.onAccept(
         [this](InputSource, Context& context)
         {

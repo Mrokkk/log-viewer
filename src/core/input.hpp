@@ -170,10 +170,8 @@ bool addInputMapping(
     std::string help,
     Context& context);
 
-bool registerKeyPress(KeyPress c, InputSource source, Context& context);
 utils::Buffer& operator<<(utils::Buffer& buf, const KeyPress k);
 std::string inputStateString(Context& context);
 void initializeInput(Context& context);
-void resize(int resx, int resy, Context& context);
 
 }  // namespace core

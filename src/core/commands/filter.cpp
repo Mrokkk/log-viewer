@@ -1,4 +1,6 @@
 #include "core/buffer.hpp"
+#include "core/event.hpp"
+#include "core/events/buffer_loaded.hpp"
 #include "core/interpreter/command.hpp"
 #include "core/main_view.hpp"
 #include "core/message_line.hpp"
@@ -57,10 +59,7 @@ DEFINE_COMMAND(filter)
             context,
             [&newWindow, &context](core::TimeOrError result)
             {
-                if (context.running)
-                {
-                    context.mainView.bufferLoaded(std::move(result), newWindow, context);
-                }
+                sendEvent<events::BufferLoaded>(InputSource::internal, context, std::move(result), newWindow);
             });
 
         return true;

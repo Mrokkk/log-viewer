@@ -9,6 +9,11 @@
 #include "core/buffers.hpp"
 #include "core/config.hpp"
 #include "core/context.hpp"
+#include "core/event.hpp"
+#include "core/event_handler.hpp"
+#include "core/events/buffer_loaded.hpp"
+#include "core/events/resize.hpp"
+#include "core/events/search_finished.hpp"
 #include "core/input.hpp"
 #include "core/logger.hpp"
 #include "core/main_loop.hpp"
@@ -83,10 +88,17 @@ struct MainView::Impl final : MainView
 
     constexpr size_t getAvailableViewHeight(WindowNode& node) const
     {
-        return mHeight
+        auto value = mHeight
             - 1 // command line
             - 1 // status line
             - (node.depth() + 1);
+
+        if (value > mHeight) [[unlikely]]
+        {
+            return 0;
+        }
+
+        return value;
     }
 
     constexpr size_t getAvailableViewWidth(Window& w) const
@@ -113,6 +125,7 @@ struct MainView::Impl final : MainView
         return mCurrentWindowNode;
     }
 
+    void resize(int width, int height, Context& context);
     void removeWindow(WindowNode& node, Context&);
     void reloadWindow(WindowNode& node, Context& context);
     void reloadLines(Buffer& buffer, Window& w, Context& context);
@@ -176,6 +189,15 @@ MainView::MainView()
     : mRoot("root")
     , mCurrentWindowNode(nullptr)
 {
+    auto& impl = Impl::get(this);
+    registerEventHandler(
+        Event::Type::Resize,
+        [&impl](EventPtr event, InputSource, Context& context)
+        {
+            auto& ev = event->cast<events::Resize>();
+            impl.resize(ev.resx, ev.resy, context);
+        });
+
     static_assert(sizeof(MainView::Impl) == sizeof(MainView));
 }
 
@@ -233,6 +255,22 @@ void MainView::initializeInputMapping(Context& context)
 {
     auto& impl = Impl::get(this);
 
+    registerEventHandler(
+        Event::Type::BufferLoaded,
+        [this](EventPtr event, InputSource, Context& context)
+        {
+            auto& ev = event->cast<events::BufferLoaded>();
+            bufferLoaded(ev.result, ev.node, context);
+        });
+
+    registerEventHandler(
+        Event::Type::SearchFinished,
+        [&impl](EventPtr event, InputSource, Context& context)
+        {
+            auto& ev = event->cast<events::SearchFinished>();
+            impl.handleSearchResult(ev.result, ev.pattern, ev.window, ev.buffer, ev.time, context);
+        });
+
     REGISTER_MAPPING("gg",        NORMAL | VISUAL, "Go to buffer beginning", impl.goTo(0, context));
     REGISTER_MAPPING("G",         NORMAL | VISUAL, "Go to buffer end", impl.goTo(-1, context));
     REGISTER_MAPPING("h",         NORMAL | VISUAL, "Move cursor left", impl.left(context));
@@ -283,13 +321,6 @@ void MainView::reloadAll(Context& context)
         });
 }
 
-void MainView::resize(int width, int height, Context& context)
-{
-    mWidth = width;
-    mHeight = height;
-    reloadAll(context);
-}
-
 WindowNode& MainView::createWindow(std::string name, Parent parent, Context& context)
 {
     auto [newBuffer, newBufferId] = context.buffers.allocate();
@@ -328,12 +359,8 @@ void MainView::bufferLoaded(TimeOrError result, WindowNode& node, Context& conte
             return;
         }
 
-        context.mainLoop->executeTask(
-            [this, &node, &context]
-            {
-                node.loaded(true);
-                Impl::get(this).reloadWindow(node, context);
-            });
+        node.loaded(true);
+        Impl::get(this).reloadWindow(node, context);
 
         context.messageLine.info()
             << node.parent()->name() << ": buffer loaded; lines: " << newBuffer->lineCount() << "; took "
@@ -350,11 +377,7 @@ void MainView::bufferLoaded(TimeOrError result, WindowNode& node, Context& conte
         {
             context.messageLine.error() << error;
 
-            context.mainLoop->executeTask(
-                [result = std::move(result), &node, &context, this]
-                {
-                    Impl::get(this).removeWindow(*node.parent(), context);
-                });
+            Impl::get(this).removeWindow(*node.parent(), context);
         }
     }
 }
@@ -440,7 +463,14 @@ void MainView::highlight(std::string pattern, std::string colorString, Context& 
         std::move(pattern),
         std::move(*data));
 
-    impl.reloadAll(context);
+    reloadAll(context);
+}
+
+void MainView::Impl::resize(int width, int height, Context& context)
+{
+    mWidth = width;
+    mHeight = height;
+    reloadAll(context);
 }
 
 void MainView::Impl::removeWindow(WindowNode& node, Context&)
@@ -1035,6 +1065,8 @@ void MainView::Impl::center(Context& context)
 
     goTo(w.ycurrent + w.yoffset - w.height / 2, context);
     w.ycurrent = w.height / 2;
+
+    updateSelection(w);
 }
 
 void MainView::Impl::lineStart()
@@ -1081,6 +1113,8 @@ void MainView::Impl::scrollDown(Context& context)
     {
         --w.ycurrent;
     }
+
+    updateSelection(w);
 }
 
 void MainView::Impl::scrollUp(Context& context)
@@ -1096,6 +1130,8 @@ void MainView::Impl::scrollUp(Context& context)
         {
             ++w.ycurrent;
         }
+
+        updateSelection(w);
     }
 }
 
@@ -1215,18 +1251,16 @@ void MainView::Impl::search(std::string pattern, SearchDirection direction, Cont
             .startLinePosition = linePosition(w),
             .pattern = pattern,
         },
-        [this, &context, &w, buffer, pattern](SearchResult result, float time)
+        [&context, &w, buffer, pattern](SearchResult result, float time)
         {
-            if (not context.running)
-            {
-                return;
-            }
-
-            context.mainLoop->executeTask(
-                [this, &context, &w, buffer, pattern = std::move(pattern), result, time]
-                {
-                    handleSearchResult(result, pattern, w, *buffer, time, context);
-                });
+            sendEvent<events::SearchFinished>(
+                InputSource::internal,
+                context,
+                std::move(result),
+                std::move(pattern),
+                w,
+                *buffer,
+                time);
         });
 }
 
@@ -1321,6 +1355,7 @@ void MainView::Impl::handleSearchResult(
     }
 
     alignCursor(w);
+    updateSelection(w);
 
     if (w.config->highlightSearch)
     {

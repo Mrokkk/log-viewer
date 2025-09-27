@@ -7,9 +7,11 @@
 #include <string_view>
 #include <vector>
 
-#include "core/assert.hpp"
 #include "core/command_line.hpp"
 #include "core/context.hpp"
+#include "core/event.hpp"
+#include "core/event_handler.hpp"
+#include "core/events/key_press.hpp"
 #include "core/grepper.hpp"
 #include "core/logger.hpp"
 #include "core/main_picker.hpp"
@@ -62,32 +64,36 @@ struct InputMapping final : utils::NonCopyable
     {
         switch (type)
         {
-            case Type::command:
-                utils::destroyAt(&keySequence);
-                break;
-            case Type::builtinCommand:
-                utils::destroyAt(&builtinCommand);
-                break;
+            case Type::command: utils::destroyAt(&keySequence); break;
+            case Type::builtinCommand: utils::destroyAt(&builtinCommand); break;
         }
     }
 
     constexpr InputMapping(const InputMapping& other)
-        : type(other.type)
     {
-        switch (type)
-        {
-            case Type::command:
-                utils::constructAt(&keySequence, other.keySequence);
-                break;
-
-            case Type::builtinCommand:
-                utils::constructAt(&builtinCommand, other.builtinCommand);
-                break;
-        }
+        copyFrom(other);
     }
 
     constexpr InputMapping& operator=(const InputMapping& other)
     {
+        copyFrom(other);
+        return *this;
+    }
+
+    constexpr InputMapping(InputMapping&& other)
+    {
+        moveFrom(std::move(other));
+    }
+
+    constexpr InputMapping& operator=(InputMapping&& other)
+    {
+        moveFrom(std::move(other));
+        return *this;
+    }
+
+private:
+    constexpr void copyFrom(const InputMapping& other)
+    {
         type = other.type;
         switch (type)
         {
@@ -99,25 +105,9 @@ struct InputMapping final : utils::NonCopyable
                 utils::constructAt(&builtinCommand, other.builtinCommand);
                 break;
         }
-        return *this;
     }
 
-    constexpr InputMapping(InputMapping&& other)
-        : type(other.type)
-    {
-        switch (type)
-        {
-            case Type::command:
-                utils::constructAt(&keySequence, std::move(other.keySequence));
-                break;
-
-            case Type::builtinCommand:
-                utils::constructAt(&builtinCommand, std::move(other.builtinCommand));
-                break;
-        }
-    }
-
-    constexpr InputMapping& operator=(InputMapping&& other)
+    constexpr void moveFrom(InputMapping&& other)
     {
         type = other.type;
         switch (type)
@@ -130,25 +120,24 @@ struct InputMapping final : utils::NonCopyable
                 utils::constructAt(&builtinCommand, std::move(other.builtinCommand));
                 break;
         }
-        return *this;
     }
 
-    constexpr bool operator()(InputSource source, Context& context) const
+public:
+    constexpr void operator()(InputSource source, Context& context) const
     {
         switch (type)
         {
             case Type::command:
                 for (auto keyPress : keySequence)
                 {
-                    registerKeyPress(keyPress, InputSource::internal, context);
+                    sendEvent<events::KeyPress>(InputSource::internal, context, keyPress);
                 }
-                return true;
+                break;
 
             case Type::builtinCommand:
-                assert(builtinCommand);
-                return builtinCommand(source, context);
+                builtinCommand(source, context);
+                break;
         }
-        return false;
     }
 
     Type type;
@@ -656,7 +645,7 @@ static void createHelpEntries(InputState& inputState, KeyPressNode& node)
         });
 }
 
-bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
+static void handleKeyPress(KeyPress keyPress, InputSource source, Context& context)
 {
     auto& inputState = context.inputState;
     auto mode = context.mode;
@@ -673,7 +662,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
                     switchMode(Mode::normal, context);
                 }
             }
-            return true;
+            return;
 
         case Mode::picker:
             if (context.mainPicker.handleKeyPress(keyPress, source, context))
@@ -683,7 +672,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
                     switchMode(Mode::normal, context);
                 }
             }
-            return true;
+            return;
 
         case Mode::grepper:
             if (context.grepper.handleKeyPress(keyPress, source, context))
@@ -693,7 +682,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
                     switchMode(Mode::normal, context);
                 }
             }
-            return true;
+            return;
 
         case Mode::normal:
         case Mode::visual:
@@ -706,13 +695,13 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
         inputState.clear();
         context.mainView.escape();
         switchMode(Mode::normal, context);
-        return true;
+        return;
     }
     else if (keyPress == KeyPress::backspace and inputState.current and inputState.assistedMode)
     {
         if (inputState.stack.empty())
         {
-            return true;
+            return;
         }
 
         inputState.stack.pop_back();
@@ -724,7 +713,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
 
         createHelpEntries(inputState, *inputState.current);
 
-        return true;
+        return;
     }
 
     static_assert(static_cast<int>(Mode::normal)  == 0);
@@ -740,7 +729,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
             inputState.assistedMode = true;
             createHelpEntries(inputState, inputState.nodes[static_cast<int>(mode)]);
             inputState.state.emplace_back(keyPress);
-            return true;
+            return;
         }
     }
 
@@ -751,7 +740,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
     if (not node)
     {
         inputState.clear();
-        return false;
+        return;
     }
 
     if (inputState.assistedMode)
@@ -772,7 +761,7 @@ bool registerKeyPress(KeyPress keyPress, InputSource source, Context& context)
         createHelpEntries(inputState, *inputState.current);
     }
 
-    return true;
+    return;
 }
 
 std::string inputStateString(Context& context)
@@ -785,8 +774,15 @@ std::string inputStateString(Context& context)
     return buf.str();
 }
 
+static void handleKeyPressEvent(EventPtr event, InputSource source, Context& context)
+{
+    handleKeyPress(event->cast<events::KeyPress>().keyPress, source, context);
+}
+
 void initializeInput(Context& context)
 {
+    registerEventHandler(Event::Type::KeyPress, &handleKeyPressEvent);
+
     addInputMapping(
         "<c-c>",
         [](InputSource, Context& context)
@@ -807,13 +803,6 @@ void initializeInput(Context& context)
 
     context.commandLine.initializeInputMapping(context);
     context.mainView.initializeInputMapping(context);
-}
-
-void resize(int resx, int resy, Context& context)
-{
-    context.commandLine.resize(resx, resy, context);
-    context.mainView.resize(resx, resy, context);
-    context.mainPicker.resize(resx, resy, context);
 }
 
 }  // namespace core

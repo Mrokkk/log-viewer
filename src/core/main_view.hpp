@@ -34,7 +34,6 @@ struct MainView : utils::Immobile
 
     void initializeInputMapping(Context& context);
     void reloadAll(Context& context);
-    void resize(int width, int height, Context& context);
     WindowNode& createWindow(std::string name, Parent parent, Context& context);
     void bufferLoaded(TimeOrError result, WindowNode& node, Context& context);
     void escape();

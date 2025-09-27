@@ -6,6 +6,8 @@
 #include "core/alias.hpp"
 #include "core/context.hpp"
 #include "core/dirs.hpp"
+#include "core/event_handler.hpp"
+#include "core/events/resize.hpp"
 #include "core/input.hpp"
 #include "core/interpreter/command.hpp"
 #include "core/interpreter/interpreter.hpp"
@@ -35,6 +37,14 @@ CommandLine::CommandLine()
     , mFilesPicker(Picker::Orientation::downTop, &feedFiles)
     , mHistoryPicker(Picker::Orientation::downTop, [this](auto&){ return feedHistory(*this); })
 {
+    registerEventHandler(
+        Event::Type::Resize,
+        [this](EventPtr event, InputSource, Context& context)
+        {
+            auto& ev = event->cast<events::Resize>();
+            resize(ev.resx, ev.resy, context);
+        });
+
     commandReadline
         .enableSuggestions()
         .connectPicker(mFilesPicker, 't', Readline::AcceptBehaviour::append)

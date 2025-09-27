@@ -90,6 +90,7 @@ add_executable(${PROJECT_NAME}
     src/core/context.cpp
     src/core/dirs.cpp
     src/core/entity.cpp
+    src/core/event.cpp
     src/core/file.cpp
     src/core/fuzzy.cpp
     src/core/grepper.cpp
@@ -114,16 +115,7 @@ add_executable(${PROJECT_NAME}
     src/core/window_node.cpp
     src/main.cpp
     src/sys/posix.cpp
-    src/ui/command_line.cpp
-    src/ui/event_converter.cpp
-    src/ui/event_handler.cpp
     src/ui/ftxui.cpp
-    src/ui/grepper.cpp
-    src/ui/main_view.cpp
-    src/ui/picker.cpp
-    src/ui/picker_entry.cpp
-    src/ui/status_line.cpp
-    src/ui/text_box.cpp
     src/ui/window_renderer.cpp
     src/utils/buffer.cpp
     src/utils/string.cpp

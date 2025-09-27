@@ -2,20 +2,64 @@
 
 #include <string>
 
+#include <ftxui/component/event.hpp>
 #include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/fwd.hpp>
 #include <ftxui/screen/terminal.hpp>
 
 #include "core/fwd.hpp"
 #include "core/main_loop.hpp"
 #include "core/user_interface.hpp"
-#include "ui/command_line.hpp"
-#include "ui/event_handler.hpp"
-#include "ui/grepper.hpp"
-#include "ui/main_view.hpp"
-#include "ui/picker.hpp"
 
 namespace ui
 {
+
+struct Ftxui;
+
+struct MainView final
+{
+    ftxui::Element render(core::Context& context);
+private:
+    ftxui::Elements renderTablines(core::Context& context);
+};
+
+struct TextBox
+{
+    const std::string&  content;
+    const size_t*       cursorPosition = nullptr;
+    const std::string*  suggestion = nullptr;
+    const ftxui::Color* suggestionColor = nullptr;
+};
+
+struct CommandLine final
+{
+    CommandLine(core::Context& context);
+    ftxui::Element render(core::Context& context);
+
+private:
+    TextBox mCommandTextBox;
+    TextBox mSearchTextBox;
+};
+
+struct MainPicker final
+{
+    MainPicker(core::Context& context);
+    ftxui::Element render(core::Context& context);
+
+private:
+    TextBox           mTextBox;
+};
+
+struct Grepper final
+{
+    Grepper(core::Context& context);
+    ftxui::Element render(core::Context& context);
+
+private:
+    ftxui::Element renderCheckbox(bool value, std::string_view description);
+
+    TextBox mTextBox;
+};
 
 struct Ftxui final : core::UserInterface, core::MainLoop
 {
@@ -30,9 +74,8 @@ struct Ftxui final : core::UserInterface, core::MainLoop
     ftxui::Dimensions        terminalSize;
     MainView                 mainView;
     CommandLine              commandLine;
-    Picker                   picker;
+    MainPicker               picker;
     Grepper                  grepper;
-    EventHandlers            eventHandlers;
 };
 
 }  // namespace ui

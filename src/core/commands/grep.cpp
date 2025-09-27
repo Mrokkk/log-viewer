@@ -1,4 +1,6 @@
 #include "core/buffer.hpp"
+#include "core/event.hpp"
+#include "core/events/buffer_loaded.hpp"
 #include "core/grep_options.hpp"
 #include "core/interpreter/command.hpp"
 #include "core/interpreter/interpreter.hpp"
@@ -90,10 +92,7 @@ DEFINE_COMMAND(grep)
             context,
             [&newWindow, &context, bufferName = buf.str()](TimeOrError result)
             {
-                if (context.running)
-                {
-                    context.mainView.bufferLoaded(std::move(result), newWindow, context);
-                }
+                sendEvent<events::BufferLoaded>(InputSource::internal, context, std::move(result), newWindow);
             });
 
         return true;
