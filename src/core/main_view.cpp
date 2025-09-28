@@ -155,8 +155,9 @@ struct MainView::Impl final : MainView
     void fastForward();
     void fastBackward();
 
-    void wordBeginning();
-    void wordEnd();
+    void backwardWordBeginning();
+    void forwardWordBeginning();
+    void forwardWordEnd();
 
     void startSearch(std::string pattern, SearchDirection direction);
     void search(std::string pattern, SearchDirection direction, Context& context);
@@ -287,8 +288,9 @@ void MainView::initializeInputMapping(Context& context)
     REGISTER_MAPPING("<pgdown>",  NORMAL | VISUAL, "Move cursor page down", impl.pageDown(context));
     REGISTER_MAPPING("<s-up>",    NORMAL | VISUAL, "Move cursor page up", impl.pageUp(context));
     REGISTER_MAPPING("<s-down>",  NORMAL | VISUAL, "Move cursor page down", impl.pageDown(context));
-    REGISTER_MAPPING("b",         NORMAL | VISUAL, "Move cursor to word beginning", impl.wordBeginning());
-    REGISTER_MAPPING("e",         NORMAL | VISUAL, "Move cursor to word end", impl.wordEnd());
+    REGISTER_MAPPING("b",         NORMAL | VISUAL, "Move cursor backward to word beginning", impl.backwardWordBeginning());
+    REGISTER_MAPPING("w",         NORMAL | VISUAL, "Move cursor forward to word beginning", impl.forwardWordBeginning());
+    REGISTER_MAPPING("e",         NORMAL | VISUAL, "Move cursor forward to word end", impl.forwardWordEnd());
     REGISTER_MAPPING("<c-e>",     NORMAL | VISUAL, "Scroll down by 1 line", impl.scrollDown(context));
     REGISTER_MAPPING("<c-y>",     NORMAL | VISUAL, "Scroll up by 1 line", impl.scrollUp(context));
     REGISTER_MAPPING("zz",        NORMAL | VISUAL, "Center current line", impl.center(context));
@@ -1163,7 +1165,7 @@ void MainView::Impl::fastBackward()
 
 constexpr auto stopFlags = GlyphFlags::whitespace;
 
-void MainView::Impl::wordBeginning()
+void MainView::Impl::backwardWordBeginning()
 {
     GET_WINDOW(w);
 
@@ -1194,7 +1196,23 @@ void MainView::Impl::wordBeginning()
     w.xoffset = 0;
 }
 
-void MainView::Impl::wordEnd()
+void MainView::Impl::forwardWordBeginning()
+{
+    GET_WINDOW(w);
+
+    const auto& glyphs = lineGlyphs(w);
+    const auto origLinePos = linePosition(w);
+    const auto lineLen = lineLength(w);
+    auto linePos = origLinePos;
+
+    while (++linePos < lineLen and not (glyphs[linePos].flags & stopFlags));
+    while (++linePos < lineLen and glyphs[linePos].flags & stopFlags);
+
+    w.xcurrent += linePos - origLinePos;
+    applyHorizontalScrollJump(w, Movement::forward);
+}
+
+void MainView::Impl::forwardWordEnd()
 {
     GET_WINDOW(w);
 
