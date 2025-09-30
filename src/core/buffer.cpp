@@ -353,6 +353,26 @@ void Buffer::search(SearchRequest req, FinishedSearchCallback callback)
         });
 }
 
+size_t Buffer::findClosestLine(size_t absoluteLineNumber)
+{
+    switch (mType)
+    {
+        case cast(BufferType::uninitialized):
+        case cast(BufferType::base):
+            return absoluteLineNumber;
+        case cast(BufferType::filtered):
+            for (size_t i = 0; i < mFilteredLines.size(); ++i)
+            {
+                if (absoluteLineNumber <= mFilteredLines[i])
+                {
+                    return i;
+                }
+            }
+            return mFilteredLines.size() - 1;
+    }
+    return 0;
+}
+
 size_t Buffer::absoluteLineNumber(size_t lineIndex) const
 {
     switch (mType)

@@ -83,6 +83,8 @@ struct Buffer : utils::Immobile
 
     void search(SearchRequest req, FinishedSearchCallback callback);
 
+    size_t findClosestLine(size_t absoluteLineNumber);
+
     size_t absoluteLineNumber(size_t lineIndex) const;
 
     const std::string& filePath() const;

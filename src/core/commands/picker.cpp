@@ -22,7 +22,29 @@ DEFINE_COMMAND(files)
     EXECUTOR()
     {
         switchMode(Mode::picker, context);
-        context.mainPicker.enter(context);
+        context.mainPicker.enter(context, MainPicker::Type::files);
+        return true;
+    }
+}
+
+DEFINE_COMMAND(bookmarks)
+{
+    HELP() = "show bookmarks picker";
+
+    FLAGS()
+    {
+        return {};
+    }
+
+    ARGUMENTS()
+    {
+        return {};
+    }
+
+    EXECUTOR()
+    {
+        switchMode(Mode::picker, context);
+        context.mainPicker.enter(context, MainPicker::Type::bookmarks);
         return true;
     }
 }

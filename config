@@ -7,6 +7,7 @@ set tabChar             "›"
 
 nmap "<c-p>" ":files<cr>" "Open files picker"
 nmap "<leader>." ":files<cr>" "Open files picker"
+nmap "<leader>b" ":bookmarks<cr>" "Open bookmarks picker"
 nmap "<c-g>" ":grepper<cr>" "Open grepper"
 nmap "B" ":toggle showLineNumbers<cr>" "Show/hide line numbers"
 nmap "A" ":toggle absoluteLineNumbers<cr>" "Enable/disable absolute line numbers"

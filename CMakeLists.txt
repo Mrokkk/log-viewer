@@ -69,9 +69,11 @@ add_executable(${PROJECT_NAME}
     src/core/app.cpp
     src/core/argparse.cpp
     src/core/assert.cpp
+    src/core/bookmarks.cpp
     src/core/buffer.cpp
     src/core/buffers.cpp
     src/core/command_line.cpp
+    src/core/commands/add_bookmark.cpp
     src/core/commands/echo.cpp
     src/core/commands/filter.cpp
     src/core/commands/get.cpp

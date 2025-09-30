@@ -5,10 +5,12 @@
 #include <span>
 #include <vector>
 
+#include "core/bookmarks.hpp"
 #include "core/buffers.hpp"
 #include "utils/bitflag.hpp"
 #include "utils/noncopyable.hpp"
 #include "utils/ring_buffer.hpp"
+#include "utils/shared_ptr.hpp"
 
 namespace core
 {
@@ -53,6 +55,8 @@ struct BufferLine
 
 using RingBuffer = utils::RingBuffer<BufferLine>;
 
+using BookmarksPtr = utils::SharedPtr<Bookmarks>;
+
 struct Window final : utils::NonCopyable
 {
     using ConfigPtr = const Config* const;
@@ -61,26 +65,27 @@ struct Window final : utils::NonCopyable
     Window(BufferId id, Context& context);
     Window(Window&& other) = default;
 
-    bool       initialized;
-    bool       loaded;
-    bool       pendingSearch;
-    bool       foundAnything;
-    BufferId   bufferId;
-    size_t     lineCount;
-    size_t     width;
-    size_t     height;
-    size_t     lineNrDigits;
-    size_t     yoffset;
-    size_t     xoffset;
-    size_t     ycurrent;
-    size_t     xcurrent;
-    bool       selectionMode;
-    size_t     selectionPivot;
-    size_t     selectionStart;
-    size_t     selectionEnd;
-    Context*   context;
-    ConfigPtr  config;
-    RingBuffer ringBuffer;
+    bool         initialized;
+    bool         loaded;
+    bool         pendingSearch;
+    bool         foundAnything;
+    BufferId     bufferId;
+    size_t       lineCount;
+    size_t       width;
+    size_t       height;
+    size_t       lineNrDigits;
+    size_t       yoffset;
+    size_t       xoffset;
+    size_t       ycurrent;
+    size_t       xcurrent;
+    bool         selectionMode;
+    size_t       selectionPivot;
+    size_t       selectionStart;
+    size_t       selectionEnd;
+    Context*     context;
+    ConfigPtr    config;
+    RingBuffer   ringBuffer;
+    BookmarksPtr bookmarks;
 };
 
 }  // namespace core

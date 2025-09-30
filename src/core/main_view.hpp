@@ -39,9 +39,11 @@ struct MainView : utils::Immobile
     void escape();
     void quitCurrentWindow(Context& context);
     void scrollTo(size_t lineNumber, Context& context);
+    void scrollToAbsolute(size_t lineNumber, Context& context);
     void searchForward(std::string pattern, Context& context);
     void searchBackward(std::string pattern, Context& context);
     void highlight(std::string pattern, std::string colorString, Context& context);
+    void addBookmark(std::string name, Context& context);
 
 private:
     struct Impl;

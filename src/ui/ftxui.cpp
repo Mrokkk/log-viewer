@@ -790,6 +790,7 @@ constexpr static std::string pickerName(const core::MainPicker::Type type)
     switch (type)
     {
         TYPE_CONVERT(files);
+        TYPE_CONVERT(bookmarks);
         TYPE_CONVERT(commands);
         TYPE_CONVERT(variables);
         TYPE_CONVERT(messages);
@@ -900,16 +901,15 @@ Element Grepper::render(core::Context& context)
 {
     auto& options = context.grepper.options;
 
-    return window(
-        text(""),
-        vbox(
-            renderTextBox(mTextBox),
-            separator(),
-            renderCheckbox(options.regex, "regex (a-r)"),
-            renderCheckbox(options.caseInsensitive, "case insensitive (a-c)"),
-            renderCheckbox(options.inverted, "inverted (a+i)"))
-                | xflex,
-        LIGHT)
+    const auto& frameColor = Palette::fg0;
+
+    return vbox(
+        renderTextBox(mTextBox),
+        separator() | color(frameColor),
+        renderCheckbox(options.regex, "regex (a-r)"),
+        renderCheckbox(options.caseInsensitive, "case insensitive (a-c)"),
+        renderCheckbox(options.inverted, "inverted (a+i)"))
+            | borderStyled(LIGHT, frameColor)
             | clear_under
             | center
             | xflex;

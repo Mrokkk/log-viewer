@@ -22,12 +22,12 @@ struct File final
     const std::string& path() const;
     size_t size() const;
 
-    bool isAreaMapped(size_t start, size_t len) const
+    constexpr bool isAreaMapped(size_t start, size_t len) const
     {
         return start >= mMapping.offset and len + start < mMapping.len + mMapping.offset;
     }
 
-    const char* at(size_t offset)
+    constexpr const char* at(size_t offset)
     {
         return mMapping.ptrAt<const char*>(offset);
     }

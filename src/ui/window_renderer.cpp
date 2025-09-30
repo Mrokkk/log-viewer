@@ -63,6 +63,7 @@ void WindowRenderer::Render(ftxui::Screen& screen)
     int selectionEnd = w.selectionEnd - w.yoffset + y;
     bool selectionMode = w.selectionMode;
     size_t xoffset = w.xoffset;
+    const bool hasBookmarks = w.bookmarks->size() != 0;
 
     if (w.ringBuffer.size() == 0) [[unlikely]]
     {
@@ -70,20 +71,31 @@ void WindowRenderer::Render(ftxui::Screen& screen)
     }
 
     w.ringBuffer.forEach(
-        [this, &xmin, &y, &screen, xoffset, ycurrent, selectionStart, selectionEnd, selectionMode](const core::BufferLine& line)
+        [this, &xmin, &y, &screen, xoffset, ycurrent, selectionStart, selectionEnd, selectionMode, hasBookmarks](const core::BufferLine& line)
         {
-            if (y > box_.y_max)
+            if (y > box_.y_max) [[unlikely]]
             {
                 return;
             }
 
             int x = box_.x_min;
 
-            auto bgColor = y == ycurrent
+            const auto bgColor = y == ycurrent
                 ? Palette::bg3
                 : selectionMode and y >= selectionStart and y <= selectionEnd
                     ? Palette::bg2
                     : Color::Default;
+
+            if (hasBookmarks)
+            {
+                if (mWindow.bookmarks->find(line.absoluteLineNumber))
+                {
+                    auto& pixel = screen.PixelAt(x, y);
+                    pixel.character = "●";
+                    pixel.foreground_color = Palette::fg3;
+                }
+                xmin = x += 2;
+            }
 
             if (mWindow.config->showLineNumbers)
             {
@@ -111,10 +123,16 @@ void WindowRenderer::Render(ftxui::Screen& screen)
 
             size_t position = 0;
 
-            // Draw line
+            // Draw text line
             for (const auto& segment : line.segments)
             {
-                auto fgColor = convertToColor(segment.color);
+                const auto segmentFgColor = convertToColor(segment.color);
+
+                const Color fgColorSelector[2] = {
+                    segmentFgColor,
+                    Palette::bg5,
+                };
+
                 for (const auto& glyph : segment.glyphs)
                 {
                     if (position < xoffset)
@@ -122,37 +140,20 @@ void WindowRenderer::Render(ftxui::Screen& screen)
                         ++position;
                         continue;
                     }
-                    if (glyph.flags & (core::GlyphFlags::control | core::GlyphFlags::invalid))
+                    const bool isSpecialGlyph = glyph.flags & (core::GlyphFlags::control | core::GlyphFlags::invalid);
+                    const auto& color = fgColorSelector[isSpecialGlyph];
+                    for (uint32_t i = 0; i < glyph.width; ++i)
                     {
-                        for (uint32_t i = 0; i < glyph.width; ++i)
+                        if (x > box_.x_max)
                         {
-                            if (x > box_.x_max)
-                            {
-                                goto next_line;
-                            }
-
-                            auto& pixel = screen.PixelAt(x, y);
-                            pixel.character = convertToString(glyph.characters[i]);
-                            pixel.background_color = bgColor;
-                            pixel.foreground_color = Palette::bg5;
-                            ++x;
+                            goto next_line;
                         }
-                    }
-                    else
-                    {
-                        for (uint32_t i = 0; i < glyph.width; ++i)
-                        {
-                            if (x > box_.x_max)
-                            {
-                                goto next_line;
-                            }
 
-                            auto& pixel = screen.PixelAt(x, y);
-                            pixel.character = convertToString(glyph.characters[i]);
-                            pixel.background_color = bgColor;
-                            pixel.foreground_color = fgColor;
-                            ++x;
-                        }
+                        auto& pixel = screen.PixelAt(x, y);
+                        pixel.character = convertToString(glyph.characters[i]);
+                        pixel.background_color = bgColor;
+                        pixel.foreground_color = color;
+                        ++x;
                     }
                     ++position;
                 }

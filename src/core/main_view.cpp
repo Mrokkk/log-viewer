@@ -28,6 +28,7 @@
 #include "utils/hash_map.hpp"
 #include "utils/math.hpp"
 #include "utils/maybe.hpp"
+#include "utils/shared_ptr.hpp"
 #include "utils/string.hpp"
 
 namespace core
@@ -145,6 +146,7 @@ struct MainView::Impl final : MainView
     void pageDown(Context& context);
     void goTo(Window& w, size_t lineNumber, Context& context);
     void goTo(size_t lineNumber, Context& context);
+    void goToAbsolute(size_t lineNumber, Context& context);
     void center(Context& context);
     void lineStart();
     void lineEnd();
@@ -174,6 +176,8 @@ struct MainView::Impl final : MainView
     void selectionModeToggle(Context& context);
     void yank(Context& context);
     void yankSingle(Context& context);
+
+    void addBookmarkImpl(std::string name, Context& context);
 
     static utils::Maybe<Pattern> parse(std::string& pattern, std::string& colorString);
 
@@ -347,6 +351,12 @@ WindowNode& MainView::createWindow(std::string name, Parent parent, Context& con
         .addChild(WindowNode::createWindow("base", newBufferId, context))
         .setActive();
 
+    auto bookmarks = parent == Parent::root
+        ? utils::makeShared<Bookmarks>()
+        : parentView->window().bookmarks;
+
+    mCurrentWindowNode->window().bookmarks = group.window().bookmarks = std::move(bookmarks);
+
     return *mCurrentWindowNode;
 }
 
@@ -419,6 +429,11 @@ void MainView::scrollTo(size_t lineNumber, Context& context)
     Impl::get(this).goTo(lineNumber, context);
 }
 
+void MainView::scrollToAbsolute(size_t lineNumber, Context& context)
+{
+    Impl::get(this).goToAbsolute(lineNumber, context);
+}
+
 void MainView::searchForward(std::string pattern, Context& context)
 {
     auto& impl = Impl::get(this);
@@ -466,6 +481,12 @@ void MainView::highlight(std::string pattern, std::string colorString, Context& 
         std::move(*data));
 
     reloadAll(context);
+}
+
+void MainView::addBookmark(std::string name, Context& context)
+{
+    auto& impl = Impl::get(this);
+    impl.addBookmarkImpl(std::move(name), context);
 }
 
 void MainView::Impl::resize(int width, int height, Context& context)
@@ -1051,6 +1072,13 @@ void MainView::Impl::goTo(size_t lineNumber, Context& context)
     goTo(w, lineNumber, context);
 }
 
+void MainView::Impl::goToAbsolute(size_t lineNumber, Context& context)
+{
+    GET_WINDOW_AND_BUFFER(w, b);
+    lineNumber = b->findClosestLine(lineNumber);
+    goTo(w, lineNumber, context);
+}
+
 void MainView::Impl::center(Context& context)
 {
     GET_WINDOW(w);
@@ -1462,6 +1490,12 @@ void MainView::Impl::yankSingle(Context& context)
     w.selectionMode = false;
 
     context.messageLine.info() << "1 line copied to clipboard";
+}
+
+void MainView::Impl::addBookmarkImpl(std::string name, Context&)
+{
+    GET_WINDOW_AND_BUFFER(w, buffer);
+    w.bookmarks->add(buffer->absoluteLineNumber(lineIndex(w)), std::move(name));
 }
 
 utils::Maybe<MainView::Pattern> MainView::Impl::parse(std::string& pattern, std::string& colorString)

@@ -1,5 +1,6 @@
 #include "main_picker.hpp"
 
+#include <cstdlib>
 #include <ctime>
 
 #include "core/commands/open.hpp"
@@ -10,6 +11,7 @@
 #include "core/interpreter/command.hpp"
 #include "core/interpreter/symbols_map.hpp"
 #include "core/logger.hpp"
+#include "core/main_view.hpp"
 #include "core/message_line.hpp"
 #include "utils/buffer.hpp"
 #include "utils/string.hpp"
@@ -22,6 +24,7 @@ MainPicker::MainPicker()
     : mCurrentPicker(0)
     , mPickers{
         Picker(Picker::Orientation::topDown, feedFiles),
+        Picker(Picker::Orientation::topDown, feedBookmarks),
         Picker(Picker::Orientation::topDown, feedCommands),
         Picker(Picker::Orientation::topDown, feedVariables),
         Picker(Picker::Orientation::topDown, feedMessages),
@@ -104,6 +107,13 @@ void MainPicker::accept(Context& context)
             core::commands::open(mReadline.line(), context);
             break;
 
+        case Type::bookmarks:
+        {
+            auto line = strtoul(mReadline.line().c_str(), NULL, 10);
+            context.mainView.scrollToAbsolute(line, context);
+            break;
+        }
+
         case Type::commands:
         case Type::variables:
         case Type::messages:
@@ -119,10 +129,34 @@ utils::Strings MainPicker::feedFiles(Context&)
     return core::readCurrentDirectoryRecursive();
 }
 
+utils::Strings MainPicker::feedBookmarks(Context& context)
+{
+    auto& mainView = context.mainView;
+    auto windowNode = mainView.currentWindowNode();
+    if (not windowNode)
+    {
+        return {};
+    }
+
+    auto& w = windowNode->window();
+
+    utils::Strings strings;
+    strings.reserve(w.bookmarks->size());
+
+    for (const auto& bookmark : *w.bookmarks)
+    {
+        utils::Buffer buf;
+        buf << bookmark.lineNumber << ": " << bookmark.name;
+        strings.emplace_back(buf.str());
+    }
+
+    return strings;
+}
+
 utils::Strings MainPicker::feedCommands(Context&)
 {
     utils::Strings strings;
-    core::interpreter::Commands::forEach(
+    interpreter::Commands::forEach(
         [&strings](const core::interpreter::Command& command)
         {
             utils::Buffer commandDesc;
