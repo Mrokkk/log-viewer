@@ -46,7 +46,7 @@ static StringRefsOrError extract(
 
     try
     {
-        rapidfuzz::fuzz::CachedTokenRatio<std::string::value_type> scorer(query);
+        rapidfuzz::fuzz::CachedWRatio<std::string::value_type> scorer(query);
 
         for (const auto& choice : choices)
         {
