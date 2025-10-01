@@ -127,6 +127,7 @@ add_executable(${PROJECT_NAME}
 )
 
 set_source_files_properties(src/core/fuzzy.cpp PROPERTIES COMPILE_FLAGS -fexceptions)
+set_source_files_properties(src/core/dirs.cpp PROPERTIES COMPILE_FLAGS -fexceptions)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${BACKTRACE_INCLUDE_DIRS}
