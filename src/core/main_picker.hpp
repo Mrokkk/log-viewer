@@ -15,7 +15,6 @@ struct MainPicker : utils::Immobile
     enum Type : int
     {
         files,
-        bookmarks,
         commands,
         variables,
         messages,
@@ -49,7 +48,6 @@ private:
     void accept(Context& context);
 
     static utils::Strings feedFiles(Context& context);
-    static utils::Strings feedBookmarks(Context& context);
     static utils::Strings feedCommands(Context& context);
     static utils::Strings feedVariables(Context& context);
     static utils::Strings feedMessages(Context& context);

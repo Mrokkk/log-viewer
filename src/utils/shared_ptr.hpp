@@ -63,6 +63,9 @@ struct SharedPtr
     constexpr auto operator->()       { return mPtr; }
     constexpr auto operator->() const { return mPtr; }
 
+    constexpr auto get()       { return mPtr; }
+    constexpr auto get() const { return mPtr; }
+
 private:
     constexpr void destroy()
     {

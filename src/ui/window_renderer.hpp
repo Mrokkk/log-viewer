@@ -13,6 +13,7 @@ namespace ui
 struct WindowRenderer : ftxui::Node
 {
     WindowRenderer(const core::Window& window);
+    static ftxui::Element create(const core::Window& window);
 
 private:
     void ComputeRequirement() override;

@@ -28,6 +28,8 @@ struct MainView : utils::Immobile
 
     constexpr int activeTabline() const { return mActiveTabline; }
 
+    constexpr bool bookmarksPaneVisible() const { return mShowBookmarks; }
+
     Buffer* currentBuffer() const;
     bool isCurrentWindowLoaded() const;
     const char* activeFileName() const;
@@ -44,6 +46,7 @@ struct MainView : utils::Immobile
     void searchBackward(std::string pattern, Context& context);
     void highlight(std::string pattern, std::string colorString, Context& context);
     void addBookmark(std::string name, Context& context);
+    void toggleBookmarksPane();
 
 private:
     struct Impl;
@@ -53,6 +56,7 @@ private:
     WindowNode*          mCurrentWindowNode;
     size_t               mWidth;
     size_t               mHeight;
+    bool                 mShowBookmarks;
     int                  mActiveTabline;
     SearchDirection      mSearchMode;
     std::string          mSearchPattern;

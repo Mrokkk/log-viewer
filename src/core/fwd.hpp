@@ -3,6 +3,7 @@
 namespace core
 {
 
+struct Bookmarks;
 struct Buffer;
 struct CommandLine;
 struct Config;

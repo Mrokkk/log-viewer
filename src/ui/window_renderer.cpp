@@ -3,11 +3,14 @@
 
 #include <cstdint>
 #include <cstring>
+#include <memory>
 
 #include <ftxui/screen/color.hpp>
 
 #include "core/config.hpp"
+#include "core/context.hpp"
 #include "core/logger.hpp"
+#include "core/mode.hpp"
 #include "core/window.hpp"
 #include "ui/palette.hpp"
 #include "utils/buffer.hpp"
@@ -23,12 +26,18 @@ WindowRenderer::WindowRenderer(const core::Window& window)
 {
 }
 
+ftxui::Element WindowRenderer::create(const core::Window& window)
+{
+    return std::make_shared<WindowRenderer>(window);
+}
+
 void WindowRenderer::ComputeRequirement()
 {
     requirement_.min_x = 0;
     requirement_.min_y = mWindow.height;
     requirement_.flex_grow_x = 1;
     requirement_.flex_grow_y = 1;
+    requirement_.flex_shrink_y = 1;
 }
 
 static std::string convertToString(uint32_t value)
@@ -80,11 +89,9 @@ void WindowRenderer::Render(ftxui::Screen& screen)
 
             int x = box_.x_min;
 
-            const auto bgColor = y == ycurrent
+            const auto bgColor = y == ycurrent or (selectionMode and y >= selectionStart and y <= selectionEnd)
                 ? Palette::bg3
-                : selectionMode and y >= selectionStart and y <= selectionEnd
-                    ? Palette::bg2
-                    : Color::Default;
+                : Color::Default;
 
             if (hasBookmarks)
             {
@@ -171,9 +178,11 @@ void WindowRenderer::Render(ftxui::Screen& screen)
             }
         });
 
-    const auto [cursorPosition, cursorWidth] = getCursorPositionAndWidth();
-
-    drawCursor(screen, cursorPosition + xmin, cursorWidth, mWindow.ycurrent + box_.y_min);
+    if (w.context->mode == core::Mode::normal or w.context->mode == core::Mode::visual)
+    {
+        const auto [cursorPosition, cursorWidth] = getCursorPositionAndWidth();
+        drawCursor(screen, cursorPosition + xmin, cursorWidth, mWindow.ycurrent + box_.y_min);
+    }
 
     logger.debug() << "took: " << 1000 * t.elapsed() << " ms";
 }

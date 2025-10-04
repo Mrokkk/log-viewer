@@ -27,28 +27,6 @@ DEFINE_COMMAND(files)
     }
 }
 
-DEFINE_COMMAND(bookmarks)
-{
-    HELP() = "show bookmarks picker";
-
-    FLAGS()
-    {
-        return {};
-    }
-
-    ARGUMENTS()
-    {
-        return {};
-    }
-
-    EXECUTOR()
-    {
-        switchMode(Mode::picker, context);
-        context.mainPicker.enter(context, MainPicker::Type::bookmarks);
-        return true;
-    }
-}
-
 DEFINE_COMMAND(commands)
 {
     HELP() = "show commands picker";

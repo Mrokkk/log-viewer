@@ -14,6 +14,7 @@ enum class Mode
     command,
     grepper,
     picker,
+    bookmarks,
 };
 
 bool switchMode(Mode newMode, Context& context);

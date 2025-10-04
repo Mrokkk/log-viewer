@@ -145,7 +145,7 @@ void CommandLine::initializeInputMapping(Context& context)
             switchMode(core::Mode::command, context);
             return true;
         },
-        InputMappingFlags::normal | InputMappingFlags::visual,
+        InputMappingFlags::normal | InputMappingFlags::visual | InputMappingFlags::bookmarks,
         "Enter command line",
         context);
 

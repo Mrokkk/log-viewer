@@ -74,6 +74,7 @@ add_executable(${PROJECT_NAME}
     src/core/buffers.cpp
     src/core/command_line.cpp
     src/core/commands/add_bookmark.cpp
+    src/core/commands/bookmarks.cpp
     src/core/commands/echo.cpp
     src/core/commands/filter.cpp
     src/core/commands/get.cpp
@@ -117,6 +118,7 @@ add_executable(${PROJECT_NAME}
     src/core/window_node.cpp
     src/main.cpp
     src/sys/posix.cpp
+    src/ui/bookmarks_renderer.cpp
     src/ui/ftxui.cpp
     src/ui/window_renderer.cpp
     src/utils/buffer.cpp

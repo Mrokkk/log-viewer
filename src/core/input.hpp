@@ -144,6 +144,7 @@ DEFINE_BITFLAG(InputMappingFlags, char,
     normal,
     visual,
     command,
+    bookmarks,
     force,
     noHelp,
 });

@@ -25,6 +25,7 @@
 #include "core/severity.hpp"
 #include "core/thread.hpp"
 #include "sys/system.hpp"
+#include "ui/bookmarks_renderer.hpp"
 #include "ui/palette.hpp"
 #include "ui/window_renderer.hpp"
 #include "utils/math.hpp"
@@ -233,6 +234,12 @@ static Element renderStatusLine(Ftxui&, core::Context& context)
             status = " GREPPER ";
             break;
 
+        case core::Mode::bookmarks:
+            statusFg = Palette::StatusLine::normalFg;
+            statusBg = Palette::StatusLine::normalBg;
+            status = " BOOKMARKS ";
+            break;
+
         [[unlikely]] default:
             statusFg = Palette::StatusLine::normalFg;
             statusBg = Palette::StatusLine::normalBg;
@@ -429,9 +436,34 @@ Element MainView::render(core::Context& context)
 
     auto vertical = renderTablines(context);
 
+    Element leftPane;
+
+    if (context.mainView.bookmarksPaneVisible())
+    {
+        Elements bookmarks;
+        if (const auto w = context.mainView.currentWindowNode())
+        {
+            leftPane = hbox(
+                BookmarksRenderer::create(*w->window().bookmarks, context.mode == core::Mode::bookmarks),
+                separator()
+                    | color(Palette::bg2));
+        }
+        else
+        {
+            leftPane = emptyElement();
+        }
+    }
+    else
+    {
+        leftPane = emptyElement();
+    }
+
     if (current->loaded()) [[likely]]
     {
-        vertical.push_back(std::make_shared<WindowRenderer>(current->window()));
+        vertical.push_back(
+            hbox(
+                leftPane,
+                WindowRenderer::create(current->window())));
     }
     else
     {
@@ -790,7 +822,6 @@ constexpr static std::string pickerName(const core::MainPicker::Type type)
     switch (type)
     {
         TYPE_CONVERT(files);
-        TYPE_CONVERT(bookmarks);
         TYPE_CONVERT(commands);
         TYPE_CONVERT(variables);
         TYPE_CONVERT(messages);

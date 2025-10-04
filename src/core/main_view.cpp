@@ -181,11 +181,20 @@ struct MainView::Impl final : MainView
 
     static utils::Maybe<Pattern> parse(std::string& pattern, std::string& colorString);
 
+    void switchPanes(Context& context);
+    void leftPane(Context& context);
+    void rightPane(Context& context);
+
     WindowNode* getActiveLineView();
     void activeTablineLeft();
     void activeTablineRight();
     void activeTablineUp();
     void activeTablineDown();
+
+    void bookmarksUp(Context& context);
+    void bookmarksDown(Context& context);
+    void bookmarksAccept(Context& context);
+    void bookmarksDelete();
 
     WindowNodes::iterator getWindowNodeIterator(WindowNode& node, WindowNodes& nodes);
 };
@@ -193,6 +202,7 @@ struct MainView::Impl final : MainView
 MainView::MainView()
     : mRoot("root")
     , mCurrentWindowNode(nullptr)
+    , mShowBookmarks(false)
 {
     auto& impl = Impl::get(this);
     registerEventHandler(
@@ -253,8 +263,9 @@ const char* MainView::activeFileName() const
         HELP, \
         context)
 
-#define NORMAL InputMappingFlags::normal
-#define VISUAL InputMappingFlags::visual
+#define NORMAL    InputMappingFlags::normal
+#define VISUAL    InputMappingFlags::visual
+#define BOOKMARKS InputMappingFlags::bookmarks
 
 void MainView::initializeInputMapping(Context& context)
 {
@@ -276,43 +287,51 @@ void MainView::initializeInputMapping(Context& context)
             impl.handleSearchResult(ev.result, ev.pattern, ev.window, ev.buffer, ev.time, context);
         });
 
-    REGISTER_MAPPING("gg",        NORMAL | VISUAL, "Go to buffer beginning", impl.goTo(0, context));
-    REGISTER_MAPPING("G",         NORMAL | VISUAL, "Go to buffer end", impl.goTo(-1, context));
-    REGISTER_MAPPING("h",         NORMAL | VISUAL, "Move cursor left", impl.left(context));
-    REGISTER_MAPPING("l",         NORMAL | VISUAL, "Move cursor right", impl.right(context));
-    REGISTER_MAPPING("k",         NORMAL | VISUAL, "Move cursor up", impl.up(context));
-    REGISTER_MAPPING("j",         NORMAL | VISUAL, "Move cursor down", impl.down(context));
-    REGISTER_MAPPING("H",         NORMAL | VISUAL, "Fast backward move", impl.fastBackward());
-    REGISTER_MAPPING("L",         NORMAL | VISUAL, "Fast forward move", impl.fastForward());
-    REGISTER_MAPPING("<left>",    NORMAL | VISUAL, "Move cursor left", impl.left(context));
-    REGISTER_MAPPING("<right>",   NORMAL | VISUAL, "Move cursor right", impl.right(context));
-    REGISTER_MAPPING("<up>",      NORMAL | VISUAL, "Move cursor up", impl.up(context));
-    REGISTER_MAPPING("<down>",    NORMAL | VISUAL, "Move cursor down", impl.down(context));
-    REGISTER_MAPPING("<pgup>",    NORMAL | VISUAL, "Move cursor page up", impl.pageUp(context));
-    REGISTER_MAPPING("<pgdown>",  NORMAL | VISUAL, "Move cursor page down", impl.pageDown(context));
-    REGISTER_MAPPING("<s-up>",    NORMAL | VISUAL, "Move cursor page up", impl.pageUp(context));
-    REGISTER_MAPPING("<s-down>",  NORMAL | VISUAL, "Move cursor page down", impl.pageDown(context));
-    REGISTER_MAPPING("b",         NORMAL | VISUAL, "Move cursor backward to word beginning", impl.backwardWordBeginning());
-    REGISTER_MAPPING("w",         NORMAL | VISUAL, "Move cursor forward to word beginning", impl.forwardWordBeginning());
-    REGISTER_MAPPING("e",         NORMAL | VISUAL, "Move cursor forward to word end", impl.forwardWordEnd());
-    REGISTER_MAPPING("<c-e>",     NORMAL | VISUAL, "Scroll down by 1 line", impl.scrollDown(context));
-    REGISTER_MAPPING("<c-y>",     NORMAL | VISUAL, "Scroll up by 1 line", impl.scrollUp(context));
-    REGISTER_MAPPING("zz",        NORMAL | VISUAL, "Center current line", impl.center(context));
-    REGISTER_MAPPING("zs",        NORMAL | VISUAL, "Scroll horizontally to the cursor", impl.scrollHorizontallyToCursor());
-    REGISTER_MAPPING("^",         NORMAL | VISUAL, "Go to line beginning", impl.lineStart());
-    REGISTER_MAPPING("<home>",    NORMAL | VISUAL, "Go to line beginning", impl.lineStart());
-    REGISTER_MAPPING("$",         NORMAL | VISUAL, "Go to line end", impl.lineEnd());
-    REGISTER_MAPPING("<end>",     NORMAL | VISUAL, "Go to line end", impl.lineEnd());
-    REGISTER_MAPPING("<c-left>",  NORMAL,          "Change active tab", impl.activeTablineLeft());
-    REGISTER_MAPPING("<c-right>", NORMAL,          "Change active tab", impl.activeTablineRight());
-    REGISTER_MAPPING("<c-up>",    NORMAL,          "Move active tabline up", impl.activeTablineUp());
-    REGISTER_MAPPING("<c-down>",  NORMAL,          "Move active tabline down", impl.activeTablineDown());
-    REGISTER_MAPPING("v",         NORMAL | VISUAL, "Visual mode", impl.selectionModeToggle(context));
-    REGISTER_MAPPING("y",         VISUAL,          "Yank selection", impl.yank(context));
-    REGISTER_MAPPING("yy",        NORMAL,          "Yank single line", impl.yankSingle(context));
-    REGISTER_MAPPING("n",         NORMAL,          "Search forward", mSearchMode = SearchDirection::forward; impl.search(context));
-    REGISTER_MAPPING("N",         NORMAL,          "Search backward", mSearchMode = SearchDirection::backward; impl.search(context));
-    REGISTER_MAPPING("<c-w>q",    NORMAL,          "Quit current window", quitCurrentWindow(context));
+    REGISTER_MAPPING("gg",           NORMAL | VISUAL,    "Go to buffer beginning", impl.goTo(0, context));
+    REGISTER_MAPPING("G",            NORMAL | VISUAL,    "Go to buffer end", impl.goTo(-1, context));
+    REGISTER_MAPPING("h",            NORMAL | VISUAL,    "Move cursor left", impl.left(context));
+    REGISTER_MAPPING("l",            NORMAL | VISUAL,    "Move cursor right", impl.right(context));
+    REGISTER_MAPPING("k",            NORMAL | VISUAL,    "Move cursor up", impl.up(context));
+    REGISTER_MAPPING("j",            NORMAL | VISUAL,    "Move cursor down", impl.down(context));
+    REGISTER_MAPPING("H",            NORMAL | VISUAL,    "Fast backward move", impl.fastBackward());
+    REGISTER_MAPPING("L",            NORMAL | VISUAL,    "Fast forward move", impl.fastForward());
+    REGISTER_MAPPING("<left>",       NORMAL | VISUAL,    "Move cursor left", impl.left(context));
+    REGISTER_MAPPING("<right>",      NORMAL | VISUAL,    "Move cursor right", impl.right(context));
+    REGISTER_MAPPING("<up>",         NORMAL | VISUAL,    "Move cursor up", impl.up(context));
+    REGISTER_MAPPING("<down>",       NORMAL | VISUAL,    "Move cursor down", impl.down(context));
+    REGISTER_MAPPING("<pgup>",       NORMAL | VISUAL,    "Move cursor page up", impl.pageUp(context));
+    REGISTER_MAPPING("<pgdown>",     NORMAL | VISUAL,    "Move cursor page down", impl.pageDown(context));
+    REGISTER_MAPPING("<s-up>",       NORMAL | VISUAL,    "Move cursor page up", impl.pageUp(context));
+    REGISTER_MAPPING("<s-down>",     NORMAL | VISUAL,    "Move cursor page down", impl.pageDown(context));
+    REGISTER_MAPPING("b",            NORMAL | VISUAL,    "Move cursor backward to word beginning", impl.backwardWordBeginning());
+    REGISTER_MAPPING("w",            NORMAL | VISUAL,    "Move cursor forward to word beginning", impl.forwardWordBeginning());
+    REGISTER_MAPPING("e",            NORMAL | VISUAL,    "Move cursor forward to word end", impl.forwardWordEnd());
+    REGISTER_MAPPING("<c-e>",        NORMAL | VISUAL,    "Scroll down by 1 line", impl.scrollDown(context));
+    REGISTER_MAPPING("<c-y>",        NORMAL | VISUAL,    "Scroll up by 1 line", impl.scrollUp(context));
+    REGISTER_MAPPING("zz",           NORMAL | VISUAL,    "Center current line", impl.center(context));
+    REGISTER_MAPPING("zs",           NORMAL | VISUAL,    "Scroll horizontally to the cursor", impl.scrollHorizontallyToCursor());
+    REGISTER_MAPPING("^",            NORMAL | VISUAL,    "Go to line beginning", impl.lineStart());
+    REGISTER_MAPPING("<home>",       NORMAL | VISUAL,    "Go to line beginning", impl.lineStart());
+    REGISTER_MAPPING("$",            NORMAL | VISUAL,    "Go to line end", impl.lineEnd());
+    REGISTER_MAPPING("<end>",        NORMAL | VISUAL,    "Go to line end", impl.lineEnd());
+    REGISTER_MAPPING("<c-left>",     NORMAL,             "Change active tab", impl.activeTablineLeft());
+    REGISTER_MAPPING("<c-right>",    NORMAL,             "Change active tab", impl.activeTablineRight());
+    REGISTER_MAPPING("<c-up>",       NORMAL,             "Move active tabline up", impl.activeTablineUp());
+    REGISTER_MAPPING("<c-down>",     NORMAL,             "Move active tabline down", impl.activeTablineDown());
+    REGISTER_MAPPING("v",            NORMAL | VISUAL,    "Visual mode", impl.selectionModeToggle(context));
+    REGISTER_MAPPING("y",            VISUAL,             "Yank selection", impl.yank(context));
+    REGISTER_MAPPING("yy",           NORMAL,             "Yank single line", impl.yankSingle(context));
+    REGISTER_MAPPING("n",            NORMAL,             "Search forward", mSearchMode = SearchDirection::forward; impl.search(context));
+    REGISTER_MAPPING("N",            NORMAL,             "Search backward", mSearchMode = SearchDirection::backward; impl.search(context));
+    REGISTER_MAPPING("<c-w>q",       NORMAL,             "Quit current window", quitCurrentWindow(context));
+    REGISTER_MAPPING("<c-w>w",       NORMAL | BOOKMARKS, "Switch between panes", impl.switchPanes(context));
+    REGISTER_MAPPING("<c-w><c-w>",   NORMAL | BOOKMARKS, "Switch between panes", impl.switchPanes(context));
+    REGISTER_MAPPING("<c-w><left>",  NORMAL,             "Move to left pane", impl.leftPane(context));
+    REGISTER_MAPPING("<c-w><right>", BOOKMARKS,          "Move to left pane", impl.rightPane(context));
+    REGISTER_MAPPING("<up>",         BOOKMARKS,          "Move cursor up", impl.bookmarksUp(context));
+    REGISTER_MAPPING("<down>",       BOOKMARKS,          "Move cursor down", impl.bookmarksDown(context));
+    REGISTER_MAPPING("<cr>",         BOOKMARKS,          "Go to bookmark", impl.bookmarksAccept(context));
+    REGISTER_MAPPING("dd",           BOOKMARKS,          "Delete bookmark", impl.bookmarksDelete());
 }
 
 void MainView::reloadAll(Context& context)
@@ -487,6 +506,11 @@ void MainView::addBookmark(std::string name, Context& context)
 {
     auto& impl = Impl::get(this);
     impl.addBookmarkImpl(std::move(name), context);
+}
+
+void MainView::toggleBookmarksPane()
+{
+    mShowBookmarks ^= true;
 }
 
 void MainView::Impl::resize(int width, int height, Context& context)
@@ -1495,7 +1519,14 @@ void MainView::Impl::yankSingle(Context& context)
 void MainView::Impl::addBookmarkImpl(std::string name, Context&)
 {
     GET_WINDOW_AND_BUFFER(w, buffer);
-    w.bookmarks->add(buffer->absoluteLineNumber(lineIndex(w)), std::move(name));
+    auto line = buffer->readLine(lineIndex(w));
+
+    if (not line) [[unlikely]]
+    {
+        return;
+    }
+
+    w.bookmarks->add(buffer->absoluteLineNumber(lineIndex(w)), std::move(name), std::string(*line));
 }
 
 utils::Maybe<MainView::Pattern> MainView::Impl::parse(std::string& pattern, std::string& colorString)
@@ -1538,6 +1569,31 @@ utils::Maybe<MainView::Pattern> MainView::Impl::parse(std::string& pattern, std:
         .type = type,
         .fgColor = color,
     };
+}
+
+void MainView::Impl::switchPanes(Context& context)
+{
+    if (context.mode == Mode::bookmarks)
+    {
+        switchMode(Mode::normal, context);
+    }
+    else if (context.mode == Mode::normal and mShowBookmarks)
+    {
+        switchMode(Mode::bookmarks, context);
+    }
+}
+
+void MainView::Impl::leftPane(Context& context)
+{
+    if (mShowBookmarks)
+    {
+        switchMode(Mode::bookmarks, context);
+    }
+}
+
+void MainView::Impl::rightPane(Context& context)
+{
+    switchMode(Mode::normal, context);
 }
 
 WindowNode* MainView::Impl::getActiveLineView()
@@ -1586,6 +1642,66 @@ void MainView::Impl::activeTablineUp()
 void MainView::Impl::activeTablineDown()
 {
     mActiveTabline = clamp(mActiveTabline + 1, 0, mCurrentWindowNode->depth());
+}
+
+void MainView::Impl::bookmarksUp(Context& context)
+{
+    GET_WINDOW(w);
+    auto& bookmarks = *w.bookmarks.get();
+
+    if (bookmarks.size() == 0)
+    {
+        return;
+    }
+
+    bookmarks.currentIndex = clamp(bookmarks.currentIndex - 1, 0, (int)bookmarks.size() - 1);
+
+    const auto& bookmark = bookmarks[bookmarks.currentIndex];
+    context.messageLine.info() << bookmark.line;
+}
+
+void MainView::Impl::bookmarksDown(Context& context)
+{
+    GET_WINDOW(w);
+
+    auto& bookmarks = *w.bookmarks.get();
+
+    if (bookmarks.size() == 0)
+    {
+        return;
+    }
+
+    bookmarks.currentIndex = clamp(bookmarks.currentIndex + 1, 0, (int)bookmarks.size() - 1);
+
+    const auto& bookmark = bookmarks[bookmarks.currentIndex];
+    context.messageLine.info() << bookmark.line;
+}
+
+void MainView::Impl::bookmarksAccept(Context& context)
+{
+    GET_WINDOW(w);
+    auto& bookmarks = *w.bookmarks.get();
+
+    if (bookmarks.size() == 0)
+    {
+        return;
+    }
+
+    const auto& bookmark = bookmarks[bookmarks.currentIndex];
+
+    goToAbsolute(bookmark.lineNumber, context);
+    switchMode(Mode::normal, context);
+}
+
+void MainView::Impl::bookmarksDelete()
+{
+    GET_WINDOW(w);
+    auto& bookmarks = *w.bookmarks.get();
+    if (bookmarks.size() == 0)
+    {
+        return;
+    }
+    bookmarks.remove();
 }
 
 WindowNodes::iterator MainView::Impl::getWindowNodeIterator(WindowNode& node, WindowNodes& nodes)

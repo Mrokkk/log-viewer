@@ -324,7 +324,14 @@ std::string KeyPress::name() const
 }
 
 InputState::InputState()
-    : nodes(new KeyPressNode[3]{KeyPressNode::root, KeyPressNode::root, KeyPressNode::root})
+    : nodes(new KeyPressNode[6]{
+        KeyPressNode::root,
+        KeyPressNode::root,
+        KeyPressNode::root,
+        KeyPressNode::root,
+        KeyPressNode::root,
+        KeyPressNode::root,
+    })
     , current(nullptr)
 {
     state.reserve(32);
@@ -565,6 +572,10 @@ static bool addInputMappingInternal(
     {
         roots.emplace_back(&context.inputState.nodes[static_cast<int>(Mode::command)]);
     }
+    if (flags & InputMappingFlags::bookmarks)
+    {
+        roots.emplace_back(&context.inputState.nodes[static_cast<int>(Mode::bookmarks)]);
+    }
 
     for (auto root : roots)
     {
@@ -686,6 +697,7 @@ static void handleKeyPress(KeyPress keyPress, InputSource source, Context& conte
 
         case Mode::normal:
         case Mode::visual:
+        case Mode::bookmarks:
         default:
             break;
     }
